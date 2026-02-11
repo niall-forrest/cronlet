@@ -1,0 +1,8 @@
+{
+  "name": "@cronlet/examples",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "cronlet": "workspace:*"
+  }
+}
