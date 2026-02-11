@@ -1,4 +1,4 @@
-import type { BackoffStrategy, RetryConfig } from "../job/types.js";
+import type { RetryConfig } from "../job/types.js";
 import { parseDuration } from "./timeout.js";
 
 /**

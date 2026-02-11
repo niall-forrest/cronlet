@@ -4,7 +4,7 @@ import type { JobDefinition } from "cronlet";
 /**
  * Print the startup banner
  */
-export function printBanner(port: number): void {
+export function printBanner(_port: number): void {
   console.log();
   console.log(pc.cyan("  ⏱  cronlet dev server running"));
   console.log();
