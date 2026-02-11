@@ -41,15 +41,19 @@ export function daily(...times: [TimeString, ...TimeString[]]): ScheduleBuilder 
     // Single time - straightforward
     cron = `${parsedTimes[0]!.minute} ${parsedTimes[0]!.hour} * * *`;
   } else if (minutes.length === 1) {
-    // All times have same minute, different hours
+    // All times have same minute, different hours: "0 9,17 * * *"
     cron = `${minutes[0]} ${hours.join(",")} * * *`;
   } else if (hours.length === 1) {
-    // All times have same hour, different minutes
+    // All times have same hour, different minutes: "0,30 9 * * *"
     cron = `${minutes.join(",")} ${hours[0]} * * *`;
   } else {
-    // Multiple different times - use the first one and note limitation
-    // In practice, you'd need multiple cron jobs for truly different times
-    cron = `${parsedTimes[0]!.minute} ${parsedTimes[0]!.hour} * * *`;
+    // Multiple times with different hours AND minutes can't be expressed in a single cron
+    // e.g., "09:30" and "17:45" would need two separate cron jobs
+    throw new Error(
+      `daily() with multiple times requires either the same hour or same minute. ` +
+      `Got times with different hours and minutes: ${times.join(", ")}. ` +
+      `Create separate schedules instead.`
+    );
   }
 
   // Generate human-readable description
