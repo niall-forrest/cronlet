@@ -10,11 +10,23 @@ interface ScheduledJob {
 }
 
 /**
+ * In-flight job execution
+ */
+interface InFlightJob {
+  jobId: string;
+  runId: string;
+  startedAt: Date;
+  promise: Promise<ExecutionResult>;
+}
+
+/**
  * Cron scheduler that runs jobs on their defined schedules
  */
 export class CronScheduler {
   private scheduledJobs: Map<string, ScheduledJob> = new Map();
+  private inFlightJobs: Map<string, InFlightJob> = new Map();
   private running = false;
+  private shuttingDown = false;
 
   /**
    * Add a job to the scheduler
@@ -56,7 +68,34 @@ export class CronScheduler {
    * Execute a job immediately
    */
   async executeJob(job: JobDefinition): Promise<ExecutionResult> {
-    return engine.run(job);
+    // Don't start new jobs if shutting down
+    if (this.shuttingDown) {
+      return {
+        jobId: job.id,
+        runId: `skipped_${Date.now()}`,
+        status: "failure",
+        startedAt: new Date(),
+        completedAt: new Date(),
+        duration: 0,
+        attempt: 0,
+        error: { message: "Scheduler is shutting down" },
+      };
+    }
+
+    const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const startedAt = new Date();
+    const promise = engine.run(job);
+
+    // Track in-flight job
+    const inFlight: InFlightJob = { jobId: job.id, runId, startedAt, promise };
+    this.inFlightJobs.set(runId, inFlight);
+
+    try {
+      const result = await promise;
+      return result;
+    } finally {
+      this.inFlightJobs.delete(runId);
+    }
   }
 
   /**
@@ -72,7 +111,7 @@ export class CronScheduler {
   }
 
   /**
-   * Stop the scheduler
+   * Stop the scheduler (does not wait for in-flight jobs)
    */
   stop(): void {
     if (!this.running) return;
@@ -81,6 +120,73 @@ export class CronScheduler {
     for (const { cron } of this.scheduledJobs.values()) {
       cron.pause();
     }
+  }
+
+  /**
+   * Gracefully shutdown the scheduler
+   * Stops accepting new jobs and waits for in-flight jobs to complete
+   *
+   * @param timeoutMs - Maximum time to wait for jobs (default: 30 seconds)
+   * @returns List of jobs that were still running when timeout expired
+   */
+  async shutdown(timeoutMs = 30000): Promise<{ completed: string[]; interrupted: string[] }> {
+    this.shuttingDown = true;
+    this.stop();
+
+    const completed: string[] = [];
+    const interrupted: string[] = [];
+
+    if (this.inFlightJobs.size === 0) {
+      return { completed, interrupted };
+    }
+
+    // Wait for in-flight jobs with timeout
+    const inFlightEntries = Array.from(this.inFlightJobs.entries());
+    const promises = inFlightEntries.map(async ([runId, inFlight]) => {
+      try {
+        await inFlight.promise;
+        completed.push(inFlight.jobId);
+      } catch {
+        // Job failed, but it did complete
+        completed.push(inFlight.jobId);
+      }
+      return runId;
+    });
+
+    // Race between all jobs completing and timeout
+    const timeoutPromise = new Promise<"timeout">((resolve) => {
+      setTimeout(() => resolve("timeout"), timeoutMs);
+    });
+
+    const allJobsPromise = Promise.all(promises).then(() => "done" as const);
+
+    const result = await Promise.race([allJobsPromise, timeoutPromise]);
+
+    if (result === "timeout") {
+      // Mark remaining jobs as interrupted
+      for (const [, inFlight] of this.inFlightJobs) {
+        if (!completed.includes(inFlight.jobId)) {
+          interrupted.push(inFlight.jobId);
+        }
+      }
+    }
+
+    this.shuttingDown = false;
+    return { completed, interrupted };
+  }
+
+  /**
+   * Get number of in-flight jobs
+   */
+  getInFlightCount(): number {
+    return this.inFlightJobs.size;
+  }
+
+  /**
+   * Check if scheduler is shutting down
+   */
+  isShuttingDown(): boolean {
+    return this.shuttingDown;
   }
 
   /**
