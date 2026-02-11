@@ -108,17 +108,30 @@ export const devCommand = new Command("dev")
 
       printWatching();
 
-      // Cleanup on exit
-      process.on("SIGINT", () => {
+      // Graceful shutdown handler
+      const handleShutdown = async (signal: string) => {
+        console.log(`\n  Received ${signal}, shutting down gracefully...`);
         watcher.close();
-        scheduler.stop();
-        process.exit(0);
-      });
 
-      process.on("SIGTERM", () => {
-        watcher.close();
-        scheduler.stop();
+        const inFlight = scheduler.getInFlightCount();
+        if (inFlight > 0) {
+          console.log(`  Waiting for ${inFlight} in-flight job(s) to complete...`);
+        }
+
+        const { completed, interrupted } = await scheduler.shutdown(30000);
+
+        if (completed.length > 0) {
+          console.log(`  ✓ ${completed.length} job(s) completed`);
+        }
+        if (interrupted.length > 0) {
+          console.log(`  ⚠ ${interrupted.length} job(s) interrupted: ${interrupted.join(", ")}`);
+        }
+
+        console.log("  Goodbye!");
         process.exit(0);
-      });
+      };
+
+      process.on("SIGINT", () => handleShutdown("SIGINT"));
+      process.on("SIGTERM", () => handleShutdown("SIGTERM"));
     }
   });
