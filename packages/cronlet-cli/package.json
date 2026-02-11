@@ -22,7 +22,9 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "cronlet": "workspace:*",
@@ -39,7 +41,8 @@
     "@cronlet/eslint-config": "workspace:*",
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
   },
   "keywords": [
     "cron",
