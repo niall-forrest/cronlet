@@ -54,9 +54,9 @@ describe("every()", () => {
       expect(result.humanReadable).toBe("every 1 week");
     });
 
-    it("parses multiple weeks", () => {
-      const result = every("2w");
-      expect(result.humanReadable).toBe("every 2 weeks");
+    it("throws for multi-week intervals", () => {
+      expect(() => every("2w")).toThrow("every(\"2w\") is not supported");
+      expect(() => every("4w")).toThrow("every(\"4w\") is not supported");
     });
   });
 

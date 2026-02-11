@@ -37,9 +37,22 @@ describe("daily()", () => {
       expect(result.humanReadable).toBe("daily at 9:00 AM and 5:00 PM");
     });
 
-    it("handles three times", () => {
+    it("parses two times with same hour", () => {
+      const result = daily("09:00", "09:30");
+      expect(result.cron).toBe("0,30 9 * * *");
+      expect(result.humanReadable).toBe("daily at 9:00 AM and 9:30 AM");
+    });
+
+    it("handles three times with same minute", () => {
       const result = daily("08:00", "12:00", "18:00");
+      expect(result.cron).toBe("0 8,12,18 * * *");
       expect(result.humanReadable).toBe("daily at 8:00 AM, 12:00 PM, and 6:00 PM");
+    });
+
+    it("throws for times with different hours AND minutes", () => {
+      expect(() => daily("09:30", "17:45")).toThrow(
+        "daily() with multiple times requires either the same hour or same minute"
+      );
     });
   });
 

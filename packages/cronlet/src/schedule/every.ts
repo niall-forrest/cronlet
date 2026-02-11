@@ -62,8 +62,12 @@ function intervalToCron(value: number, unit: IntervalUnit): string {
       if (value === 1) {
         return "0 0 * * 0"; // Weekly on Sunday
       }
-      // Every N weeks - approximate with days
-      return intervalToCron(value * 7, "d");
+      // Multi-week intervals can't be expressed in cron without drift
+      // e.g., "every 2 weeks" would need to track state across months
+      throw new Error(
+        `every("${value}w") is not supported. Cron cannot express multi-week intervals accurately. ` +
+        `Use every("1w") or every("${value * 7}d") (note: day intervals reset each month).`
+      );
 
     default:
       throw new Error(`Unknown interval unit: ${unit}`);
