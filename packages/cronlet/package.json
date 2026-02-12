@@ -16,6 +16,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./verify": {
+      "import": {
+        "types": "./dist/verify/index.d.ts",
+        "default": "./dist/verify/index.js"
+      },
+      "require": {
+        "types": "./dist/verify/index.d.cts",
+        "default": "./dist/verify/index.cjs"
+      }
     }
   },
   "files": [
