@@ -70,3 +70,11 @@ export type {
   ExecutionEvent,
   ExecutionEventListener,
 } from "./engine/types.js";
+
+// Config
+export { defineConfig } from "./config.js";
+export type { CronletConfig } from "./config.js";
+
+// Worker
+export { createWorker } from "./worker/index.js";
+export type { WorkerOptions, Worker, Logger } from "./worker/index.js";
