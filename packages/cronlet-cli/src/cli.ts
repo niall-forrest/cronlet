@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { initCommand } from "./commands/init.js";
 import { devCommand } from "./commands/dev.js";
 import { listCommand } from "./commands/list.js";
 import { runCommand } from "./commands/run.js";
@@ -12,6 +13,7 @@ program
   .description("The simplest way to add scheduled tasks to your Node.js app")
   .version("0.1.1");
 
+program.addCommand(initCommand);
 program.addCommand(devCommand);
 program.addCommand(listCommand);
 program.addCommand(runCommand);
