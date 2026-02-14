@@ -99,6 +99,10 @@ importers:
         version: link:../packages/cronlet
 
   packages/cronlet:
+    dependencies:
+      croner:
+        specifier: ^8.0.0
+        version: 8.1.2
     devDependencies:
       '@cronlet/eslint-config':
         specifier: workspace:*

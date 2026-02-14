@@ -14,31 +14,24 @@ export default schedule(weekly("fri", "09:00"), async (ctx) => {
 ## Quick Start
 
 ```bash
-# Install
 npm install cronlet cronlet-cli
-
-# Create a job
-mkdir jobs && cat > jobs/hello.ts << 'EOF'
-import { schedule, every } from "cronlet"
-
-export default schedule(every("1m"), async (ctx) => {
-  console.log(`Hello from ${ctx.jobName}!`)
-})
-EOF
-
-# Run the dev server
+npx cronlet init
 npx cronlet dev
 ```
 
 ```
-  ⏱  cronlet dev server running
+  Detected Next.js (App Router) + TypeScript
 
-  Jobs discovered:
-    ✓ hello    every 1 minute
+  + Created src/jobs/
+  + Created src/jobs/health-check.ts
+  + Created cronlet.config.ts
 
-  Dashboard: http://localhost:3141
-  Watching for changes...
+  Next steps:
+
+    npx cronlet dev
 ```
+
+`cronlet init` detects your framework, creates a jobs directory, drops in a working example, and generates a config file. Then `cronlet dev` starts the local scheduler with hot reload and a dashboard at `http://localhost:3141`.
 
 ## Schedule API
 
@@ -145,6 +138,7 @@ interface JobContext {
 ## CLI Commands
 
 ```bash
+cronlet init             # Initialize cronlet in your project
 cronlet dev              # Start dev server with hot reload
 cronlet list             # List all discovered jobs
 cronlet run <job-id>     # Manually trigger a job
@@ -254,24 +248,125 @@ export default defineConfig({
 - Vercel Cron runs in UTC — `.withTimezone()` is for local dev only
 - Retry/timeout config runs within the serverless function execution time
 
+## Deploy as a Worker
+
+For any platform that runs Node — Railway, Fly.io, Docker, EC2 — use `createWorker()` to run cronlet as a standalone long-running process.
+
+### Basic
+
+```ts
+// worker.ts
+import { createWorker } from "cronlet"
+
+const worker = createWorker({ dir: "./jobs" })
+await worker.start()
+```
+
+```bash
+npx tsx worker.ts
+```
+
+The worker discovers your jobs, schedules them, logs execution, exposes a health check on port 3141, and handles `SIGTERM`/`SIGINT` with graceful shutdown.
+
+### With Options
+
+```ts
+import { createWorker } from "cronlet"
+
+const worker = createWorker({
+  dir: "./jobs",
+
+  healthCheck: {
+    enabled: true,
+    port: 8080,
+    path: "/healthz",
+  },
+
+  shutdownTimeout: 30_000,
+
+  onJobComplete: (jobId, result) => {
+    metrics.increment("cronlet.job.complete", { jobId, status: result.status })
+  },
+  onJobError: (jobId, error) => {
+    Sentry.captureException(error, { tags: { jobId } })
+  },
+})
+
+await worker.start()
+```
+
+### Worker API
+
+```ts
+await worker.start()                  // discover jobs, start scheduling
+await worker.stop()                   // graceful shutdown
+worker.getJobs()                      // list all registered jobs
+await worker.trigger("sync-stripe")   // manually run a job by ID
+worker.isRunning()                    // check if worker is active
+```
+
+### Health Check
+
+The worker exposes a health endpoint for platforms that need one (Railway, Fly, Kubernetes):
+
+```
+GET /health → 200 { "status": "ok", "jobs": 3, "uptime": 12345 }
+```
+
+Port defaults to the `PORT` environment variable (standard for Railway/Fly) or `3141`. Disable with `healthCheck: { enabled: false }`.
+
+### Graceful Shutdown
+
+The worker handles `SIGTERM` and `SIGINT` automatically:
+
+1. Stops accepting new scheduled runs
+2. Waits for in-flight jobs to finish (configurable timeout, default 30s)
+3. Closes the health check server
+4. Exits cleanly
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+CMD ["node", "dist/worker.js"]
+```
+
+### Railway / Fly
+
+```json
+{
+  "scripts": {
+    "worker": "tsx worker.ts"
+  }
+}
+```
+
+Set the start command to `npm run worker`. The health check will bind to the `PORT` env var automatically.
+
 ## Comparison
 
 | Feature | Cronlet | Vercel Cron | Trigger.dev | Inngest |
 |---------|---------|-------------|-------------|---------|
-| Setup complexity | Zero config | vercel.json | Dashboard + SDK | Dashboard + SDK |
+| Setup complexity | `cronlet init` | vercel.json | Dashboard + SDK | Dashboard + SDK |
 | Type safety | Full TypeScript | None | Partial | Partial |
 | Local development | Built-in dashboard | None | Requires tunnel | Requires tunnel |
-| Vercel integration | Auto-generates routes | Native | Manual | Manual |
+| Deploy targets | Vercel, Railway, Fly, Docker, any Node host | Vercel only | Cloud only | Cloud only |
 | Schedule syntax | Typed builders | Cron strings | Cron strings | Cron strings |
 | Retries | Built-in | Manual | Built-in | Built-in |
-| Pricing | Free (uses your infra) | Hobby limits | Per-execution | Per-execution |
+| Graceful shutdown | Built-in | N/A | Managed | Managed |
+| Pricing | Free (runs on your infra) | Hobby limits | Per-execution | Per-execution |
 
 ## Why Cronlet?
 
 Sits between basic cron and full orchestration platforms:
 
 - **Better DX than Vercel Cron** — typed schedules, retries, timeouts, local dev dashboard
-- **Deploys to Vercel Cron** — one command generates routes and config
+- **Deploys anywhere** — Vercel Cron bridge, or a standalone worker on Railway, Fly, Docker, EC2
 - **Simpler than Trigger.dev/Inngest** — no cloud dashboard, no webhooks, runs on your existing infrastructure
 
 ## Project Structure
@@ -327,12 +422,9 @@ cronlet dev --dir ./examples
 
 ### Key Packages
 
-- **cronlet** - Core library with schedule builders and job types. Zero runtime dependencies.
-- **cronlet-cli** - CLI with dev server, job discovery, and local scheduler.
+- **cronlet** - Core library with schedule builders, execution engine, and `createWorker()`.
+- **cronlet-cli** - CLI with `init`, dev server, job discovery, and Vercel deploy.
 
-## Status
-
-Early development. API may change.
 
 ## License
 
