@@ -1,6 +1,6 @@
 # cronlet-cli
 
-![cronlet banner](https://raw.githubusercontent.com/niallforrest/cronlet/main/.github/assets/cronlet.png)
+![cronlet banner](https://raw.githubusercontent.com/niall-forrest/cronlet/main/.github/assets/cronlet.png)
 
 CLI for [cronlet](https://www.npmjs.com/package/cronlet) - the simplest way to add scheduled tasks to a Node.js application.
 

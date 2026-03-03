@@ -1,0 +1,100 @@
+---
+title: CLI Commands
+description: Daily command reference for init, dev, list, run, validate, and deploy.
+sidebar:
+  order: 5
+  label: CLI Commands
+---
+
+Use commands via `npx cronlet ...` or with a globally installed binary.
+
+## `cronlet init`
+
+Initializes cronlet in your project:
+
+- detects app structure
+- creates a jobs directory
+- creates an example job
+- writes a config file
+
+```bash
+npx cronlet init
+```
+
+## `cronlet dev`
+
+Starts local scheduler + dashboard.
+
+```bash
+npx cronlet dev
+npx cronlet dev --port 4000
+npx cronlet dev --dir ./jobs
+npx cronlet dev --no-watch
+```
+
+Options:
+
+- `-p, --port <port>` (default `3141`)
+- `-d, --dir <directory>`
+- `--no-watch`
+
+## `cronlet list`
+
+Lists discovered jobs with schedule and cron expression.
+
+```bash
+npx cronlet list
+npx cronlet list --dir ./src/jobs
+```
+
+Options:
+
+- `-d, --dir <directory>`
+
+## `cronlet run <job-id>`
+
+Triggers a single discovered job manually.
+
+```bash
+npx cronlet run billing/sync-stripe
+```
+
+Options:
+
+- `-d, --dir <directory>`
+
+## `cronlet validate`
+
+Validates discovered job definitions:
+
+- schedule presence
+- handler shape
+- retry format
+- timeout and retry delay duration format (`ms|s|m|h|d`)
+
+```bash
+npx cronlet validate
+```
+
+Options:
+
+- `-d, --dir <directory>`
+
+## `cronlet deploy --platform vercel`
+
+Generates Vercel cron route files and `vercel.json` cron entries.
+
+```bash
+npx cronlet deploy --platform vercel
+npx cronlet deploy --platform vercel --dry-run
+```
+
+Options:
+
+- `--platform <platform>` required (`vercel`)
+- `-d, --dir <directory>`
+- `--prefix <prefix>`
+- `--dry-run`
+- `--force`
+- `--no-clean`
+

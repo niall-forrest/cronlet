@@ -1,15 +1,36 @@
 ---
-title: Introduction
-description: What cronlet is and when to use it.
+title: Overview
+description: What cronlet is, where it fits, and how to use these docs.
+sidebar:
+  order: 1
+  label: Overview
 ---
 
-`cronlet` is a TypeScript-first scheduling toolkit for Node.js apps.
+`cronlet` is a TypeScript-first scheduling toolkit for Node.js apps. It is built for teams that want cron jobs to live with application code instead of a separate orchestration product.
 
-It helps you:
+## Why teams use cronlet
 
-- define schedules with typed builders (`every`, `daily`, `weekly`, `monthly`, `cron`)
-- discover jobs from your codebase with stable IDs
-- run jobs locally with a dev dashboard
-- deploy scheduled routes for platforms like Vercel
+- Typed schedule builders: `every`, `daily`, `weekly`, `monthly`, `cron`
+- File-based discovery with deterministic job IDs
+- Local dashboard with live job status and manual triggering
+- Built-in retries, timeouts, and overlap controls
+- Deploy helpers for Vercel and a standalone worker mode for any Node host
 
-Use `cronlet` when you want scheduling integrated directly into your existing app code without introducing a separate orchestration platform.
+## Where cronlet fits
+
+Use cronlet when you want scheduling integrated into your existing app and repo:
+
+- Next.js monorepos
+- API/backoffice services with recurring tasks
+- Jobs that need shared app code and types
+
+If you need distributed workflows, multi-step orchestration, or cross-service state machines, cronlet is usually too small by itself.
+
+## Read this docs set in order
+
+1. [Quickstart](/getting-started/) for first run
+2. [Jobs and Scheduling Model](/jobs-and-scheduling-model/) for job architecture
+3. [Config Reference](/config-reference/) and [CLI Commands](/cli-commands/) for day-to-day usage
+4. [Local Dev and Hot Reload](/local-dev-and-hot-reload/) for team DX
+5. [Deploy Targets and Caveats](/deploy-targets-and-caveats/) before production rollout
+6. [Troubleshooting and FAQ](/troubleshooting-and-faq/) when things do not behave as expected

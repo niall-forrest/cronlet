@@ -1,29 +1,69 @@
 ---
-title: Getting Started
-description: Install cronlet and run your first scheduled job.
+title: Quickstart
+description: Install cronlet, create your first job, and run it locally in under 5 minutes.
+sidebar:
+  order: 2
+  label: Quickstart
 ---
 
-## Install
+## 1. Install
 
 ```bash
 npm install cronlet cronlet-cli
 ```
 
-## Initialize
+## 2. Initialize the project
 
 ```bash
 npx cronlet init
 ```
 
-## Run locally
+`cronlet init` detects your project, creates a jobs directory, adds an example job, and writes `cronlet.config.*`.
+
+## 3. Create a job
+
+Create `src/jobs/weekly-digest.ts` (or `jobs/weekly-digest.ts` depending on your project):
+
+```ts
+import { schedule, weekly } from "cronlet";
+
+export default schedule(weekly("fri", "09:00"), async () => {
+  await sendWeeklyDigest();
+});
+```
+
+## 4. Start local dev scheduler
 
 ```bash
 npx cronlet dev
 ```
 
-The dev server discovers jobs in `./jobs`, `./src/jobs`, or `./app/jobs` and starts a dashboard at `http://localhost:3141`.
+You will get:
 
-## Concurrency controls
+- job discovery
+- local scheduler execution
+- dashboard at `http://localhost:3141`
+- file watching and hot reload
+
+## 5. Verify jobs are discoverable
+
+```bash
+npx cronlet list
+```
+
+Run one job manually:
+
+```bash
+npx cronlet run weekly-digest
+```
+
+Validate config and schedule declarations:
+
+```bash
+npx cronlet validate
+```
+
+## Optional: add runtime safety
 
 ```ts
 import { schedule, every } from "cronlet";
@@ -31,21 +71,20 @@ import { schedule, every } from "cronlet";
 export default schedule(
   every("1m"),
   {
-    // default: "skip"
-    // "allow" runs overlaps, "queue" serializes all triggers
+    // default is "skip"
     concurrency: "skip",
-    // only used with skip: queue one follow-up run when ticks are skipped
+    // only used with concurrency: "skip"
     catchup: true,
   },
   async () => {
-    // your job work
+    await doWork();
   }
 );
 ```
 
-## Timeout format
+## Timeout and retry duration format
 
-Use duration strings with units:
+Use integer + unit values:
 
 - `100ms`
 - `30s`
@@ -53,38 +92,8 @@ Use duration strings with units:
 - `1h`
 - `1d`
 
-These units are used for both `timeout` and `retry.initialDelay`.
+These units are supported for both `timeout` and `retry.initialDelay`.
 
-## Job IDs (how to think about them)
+## Next step
 
-When jobs are discovered from files:
-
-1. If you set `config.name`, that becomes the ID.
-2. If you do not set `config.name`, cronlet uses the file path relative to your jobs directory.
-
-Example: `src/jobs/billing/sync-stripe.ts` becomes `billing/sync-stripe`.
-
-## Config file behavior
-
-Cronlet CLI looks for the first config file that exists, in this order:
-
-1. `cronlet.config.ts`
-2. `cronlet.config.mts`
-3. `cronlet.config.cts`
-4. `cronlet.config.js`
-5. `cronlet.config.mjs`
-6. `cronlet.config.cjs`
-
-Directory resolution for `dev`, `list`, `run`, `validate`, and `deploy`:
-
-1. `--dir <path>`
-2. `jobsDir` in `cronlet.config.*`
-3. auto-detect: `./jobs`, `./src/jobs`, `./app/jobs`
-
-## Monthly caveat (`last-*`)
-
-`monthly("last-fri", "17:00")` compiles to cron syntax with `L` (`5L`).
-
-- Works in cronlet local runtime.
-- May not work on every hosted cron platform.
-- Validate generated cron syntax before production deploys.
+Move to [Jobs and Scheduling Model](/jobs-and-scheduling-model/) to understand stable IDs, job context, and how cronlet handles overlapping runs.

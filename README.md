@@ -1,6 +1,6 @@
 # cronlet
 
-![cronlet banner](https://raw.githubusercontent.com/niallforrest/cronlet/main/.github/assets/cronlet.png)
+![cronlet banner](https://raw.githubusercontent.com/niall-forrest/cronlet/main/.github/assets/cronlet.png)
 
 The simplest way to add scheduled tasks to a Node.js application. A typed, fluent API with file-based job discovery, stable file-based IDs, built-in retries, and a local dev dashboard. Just write functions and say when they should run.
 

@@ -21,11 +21,12 @@ pnpm release:check
 2. `pnpm test`
 3. `pnpm typecheck`
 4. `pnpm test:fixtures` (CLI fixture smoke tests)
+5. `pnpm docs:smoke` (docs build + required route outputs + canonical sitemap domain)
 
 ## 3. Manual sanity checks (recommended)
 
 - Run `pnpm cronlet -- list --dir ./examples` to verify CLI still works in a real project.
-- Confirm docs build output renders expected content for new behavior/caveats.
+- Confirm docs preview reflects dashboard-aligned theme and updated docs IA.
 
 ## 4. Publish
 

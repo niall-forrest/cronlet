@@ -1,0 +1,71 @@
+---
+title: Config Reference
+description: Complete reference for cronlet.config files and directory resolution behavior.
+sidebar:
+  order: 4
+  label: Config Reference
+---
+
+## Supported config filenames
+
+Cronlet CLI loads the first config file it finds in this order:
+
+1. `cronlet.config.ts`
+2. `cronlet.config.mts`
+3. `cronlet.config.cts`
+4. `cronlet.config.js`
+5. `cronlet.config.mjs`
+6. `cronlet.config.cjs`
+
+## Config format
+
+```ts
+import { defineConfig } from "cronlet";
+
+export default defineConfig({
+  jobsDir: "./src/jobs",
+  deploy: {
+    prefix: "/api/cron",
+    vercel: {
+      maxDuration: 60,
+    },
+  },
+});
+```
+
+## Fields
+
+### `jobsDir?: string`
+
+Path to your jobs directory.
+
+### `deploy.prefix?: string`
+
+Route prefix used by `cronlet deploy --platform vercel`.
+
+Default: `"/api/cron"`.
+
+### `deploy.vercel.maxDuration?: number`
+
+Maximum function duration in seconds used in generated Vercel route files.
+
+## Directory resolution (all CLI commands)
+
+`dev`, `list`, `run`, `validate`, and `deploy` resolve the jobs directory in this order:
+
+1. `--dir <path>`
+2. `jobsDir` from config
+3. auto-detect (`./jobs`, `./src/jobs`, `./app/jobs`)
+
+This is consistent across commands, so you do not need per-command path workarounds.
+
+## Watch path behavior in `dev`
+
+`cronlet dev` watches:
+
+1. `--dir` if provided
+2. otherwise `jobsDir` from config
+3. otherwise the default candidates (`./jobs`, `./src/jobs`, `./app/jobs`)
+
+At startup, cronlet prints the resolved config path, jobs source, and watch directories.
+

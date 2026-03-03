@@ -1,6 +1,6 @@
 {
   "name": "cronlet",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "The simplest way to add scheduled tasks to your Node.js app",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -59,7 +59,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/niallforrest/cronlet"
+    "url": "https://github.com/niall-forrest/cronlet"
   },
   "engines": {
     "node": ">=18"

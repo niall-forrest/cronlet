@@ -1,0 +1,80 @@
+---
+title: Troubleshooting and FAQ
+description: Fast fixes for common cronlet setup and runtime issues.
+sidebar:
+  order: 8
+  label: Troubleshooting and FAQ
+---
+
+## No jobs found
+
+Check directory resolution order:
+
+1. `--dir`
+2. `jobsDir` in `cronlet.config.*`
+3. auto-detect (`./jobs`, `./src/jobs`, `./app/jobs`)
+
+Then run:
+
+```bash
+npx cronlet list
+```
+
+If still empty, verify files export a valid default job definition.
+
+## My job ID changed unexpectedly
+
+For discovered jobs, IDs are:
+
+1. `config.name` if set
+2. otherwise file path relative to the jobs directory
+
+If you moved files or changed `jobsDir`, IDs will change by design.
+
+## Duplicate job ID conflict
+
+This means two files resolve to the same ID (or same explicit `name`).
+
+Fix by:
+
+- renaming one file path, or
+- setting distinct `config.name` values
+
+## `validate` fails on timeout or retry delay
+
+`timeout` and `retry.initialDelay` must be integer + unit:
+
+- `100ms`
+- `30s`
+- `5m`
+- `1h`
+- `1d`
+
+Values like `0.5m` or `5 minutes` are invalid.
+
+## Hot reload is not triggering
+
+Check `cronlet dev` startup output for watch directories.
+
+If needed, force explicit path:
+
+```bash
+npx cronlet dev --dir ./src/jobs
+```
+
+## Vercel deployed, but jobs are not executing
+
+Checklist:
+
+1. Confirm generated routes were committed.
+2. Confirm `vercel.json` includes expected cron paths.
+3. Confirm cron paths match your deploy prefix.
+4. Confirm schedule syntax is Vercel-compatible (no seconds field).
+5. Check logs for verification/auth failures on cron routes.
+
+## Does cronlet support monthly "last weekday" schedules?
+
+Yes locally. `monthly("last-fri", "17:00")` compiles to `L` syntax.
+
+Hosted cron support for `L` varies. Always validate your target platform behavior before relying on it in production.
+

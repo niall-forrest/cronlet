@@ -1,0 +1,63 @@
+---
+title: Deploy Targets and Caveats
+description: Ship cronlet jobs on Vercel or as a standalone worker, with known platform limits.
+sidebar:
+  order: 7
+  label: Deploy Targets and Caveats
+---
+
+## Vercel path (generated routes + vercel.json)
+
+Generate deployment artifacts:
+
+```bash
+npx cronlet deploy --platform vercel
+```
+
+Cronlet generates:
+
+- API route files that verify cron requests and execute jobs
+- `vercel.json` `crons` entries
+
+Useful flags:
+
+- `--dry-run` preview changes
+- `--prefix` change route base (default `/api/cron`)
+- `--force` overwrite manually edited generated files
+- `--no-clean` keep old generated routes
+
+## Vercel caveats (important)
+
+1. Vercel cron supports minute precision, not seconds.
+   `every("30s")` is valid locally but cannot be deployed to Vercel cron.
+2. Vercel cron runs in UTC.
+   If you use `.withTimezone(...)`, validate production behavior carefully.
+3. Retry + timeout settings can exceed function limits.
+   Use `deploy.vercel.maxDuration` and keep execution budget realistic.
+4. Monthly `last-*` schedules compile to cron `L` syntax (e.g. `5L`).
+   Cronlet runtime supports it locally, but hosted cron support can vary.
+
+## Worker path (any Node host)
+
+For Railway, Fly, Docker, Kubernetes, EC2, and similar hosts, run cronlet as a long-lived worker:
+
+```ts
+import { createWorker } from "cronlet";
+
+const worker = createWorker({ dir: "./src/jobs" });
+await worker.start();
+```
+
+Worker mode includes:
+
+- job discovery and scheduling
+- graceful shutdown (`SIGINT`/`SIGTERM`)
+- health endpoint (default enabled)
+
+## Recommended production rollout
+
+1. Validate locally (`npx cronlet validate`).
+2. Dry-run deploy generation (`--dry-run`).
+3. Review generated routes + `vercel.json`.
+4. Deploy and verify first execution in logs/metrics.
+
