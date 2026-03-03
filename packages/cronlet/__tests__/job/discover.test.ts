@@ -75,6 +75,75 @@ describe("discoverJobs()", () => {
     const jobs = await discoverJobs({ directory: "./__test_jobs__" });
     expect(jobs).toEqual([]);
   });
+
+  it("uses file-based IDs for anonymous jobs", async () => {
+    mkdirSync(join(TEST_DIR, "billing"), { recursive: true });
+    writeFileSync(
+      join(TEST_DIR, "billing", "sync.js"),
+      `export default {
+  id: "anonymous-job-1",
+  name: "anonymous-job-1",
+  schedule: { type: "interval", cron: "*/15 * * * *", humanReadable: "every 15 minutes", originalParams: {} },
+  config: {},
+  handler: async () => {}
+};`
+    );
+
+    const jobs = await discoverJobs({
+      directory: "./__test_jobs__",
+      extensions: [".js"],
+    });
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.id).toBe("billing/sync");
+    expect(jobs[0]?.name).toBe("billing/sync");
+    expect(jobs[0]?.filePath).toContain("billing/sync.js");
+  });
+
+  it("preserves explicit config.name IDs", async () => {
+    mkdirSync(TEST_DIR, { recursive: true });
+    writeFileSync(
+      join(TEST_DIR, "named.js"),
+      `export default {
+  id: "anonymous-job-1",
+  name: "anonymous-job-1",
+  schedule: { type: "interval", cron: "*/15 * * * *", humanReadable: "every 15 minutes", originalParams: {} },
+  config: { name: "daily-report" },
+  handler: async () => {}
+};`
+    );
+
+    const jobs = await discoverJobs({
+      directory: "./__test_jobs__",
+      extensions: [".js"],
+    });
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.id).toBe("daily-report");
+    expect(jobs[0]?.name).toBe("daily-report");
+  });
+
+  it("syncs normalized IDs back into the registry", async () => {
+    mkdirSync(TEST_DIR, { recursive: true });
+    writeFileSync(
+      join(TEST_DIR, "cleanup.js"),
+      `export default {
+  id: "anonymous-job-1",
+  name: "anonymous-job-1",
+  schedule: { type: "interval", cron: "*/15 * * * *", humanReadable: "every 15 minutes", originalParams: {} },
+  config: {},
+  handler: async () => {}
+};`
+    );
+
+    await discoverJobs({
+      directory: "./__test_jobs__",
+      extensions: [".js"],
+    });
+
+    expect(registry.getById("cleanup")).toBeDefined();
+    expect(registry.getById("anonymous-job-1")).toBeUndefined();
+  });
 });
 
 describe("getDefaultDirectories()", () => {

@@ -74,12 +74,84 @@ function filePathToJobId(filePath: string, baseDir: string): string {
   return relativePath.slice(0, -ext.length).replace(/\\/g, "/");
 }
 
+function hasExplicitName(job: JobDefinition): boolean {
+  return typeof job.config.name === "string" && job.config.name.length > 0;
+}
+
+function buildNormalizedJob(
+  job: JobDefinition,
+  filePath: string,
+  fileJobId: string
+): JobDefinition {
+  if (hasExplicitName(job)) {
+    const name = job.config.name!;
+    return {
+      ...job,
+      id: name,
+      name,
+      filePath,
+    };
+  }
+
+  // schedule() uses anonymous-job-* IDs when no explicit name is provided.
+  // During discovery we normalize those IDs to stable file-based IDs.
+  if (job.id.startsWith("anonymous-job-")) {
+    return {
+      ...job,
+      id: fileJobId,
+      name: fileJobId,
+      filePath,
+    };
+  }
+
+  return {
+    ...job,
+    filePath,
+  };
+}
+
+function createJobConflictError(
+  jobId: string,
+  filePath: string,
+  existing: JobDefinition
+): Error {
+  const existingPath = existing.filePath ?? "(unknown source)";
+  return new Error(
+    `Job ID conflict for "${jobId}": ${filePath} conflicts with ${existingPath}. ` +
+      `Use config.name to disambiguate.`
+  );
+}
+
+function syncRegistryJob(
+  importedJob: JobDefinition,
+  normalizedJob: JobDefinition,
+  filePath: string
+): JobDefinition {
+  const existingAtTargetId = registry.getById(normalizedJob.id);
+  if (existingAtTargetId) {
+    if (existingAtTargetId === importedJob) {
+      existingAtTargetId.filePath = filePath;
+      existingAtTargetId.name = normalizedJob.name;
+      return existingAtTargetId;
+    }
+    throw createJobConflictError(normalizedJob.id, filePath, existingAtTargetId);
+  }
+
+  const existingAtImportedId = registry.getById(importedJob.id);
+  if (existingAtImportedId === importedJob && importedJob.id !== normalizedJob.id) {
+    registry.remove(importedJob.id);
+  }
+
+  registry.register(normalizedJob);
+  return normalizedJob;
+}
+
 /**
  * Import a job file and extract the job definition
  */
 async function importJobFile(
   filePath: string,
-  _jobId: string
+  fileJobId: string
 ): Promise<JobDefinition | null> {
   try {
     // Convert to file URL for ESM import
@@ -107,12 +179,8 @@ async function importJobFile(
       return null;
     }
 
-    // Return the job as-is - schedule() already registered it with the correct ID
-    // Just add the file path for reference
-    return {
-      ...jobDef,
-      filePath,
-    };
+    const normalizedJob = buildNormalizedJob(jobDef as JobDefinition, filePath, fileJobId);
+    return syncRegistryJob(jobDef as JobDefinition, normalizedJob, filePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Error importing ${filePath}: ${message}`);
