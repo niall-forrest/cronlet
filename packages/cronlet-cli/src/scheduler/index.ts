@@ -25,6 +25,9 @@ interface InFlightJob {
 export class CronScheduler {
   private scheduledJobs: Map<string, ScheduledJob> = new Map();
   private inFlightJobs: Map<string, InFlightJob> = new Map();
+  private activeJobCounts: Map<string, number> = new Map();
+  private queuedJobs: Map<string, Promise<ExecutionResult>> = new Map();
+  private catchupQueued: Set<string> = new Set();
   private running = false;
   private shuttingDown = false;
 
@@ -70,16 +73,112 @@ export class CronScheduler {
   async executeJob(job: JobDefinition): Promise<ExecutionResult> {
     // Don't start new jobs if shutting down
     if (this.shuttingDown) {
-      return {
-        jobId: job.id,
-        runId: `skipped_${Date.now()}`,
-        status: "failure",
-        startedAt: new Date(),
-        completedAt: new Date(),
-        duration: 0,
-        attempt: 0,
-        error: { message: "Scheduler is shutting down" },
-      };
+      return this.createSkippedResult(job, "Scheduler is shutting down");
+    }
+
+    const policy = job.config.concurrency ?? "skip";
+
+    if (policy === "allow") {
+      return this.runJob(job);
+    }
+
+    if (policy === "queue") {
+      return this.enqueueJob(job);
+    }
+
+    // Default policy: skip overlapping runs
+    const hasQueuedRun = this.queuedJobs.has(job.id);
+    if (this.isJobActive(job.id) || hasQueuedRun) {
+      if (!job.config.catchup) {
+        return this.createSkippedResult(job, "Job is already running or queued (concurrency=skip)");
+      }
+
+      const queued = this.queueCatchupRun(job);
+      return this.createSkippedResult(
+        job,
+        queued
+          ? "Job is already running; scheduled one catch-up run"
+          : "Job is already running; catch-up run already queued"
+      );
+    }
+
+    return this.runJob(job);
+  }
+
+  private createSkippedResult(job: JobDefinition, message: string): ExecutionResult {
+    return {
+      jobId: job.id,
+      runId: `skipped_${Date.now()}`,
+      status: "failure",
+      startedAt: new Date(),
+      completedAt: new Date(),
+      duration: 0,
+      attempt: 0,
+      error: { message },
+    };
+  }
+
+  private isJobActive(jobId: string): boolean {
+    return (this.activeJobCounts.get(jobId) ?? 0) > 0;
+  }
+
+  private incrementActiveJob(jobId: string): void {
+    this.activeJobCounts.set(jobId, (this.activeJobCounts.get(jobId) ?? 0) + 1);
+  }
+
+  private decrementActiveJob(jobId: string): void {
+    const nextCount = (this.activeJobCounts.get(jobId) ?? 1) - 1;
+    if (nextCount <= 0) {
+      this.activeJobCounts.delete(jobId);
+      return;
+    }
+    this.activeJobCounts.set(jobId, nextCount);
+  }
+
+  private waitForActiveRuns(jobId: string): Promise<void> {
+    const activePromises = Array.from(this.inFlightJobs.values())
+      .filter((inFlight) => inFlight.jobId === jobId)
+      .map((inFlight) => inFlight.promise);
+
+    if (activePromises.length === 0) {
+      return Promise.resolve();
+    }
+
+    return Promise.allSettled(activePromises).then(() => undefined);
+  }
+
+  private enqueueJob(job: JobDefinition, waitFor?: Promise<void>): Promise<ExecutionResult> {
+    const base = this.queuedJobs.get(job.id) ?? waitFor ?? Promise.resolve();
+    const next = base
+      .catch(() => undefined)
+      .then(() => this.runJob(job));
+
+    const tracked = next.finally(() => {
+      if (this.queuedJobs.get(job.id) === tracked) {
+        this.queuedJobs.delete(job.id);
+      }
+    });
+
+    this.queuedJobs.set(job.id, tracked);
+    return tracked;
+  }
+
+  private queueCatchupRun(job: JobDefinition): boolean {
+    if (this.catchupQueued.has(job.id)) {
+      return false;
+    }
+
+    this.catchupQueued.add(job.id);
+    const waitFor = this.waitForActiveRuns(job.id);
+    this.enqueueJob(job, waitFor).finally(() => {
+      this.catchupQueued.delete(job.id);
+    });
+    return true;
+  }
+
+  private async runJob(job: JobDefinition): Promise<ExecutionResult> {
+    if (this.shuttingDown) {
+      return this.createSkippedResult(job, "Scheduler is shutting down");
     }
 
     const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -89,12 +188,14 @@ export class CronScheduler {
     // Track in-flight job
     const inFlight: InFlightJob = { jobId: job.id, runId, startedAt, promise };
     this.inFlightJobs.set(runId, inFlight);
+    this.incrementActiveJob(job.id);
 
     try {
       const result = await promise;
       return result;
     } finally {
       this.inFlightJobs.delete(runId);
+      this.decrementActiveJob(job.id);
     }
   }
 

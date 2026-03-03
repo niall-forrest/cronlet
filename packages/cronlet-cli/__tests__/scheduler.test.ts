@@ -15,7 +15,11 @@ vi.mock("cronlet", async () => {
 
 import { engine } from "cronlet";
 
-const createMockJob = (id: string, cronExpr = "0 * * * *"): JobDefinition => ({
+const createMockJob = (
+  id: string,
+  cronExpr = "0 * * * *",
+  config: JobDefinition["config"] = {}
+): JobDefinition => ({
   id,
   name: id,
   schedule: {
@@ -24,7 +28,7 @@ const createMockJob = (id: string, cronExpr = "0 * * * *"): JobDefinition => ({
     humanReadable: "every hour",
     originalParams: {},
   },
-  config: {},
+  config,
   handler: async () => {},
 });
 
@@ -100,6 +104,159 @@ describe("CronScheduler", () => {
 
       // Job should no longer be in-flight
       expect(scheduler.getInFlightCount()).toBe(0);
+    });
+  });
+
+  describe("concurrency policies", () => {
+    it("skips overlapping runs by default", async () => {
+      const job = createMockJob("skip-job", "0 * * * *", { concurrency: "skip" });
+      let resolveFirst: () => void;
+
+      vi.mocked(engine.run).mockImplementation(async () => {
+        await new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        });
+        return {
+          jobId: job.id,
+          runId: "run-1",
+          status: "success",
+          startedAt: new Date(),
+          completedAt: new Date(),
+          duration: 100,
+          attempt: 1,
+        };
+      });
+
+      const firstExecution = scheduler.executeJob(job);
+      const overlapResult = await scheduler.executeJob(job);
+
+      expect(overlapResult.status).toBe("failure");
+      expect(overlapResult.error?.message).toBe("Job is already running or queued (concurrency=skip)");
+      expect(engine.run).toHaveBeenCalledTimes(1);
+
+      resolveFirst!();
+      await firstExecution;
+    });
+
+    it("queues overlapping runs when configured", async () => {
+      const job = createMockJob("queue-job", "0 * * * *", { concurrency: "queue" });
+      let resolveFirst: () => void;
+
+      vi.mocked(engine.run)
+        .mockImplementationOnce(async () => {
+          await new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+          return {
+            jobId: job.id,
+            runId: "run-1",
+            status: "success",
+            startedAt: new Date(),
+            completedAt: new Date(),
+            duration: 100,
+            attempt: 1,
+          };
+        })
+        .mockImplementationOnce(async () => ({
+          jobId: job.id,
+          runId: "run-2",
+          status: "success",
+          startedAt: new Date(),
+          completedAt: new Date(),
+          duration: 50,
+          attempt: 1,
+        }));
+
+      const firstExecution = scheduler.executeJob(job);
+      const secondExecution = scheduler.executeJob(job);
+
+      await vi.waitFor(() => {
+        expect(engine.run).toHaveBeenCalledTimes(1);
+      });
+      resolveFirst!();
+
+      const [firstResult, secondResult] = await Promise.all([firstExecution, secondExecution]);
+
+      expect(firstResult.runId).toBe("run-1");
+      expect(secondResult.runId).toBe("run-2");
+      expect(engine.run).toHaveBeenCalledTimes(2);
+    });
+
+    it("allows overlapping runs when configured", async () => {
+      const job = createMockJob("allow-job", "0 * * * *", { concurrency: "allow" });
+      let resolveGate: () => void;
+      const gate = new Promise<void>((resolve) => {
+        resolveGate = resolve;
+      });
+
+      vi.mocked(engine.run).mockImplementation(async () => {
+        await gate;
+        return {
+          jobId: job.id,
+          runId: "allow-run",
+          status: "success",
+          startedAt: new Date(),
+          completedAt: new Date(),
+          duration: 100,
+          attempt: 1,
+        };
+      });
+
+      const firstExecution = scheduler.executeJob(job);
+      const secondExecution = scheduler.executeJob(job);
+
+      expect(engine.run).toHaveBeenCalledTimes(2);
+      expect(scheduler.getInFlightCount()).toBe(2);
+
+      resolveGate!();
+      await Promise.all([firstExecution, secondExecution]);
+    });
+
+    it("schedules a single catch-up run when skip+catchup is enabled", async () => {
+      const job = createMockJob("catchup-job", "0 * * * *", {
+        concurrency: "skip",
+        catchup: true,
+      });
+      let resolveFirst: () => void;
+
+      vi.mocked(engine.run)
+        .mockImplementationOnce(async () => {
+          await new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+          return {
+            jobId: job.id,
+            runId: "run-1",
+            status: "success",
+            startedAt: new Date(),
+            completedAt: new Date(),
+            duration: 100,
+            attempt: 1,
+          };
+        })
+        .mockImplementationOnce(async () => ({
+          jobId: job.id,
+          runId: "run-2",
+          status: "success",
+          startedAt: new Date(),
+          completedAt: new Date(),
+          duration: 50,
+          attempt: 1,
+        }));
+
+      const firstExecution = scheduler.executeJob(job);
+      const overlapOne = await scheduler.executeJob(job);
+      const overlapTwo = await scheduler.executeJob(job);
+
+      expect(overlapOne.error?.message).toBe("Job is already running; scheduled one catch-up run");
+      expect(overlapTwo.error?.message).toBe("Job is already running; catch-up run already queued");
+      expect(engine.run).toHaveBeenCalledTimes(1);
+
+      resolveFirst!();
+      await firstExecution;
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(engine.run).toHaveBeenCalledTimes(2);
     });
   });
 

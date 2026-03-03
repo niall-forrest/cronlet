@@ -100,6 +100,8 @@ schedule(
   daily("09:00"),
   {
     name: "daily-report",
+    concurrency: "skip", // default: "skip" | "allow" | "queue"
+    catchup: false,      // when skip is used, queue one missed run
     retry: {
       attempts: 3,
       backoff: "exponential",
@@ -117,6 +119,22 @@ schedule(
     await generateAndSendReport()
   }
 )
+```
+
+### Concurrency Behavior
+
+```ts
+// default: skip overlapping runs
+schedule(every("1m"), { concurrency: "skip" }, handler)
+
+// allow overlapping runs
+schedule(every("1m"), { concurrency: "allow" }, handler)
+
+// serialize runs; every trigger is queued
+schedule(every("1m"), { concurrency: "queue" }, handler)
+
+// skip overlaps, but queue one follow-up run
+schedule(every("1m"), { concurrency: "skip", catchup: true }, handler)
 ```
 
 ## Job Context

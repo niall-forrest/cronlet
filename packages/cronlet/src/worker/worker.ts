@@ -8,17 +8,26 @@ import type { WorkerOptions, Worker, Logger } from "./types.js";
 import { createDefaultLogger } from "./logger.js";
 import { startHealthServer, type HealthServer } from "./health.js";
 
+interface InFlightExecution {
+  jobId: string;
+  promise: Promise<ExecutionResult>;
+}
+
 export class CronletWorker implements Worker {
   private options: WorkerOptions;
   private logger: Logger;
   private crons: Map<string, Cron> = new Map();
   private jobs: JobDefinition[] = [];
-  private inFlight: Map<string, Promise<ExecutionResult>> = new Map();
+  private inFlight: Map<string, InFlightExecution> = new Map();
+  private activeJobCounts: Map<string, number> = new Map();
+  private queuedJobs: Map<string, Promise<ExecutionResult>> = new Map();
+  private catchupQueued: Set<string> = new Set();
   private running = false;
   private shuttingDown = false;
   private healthServer: HealthServer | null = null;
   private startedAt = new Date();
   private unsubscribers: Array<() => void> = [];
+  private signalHandlers: Array<{ signal: NodeJS.Signals; handler: () => void }> = [];
 
   constructor(options: WorkerOptions) {
     this.options = options;
@@ -98,7 +107,7 @@ export class CronletWorker implements Worker {
       const timeout = this.options.shutdownTimeout ?? 30_000;
       const deadline = new Promise<"timeout">((r) => setTimeout(() => r("timeout"), timeout));
       const all = Promise.all(
-        Array.from(this.inFlight.values()).map((p) => p.catch(() => {}))
+        Array.from(this.inFlight.values()).map((entry) => entry.promise.catch(() => {}))
       ).then(() => "done" as const);
 
       const result = await Promise.race([all, deadline]);
@@ -118,6 +127,7 @@ export class CronletWorker implements Worker {
       unsub();
     }
     this.unsubscribers = [];
+    this.unregisterSignalHandlers();
 
     this.running = false;
     this.shuttingDown = false;
@@ -142,26 +152,124 @@ export class CronletWorker implements Worker {
 
   private async executeJob(job: JobDefinition): Promise<ExecutionResult> {
     if (this.shuttingDown) {
-      return {
-        jobId: job.id,
-        runId: `skipped_${Date.now()}`,
-        status: "failure",
-        startedAt: new Date(),
-        completedAt: new Date(),
-        duration: 0,
-        attempt: 0,
-        error: { message: "Worker is shutting down" },
-      };
+      return this.createSkippedResult(job, "Worker is shutting down");
+    }
+
+    const policy = job.config.concurrency ?? "skip";
+
+    if (policy === "allow") {
+      return this.runJob(job);
+    }
+
+    if (policy === "queue") {
+      return this.enqueueJob(job);
+    }
+
+    // Default policy: skip overlapping runs
+    const hasQueuedRun = this.queuedJobs.has(job.id);
+    if (this.isJobActive(job.id) || hasQueuedRun) {
+      if (!job.config.catchup) {
+        return this.createSkippedResult(job, "Job is already running or queued (concurrency=skip)");
+      }
+
+      const queued = this.queueCatchupRun(job);
+      return this.createSkippedResult(
+        job,
+        queued
+          ? "Job is already running; scheduled one catch-up run"
+          : "Job is already running; catch-up run already queued"
+      );
+    }
+
+    return this.runJob(job);
+  }
+
+  private createSkippedResult(job: JobDefinition, message: string): ExecutionResult {
+    return {
+      jobId: job.id,
+      runId: `skipped_${Date.now()}`,
+      status: "failure",
+      startedAt: new Date(),
+      completedAt: new Date(),
+      duration: 0,
+      attempt: 0,
+      error: { message },
+    };
+  }
+
+  private isJobActive(jobId: string): boolean {
+    return (this.activeJobCounts.get(jobId) ?? 0) > 0;
+  }
+
+  private incrementActiveJob(jobId: string): void {
+    this.activeJobCounts.set(jobId, (this.activeJobCounts.get(jobId) ?? 0) + 1);
+  }
+
+  private decrementActiveJob(jobId: string): void {
+    const nextCount = (this.activeJobCounts.get(jobId) ?? 1) - 1;
+    if (nextCount <= 0) {
+      this.activeJobCounts.delete(jobId);
+      return;
+    }
+    this.activeJobCounts.set(jobId, nextCount);
+  }
+
+  private waitForActiveRuns(jobId: string): Promise<void> {
+    const activePromises = Array.from(this.inFlight.values())
+      .filter((entry) => entry.jobId === jobId)
+      .map((entry) => entry.promise);
+
+    if (activePromises.length === 0) {
+      return Promise.resolve();
+    }
+
+    return Promise.allSettled(activePromises).then(() => undefined);
+  }
+
+  private enqueueJob(job: JobDefinition, waitFor?: Promise<void>): Promise<ExecutionResult> {
+    const base = this.queuedJobs.get(job.id) ?? waitFor ?? Promise.resolve();
+    const next = base
+      .catch(() => undefined)
+      .then(() => this.runJob(job));
+
+    const tracked = next.finally(() => {
+      if (this.queuedJobs.get(job.id) === tracked) {
+        this.queuedJobs.delete(job.id);
+      }
+    });
+
+    this.queuedJobs.set(job.id, tracked);
+    return tracked;
+  }
+
+  private queueCatchupRun(job: JobDefinition): boolean {
+    if (this.catchupQueued.has(job.id)) {
+      return false;
+    }
+
+    this.catchupQueued.add(job.id);
+    const waitFor = this.waitForActiveRuns(job.id);
+    this.enqueueJob(job, waitFor).finally(() => {
+      this.catchupQueued.delete(job.id);
+    });
+    return true;
+  }
+
+  private async runJob(job: JobDefinition): Promise<ExecutionResult> {
+    if (this.shuttingDown) {
+      return this.createSkippedResult(job, "Worker is shutting down");
     }
 
     const promise = engine.run(job);
     const key = `${job.id}_${Date.now()}`;
-    this.inFlight.set(key, promise);
+    this.inFlight.set(key, { jobId: job.id, promise });
+    this.incrementActiveJob(job.id);
 
     try {
       return await promise;
     } finally {
       this.inFlight.delete(key);
+      this.decrementActiveJob(job.id);
     }
   }
 
@@ -248,12 +356,27 @@ export class CronletWorker implements Worker {
   }
 
   private registerSignalHandlers(): void {
-    const handle = (signal: string) => {
-      this.logger.info(`Received ${signal}`);
-      this.stop().then(() => process.exit(0));
+    if (this.signalHandlers.length > 0) {
+      return;
+    }
+
+    const register = (signal: NodeJS.Signals): void => {
+      const handler = () => {
+        this.logger.info(`Received ${signal}`);
+        void this.stop().finally(() => process.exit(0));
+      };
+      process.on(signal, handler);
+      this.signalHandlers.push({ signal, handler });
     };
 
-    process.on("SIGTERM", () => handle("SIGTERM"));
-    process.on("SIGINT", () => handle("SIGINT"));
+    register("SIGTERM");
+    register("SIGINT");
+  }
+
+  private unregisterSignalHandlers(): void {
+    for (const { signal, handler } of this.signalHandlers) {
+      process.removeListener(signal, handler);
+    }
+    this.signalHandlers = [];
   }
 }

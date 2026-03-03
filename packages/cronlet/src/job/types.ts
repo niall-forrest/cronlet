@@ -31,6 +31,11 @@ export type JobHandler = (context: JobContext) => Promise<void> | void;
 export type BackoffStrategy = "linear" | "exponential";
 
 /**
+ * Concurrency behavior when a schedule ticks while a previous run is still active
+ */
+export type ConcurrencyPolicy = "allow" | "skip" | "queue";
+
+/**
  * Retry configuration for jobs
  */
 export interface RetryConfig {
@@ -48,6 +53,10 @@ export interface RetryConfig {
 export interface JobConfig {
   /** Optional explicit name for the job */
   name?: string;
+  /** How to handle overlapping schedule ticks (default: "skip") */
+  concurrency?: ConcurrencyPolicy;
+  /** Queue a single follow-up run when overlapping ticks are skipped (default: false) */
+  catchup?: boolean;
   /** Retry configuration */
   retry?: RetryConfig;
   /** Maximum execution time (e.g., "5m", "30s") */

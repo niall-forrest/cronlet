@@ -3,6 +3,7 @@ export type {
   JobContext,
   JobHandler,
   BackoffStrategy,
+  ConcurrencyPolicy,
   RetryConfig,
   JobConfig,
   JobDefinition,
