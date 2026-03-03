@@ -1,6 +1,6 @@
 {
   "name": "cronlet-cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "CLI for Cronlet - the simplest way to add scheduled tasks to your Node.js app",
   "type": "module",
   "bin": {
@@ -54,7 +54,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/niallforrest/cronlet"
+    "url": "https://github.com/niall-forrest/cronlet"
   },
   "engines": {
     "node": ">=18"

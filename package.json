@@ -6,10 +6,12 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "docs:build": "pnpm --filter @cronlet/docs build",
+    "docs:smoke": "node scripts/smoke/docs-site.mjs",
     "test:fixtures": "node scripts/smoke/cli-fixtures.mjs",
     "clean": "turbo run clean && rm -rf node_modules",
     "typecheck": "turbo run typecheck",
-    "release:check": "pnpm build && pnpm test && pnpm typecheck && pnpm test:fixtures",
+    "release:check": "pnpm build && pnpm test && pnpm typecheck && pnpm test:fixtures && pnpm docs:smoke",
     "cronlet": "node packages/cronlet-cli/dist/cli.js"
   },
   "devDependencies": {
