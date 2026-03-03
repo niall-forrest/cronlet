@@ -3,6 +3,7 @@ import { discoverJobs, registry, engine } from "cronlet";
 import { createServer } from "../server/index.js";
 import { CronScheduler } from "../scheduler/index.js";
 import { createWatcher } from "../watcher/index.js";
+import { loadConfig, resolveJobsDirectory } from "../config/index.js";
 import {
   printBanner,
   printJobs,
@@ -15,6 +16,7 @@ import {
   printFileChange,
   printError,
 } from "../ui/banner.js";
+import pc from "picocolors";
 
 export const devCommand = new Command("dev")
   .description("Start the development server with hot reloading")
@@ -23,6 +25,12 @@ export const devCommand = new Command("dev")
   .option("--no-watch", "Disable file watching")
   .action(async (options) => {
     const port = parseInt(options.port, 10);
+    const loadedConfig = await loadConfig();
+    const jobsDir = resolveJobsDirectory(options.dir, loadedConfig.config);
+
+    for (const warning of loadedConfig.warnings) {
+      console.warn(pc.yellow(`  Warning: ${warning}`));
+    }
 
     // Setup execution event listeners for console output
     engine.on("job:start", (event) => {
@@ -55,7 +63,7 @@ export const devCommand = new Command("dev")
 
       try {
         const jobs = await discoverJobs({
-          directory: options.dir,
+          directory: jobsDir,
           clearRegistry: false,
         });
 
@@ -93,10 +101,10 @@ export const devCommand = new Command("dev")
 
     // Setup file watcher
     if (options.watch !== false) {
-      const jobsDir = options.dir ?? "./jobs";
+      const watchDir = jobsDir ?? "./jobs";
 
       const watcher = createWatcher({
-        directory: jobsDir,
+        directory: watchDir,
         onChange: async (path) => {
           printFileChange(path);
 

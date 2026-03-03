@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
-import type { JobDefinition } from "cronlet";
-import type { ProjectInfo, CronletConfig } from "../detection.js";
+import type { JobDefinition, CronletConfig } from "cronlet";
+import type { ProjectInfo } from "../detection.js";
 import { validateForVercel, flattenJobId } from "../validation.js";
 import { generateAppRoute } from "../generators/route-app.js";
 import { generatePagesRoute } from "../generators/route-pages.js";

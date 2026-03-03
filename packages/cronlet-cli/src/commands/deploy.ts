@@ -1,14 +1,19 @@
 import { Command } from "commander";
 import { discoverJobs } from "cronlet";
 import pc from "picocolors";
-import { detectProject, findJobsDirectory, loadConfig } from "../deploy/detection.js";
+import { detectProject } from "../deploy/detection.js";
 import { deployToVercel } from "../deploy/platforms/vercel.js";
+import {
+  loadConfig,
+  resolveJobsDirectory,
+  DEFAULT_JOB_DIRECTORIES,
+} from "../config/index.js";
 
 export const deployCommand = new Command("deploy")
   .description("Generate deployment files for a target platform")
   .requiredOption("--platform <platform>", "Target platform (vercel)")
   .option("-d, --dir <directory>", "Jobs directory")
-  .option("--prefix <prefix>", "Route prefix", "/api/cron")
+  .option("--prefix <prefix>", "Route prefix")
   .option("--dry-run", "Preview changes without writing files")
   .option("--force", "Overwrite manually edited files")
   .option("--no-clean", "Keep orphaned routes from deleted jobs")
@@ -40,13 +45,23 @@ export const deployCommand = new Command("deploy")
     console.log(pc.dim(`  Project: ${project.router === "app" ? "App Router" : "Pages Router"} (${project.typescript ? "TypeScript" : "JavaScript"})`));
 
     // Load config
-    const config = await loadConfig();
+    const loadedConfig = await loadConfig();
+    const config = loadedConfig.config;
+    for (const warning of loadedConfig.warnings) {
+      console.log(pc.yellow(`  Warning: ${warning}`));
+    }
+
+    const prefix = options.prefix ?? config?.deploy?.prefix ?? "/api/cron";
 
     // Find jobs directory
-    const jobsDir = options.dir ?? config?.jobsDir ?? findJobsDirectory();
+    const jobsDir = resolveJobsDirectory(options.dir, config);
     if (!jobsDir) {
       console.error(pc.red("  Error: Could not find jobs directory."));
-      console.error(pc.dim("  Create ./jobs, ./src/jobs, or ./app/jobs, or use --dir flag."));
+      console.error(
+        pc.dim(
+          `  Create one of ${DEFAULT_JOB_DIRECTORIES.join(", ")}, set jobsDir in config, or use --dir.`
+        )
+      );
       process.exit(1);
     }
 
@@ -82,7 +97,7 @@ export const deployCommand = new Command("deploy")
       project,
       jobsDir,
       {
-        prefix: options.prefix,
+        prefix,
         force: options.force ?? false,
         clean: options.clean ?? true,
         dryRun: options.dryRun ?? false,

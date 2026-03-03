@@ -1,14 +1,21 @@
 import { Command } from "commander";
 import { discoverJobs } from "cronlet";
 import pc from "picocolors";
+import { loadConfig, resolveJobsDirectory } from "../config/index.js";
 
 export const listCommand = new Command("list")
   .description("List all discovered jobs")
   .option("-d, --dir <directory>", "Jobs directory")
   .action(async (options) => {
     try {
+      const loadedConfig = await loadConfig();
+      const jobsDir = resolveJobsDirectory(options.dir, loadedConfig.config);
+      for (const warning of loadedConfig.warnings) {
+        console.warn(pc.yellow(`Warning: ${warning}`));
+      }
+
       const jobs = await discoverJobs({
-        directory: options.dir,
+        directory: jobsDir,
       });
 
       if (jobs.length === 0) {

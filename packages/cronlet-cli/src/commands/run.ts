@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { discoverJobs, registry, engine } from "cronlet";
 import pc from "picocolors";
+import { loadConfig, resolveJobsDirectory } from "../config/index.js";
 
 export const runCommand = new Command("run")
   .description("Manually trigger a specific job")
@@ -8,9 +9,15 @@ export const runCommand = new Command("run")
   .option("-d, --dir <directory>", "Jobs directory")
   .action(async (jobId, options) => {
     try {
+      const loadedConfig = await loadConfig();
+      const jobsDir = resolveJobsDirectory(options.dir, loadedConfig.config);
+      for (const warning of loadedConfig.warnings) {
+        console.warn(pc.yellow(`Warning: ${warning}`));
+      }
+
       // Discover jobs
       await discoverJobs({
-        directory: options.dir,
+        directory: jobsDir,
       });
 
       // Find the job
