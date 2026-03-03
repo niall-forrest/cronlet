@@ -42,3 +42,49 @@ export default schedule(
   }
 );
 ```
+
+## Timeout format
+
+Use duration strings with units:
+
+- `100ms`
+- `30s`
+- `5m`
+- `1h`
+- `1d`
+
+These units are used for both `timeout` and `retry.initialDelay`.
+
+## Job IDs (how to think about them)
+
+When jobs are discovered from files:
+
+1. If you set `config.name`, that becomes the ID.
+2. If you do not set `config.name`, cronlet uses the file path relative to your jobs directory.
+
+Example: `src/jobs/billing/sync-stripe.ts` becomes `billing/sync-stripe`.
+
+## Config file behavior
+
+Cronlet CLI looks for the first config file that exists, in this order:
+
+1. `cronlet.config.ts`
+2. `cronlet.config.mts`
+3. `cronlet.config.cts`
+4. `cronlet.config.js`
+5. `cronlet.config.mjs`
+6. `cronlet.config.cjs`
+
+Directory resolution for `dev`, `list`, `run`, `validate`, and `deploy`:
+
+1. `--dir <path>`
+2. `jobsDir` in `cronlet.config.*`
+3. auto-detect: `./jobs`, `./src/jobs`, `./app/jobs`
+
+## Monthly caveat (`last-*`)
+
+`monthly("last-fri", "17:00")` compiles to cron syntax with `L` (`5L`).
+
+- Works in cronlet local runtime.
+- May not work on every hosted cron platform.
+- Validate generated cron syntax before production deploys.

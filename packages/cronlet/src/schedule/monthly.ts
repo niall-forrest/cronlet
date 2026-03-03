@@ -31,7 +31,7 @@ function parseLastDay(day: string): DayOfWeek | null {
  * ```ts
  * monthly(1, "09:00")              // 1st of every month at 9:00 AM
  * monthly(15, "12:00")             // 15th of every month at noon
- * monthly("last-friday", "17:00")  // last Friday of every month at 5:00 PM
+ * monthly("last-fri", "17:00")     // last Friday of every month at 5:00 PM
  * ```
  */
 export function monthly(day: MonthlyDay, time: TimeString): ScheduleBuilder {
@@ -62,14 +62,12 @@ export function monthly(day: MonthlyDay, time: TimeString): ScheduleBuilder {
     const lastDay = parseLastDay(day);
     if (!lastDay) {
       throw new Error(
-        `Invalid monthly day format: "${day}". Expected a number (1-31) or "last-{weekday}" (e.g., "last-friday")`
+        `Invalid monthly day format: "${day}". Expected a number (1-31) or "last-{weekday}" (last-mon|last-tue|last-wed|last-thu|last-fri|last-sat|last-sun)`
       );
     }
 
-    // For "last X of month", we need a special cron expression
-    // Standard cron can't express this directly, but we can use "L" in some implementations
-    // We'll use a format that the scheduler can interpret: day#L or just store the info
-    // For compatibility, we'll use the weekday and note it's the last occurrence
+    // "Last weekday of month" uses the non-standard "L" suffix (e.g. 5L).
+    // Croner supports this, but some external schedulers may not.
     const cronDay = dayOfWeekToCron[lastDay];
 
     // Using the "weekday#occurrence" format where L = last

@@ -1,6 +1,6 @@
 # cronlet
 
-The simplest way to add scheduled tasks to a Node.js application. A typed, fluent API with file-based job discovery, built-in retries, and a local dev dashboard. Just write functions and say when they should run.
+The simplest way to add scheduled tasks to a Node.js application. A typed, fluent API with file-based job discovery, stable file-based IDs, built-in retries, and a local dev dashboard. Just write functions and say when they should run.
 
 ```ts
 // jobs/weekly-digest.ts
@@ -76,6 +76,8 @@ schedule(monthly(15, "12:00"), handler)             // 15th of month at noon
 schedule(monthly("last-fri", "17:00"), handler)     // last Friday of month
 ```
 
+`monthly("last-...")` compiles to a cron expression that uses `L` (for example `5L`). Cronlet's local scheduler supports this, but some hosted schedulers do not. Verify `L` support before deploying.
+
 ### Raw Cron
 
 ```ts
@@ -121,6 +123,8 @@ schedule(
 )
 ```
 
+`timeout` and `retry.initialDelay` accept `ms`, `s`, `m`, `h`, `d` units (for example `100ms`, `30s`, `5m`).
+
 ### Concurrency Behavior
 
 ```ts
@@ -152,6 +156,15 @@ interface JobContext {
   signal: AbortSignal  // for cancellation
 }
 ```
+
+## Job IDs
+
+For file-discovered jobs (CLI/worker), IDs are deterministic:
+
+1. If `config.name` is set, that value is the job ID.
+2. Otherwise, the ID is the path relative to your jobs directory (for example `billing/sync-stripe`).
+
+This keeps `cronlet list`, `cronlet run <id>`, and deploy route generation stable across restarts.
 
 ## CLI Commands
 
@@ -244,7 +257,7 @@ cronlet deploy --platform vercel [options]
 
 ### Configuration
 
-Optional `cronlet.config.ts` for customization:
+Optional `cronlet.config.*` for customization:
 
 ```ts
 import { defineConfig } from "cronlet";
@@ -260,11 +273,27 @@ export default defineConfig({
 });
 ```
 
+Config filenames supported by the CLI (first match wins):
+
+1. `cronlet.config.ts`
+2. `cronlet.config.mts`
+3. `cronlet.config.cts`
+4. `cronlet.config.js`
+5. `cronlet.config.mjs`
+6. `cronlet.config.cjs`
+
+Directory resolution order for CLI commands (`dev`, `list`, `run`, `validate`, `deploy`):
+
+1. `--dir <path>`
+2. `jobsDir` in `cronlet.config.*`
+3. auto-detect `./jobs`, `./src/jobs`, `./app/jobs`
+
 ### Limitations
 
 - Vercel Cron minimum interval is 1 minute (no `every("30s")`)
 - Vercel Cron runs in UTC — `.withTimezone()` is for local dev only
 - Retry/timeout config runs within the serverless function execution time
+- Monthly `last-*` schedules use `L` syntax, which may not be supported by every cron platform
 
 ## Deploy as a Worker
 
@@ -400,7 +429,7 @@ your-app/
 └── ...
 ```
 
-Jobs are discovered automatically from `./jobs`, `./src/jobs`, or `./app/jobs`.
+Jobs are discovered from your resolved jobs directory. By default, cronlet auto-detects `./jobs`, then `./src/jobs`, then `./app/jobs`, unless overridden by `--dir` or `cronlet.config.*`.
 
 ## Development
 

@@ -1,6 +1,6 @@
 # cronlet
 
-The simplest way to add scheduled tasks to a Node.js application. A typed, fluent API with file-based job discovery, built-in retries, and a local dev dashboard. Just write functions and say when they should run.
+The simplest way to add scheduled tasks to a Node.js application. A typed, fluent API with file-based job discovery, stable file-based IDs, built-in retries, and a local dev dashboard. Just write functions and say when they should run.
 
 ```ts
 // jobs/weekly-digest.ts
@@ -65,7 +65,10 @@ schedule(weekly(["mon", "wed", "fri"], "09:00"), handler)    // MWF at 9 AM
 ```ts
 schedule(monthly(1, "09:00"), handler)              // 1st of month at 9 AM
 schedule(monthly(15, "12:00"), handler)             // 15th of month at noon
+schedule(monthly("last-fri", "17:00"), handler)     // last Friday of month
 ```
+
+`monthly("last-...")` uses cron `L` syntax (for example `5L`). Cronlet supports this locally, but some hosted cron platforms do not.
 
 ### Raw Cron
 
@@ -98,6 +101,15 @@ schedule(
   }
 )
 ```
+
+`timeout` and `retry.initialDelay` support `ms`, `s`, `m`, `h`, `d` units.
+
+## Job IDs
+
+For jobs discovered from files:
+
+1. `config.name` becomes the job ID if set.
+2. Otherwise the ID is the file path relative to your jobs directory (for example `billing/sync-stripe`).
 
 ## Job Context
 

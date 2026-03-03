@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { discoverJobs } from "cronlet";
+import { discoverJobs, parseDuration } from "cronlet";
 import pc from "picocolors";
 import { loadConfig, resolveJobsDirectory } from "../config/index.js";
 
@@ -55,9 +55,23 @@ export const validateCommand = new Command("validate")
 
         // Validate timeout format
         if (job.config.timeout) {
-          const timeoutMatch = job.config.timeout.match(/^(\d+)(s|m|h|d)$/);
-          if (!timeoutMatch) {
-            issues.push(`Invalid timeout format: ${job.config.timeout}`);
+          try {
+            parseDuration(job.config.timeout);
+          } catch {
+            issues.push(
+              `Invalid timeout format: ${job.config.timeout} (use ms|s|m|h|d, e.g. 100ms, 30s, 5m)`
+            );
+          }
+        }
+
+        // Validate retry initial delay format
+        if (job.config.retry?.initialDelay) {
+          try {
+            parseDuration(job.config.retry.initialDelay);
+          } catch {
+            issues.push(
+              `Invalid retry initialDelay format: ${job.config.retry.initialDelay} (use ms|s|m|h|d)`
+            );
           }
         }
 
