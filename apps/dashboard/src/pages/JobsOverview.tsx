@@ -1,11 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchJobs } from "../api/client";
 import { JobCard } from "../components/JobCard";
+import { usePollingInterval } from "../realtime";
 
 export function JobsOverview() {
+  const pollingInterval = usePollingInterval();
+
   const { data: jobs, isLoading, error } = useQuery({
     queryKey: ["jobs"],
     queryFn: fetchJobs,
+    refetchInterval: pollingInterval,
   });
 
   if (isLoading) {

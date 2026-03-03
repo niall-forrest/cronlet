@@ -29,6 +29,7 @@ interface ServerState {
   scheduler: CronScheduler;
   history: Map<string, HistoryEntry[]>;
   runningJobs: Set<string>;
+  runStartedAt: Map<string, Date>;
   sseClients: Set<SSEClient>;
 }
 
@@ -44,11 +45,12 @@ export async function createServer(scheduler: CronScheduler, port: number) {
     scheduler,
     history: new Map(),
     runningJobs: new Set(),
+    runStartedAt: new Map(),
     sseClients: new Set(),
   };
 
   // Subscribe to execution events
-  engine.on("*", (event) => {
+  const unsubscribe = engine.on("*", (event) => {
     // Broadcast to all SSE clients
     for (const client of state.sseClients) {
       client.send(event);
@@ -57,6 +59,7 @@ export async function createServer(scheduler: CronScheduler, port: number) {
     // Update running state
     if (event.type === "job:start") {
       state.runningJobs.add(event.jobId);
+      state.runStartedAt.set(event.runId, event.timestamp);
     } else if (
       event.type === "job:success" ||
       event.type === "job:failure" ||
@@ -67,14 +70,19 @@ export async function createServer(scheduler: CronScheduler, port: number) {
       // Add to history
       const job = registry.getById(event.jobId);
       if (job) {
+        const completedAt = event.timestamp;
+        const knownStartedAt = state.runStartedAt.get(event.runId);
+        const startedAt = knownStartedAt
+          ?? new Date(completedAt.getTime() - (event.duration ?? 0));
+
         const entry: HistoryEntry = {
           jobId: event.jobId,
           jobName: job.name,
           runId: event.runId,
           status: event.type === "job:success" ? "success" : event.type === "job:timeout" ? "timeout" : "failure",
-          startedAt: event.timestamp,
-          completedAt: event.timestamp,
-          duration: event.duration ?? 0,
+          startedAt,
+          completedAt,
+          duration: event.duration ?? completedAt.getTime() - startedAt.getTime(),
           attempt: event.attempt,
           error: event.error,
         };
@@ -91,7 +99,13 @@ export async function createServer(scheduler: CronScheduler, port: number) {
           jobHistory.pop();
         }
       }
+
+      state.runStartedAt.delete(event.runId);
     }
+  });
+
+  fastify.addHook("onClose", async () => {
+    unsubscribe();
   });
 
   // CORS headers for dashboard

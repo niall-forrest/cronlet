@@ -4,20 +4,24 @@ import { fetchJob, fetchJobRuns } from "../api/client";
 import { StatusBadge } from "../components/StatusBadge";
 import { RunNowButton } from "../components/RunNowButton";
 import { ExecutionHistory } from "../components/ExecutionHistory";
+import { usePollingInterval } from "../realtime";
 
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
+  const pollingInterval = usePollingInterval();
 
   const { data: job, isLoading: jobLoading } = useQuery({
     queryKey: ["job", id],
     queryFn: () => fetchJob(id!),
     enabled: !!id,
+    refetchInterval: pollingInterval,
   });
 
   const { data: runs, isLoading: runsLoading } = useQuery({
     queryKey: ["jobRuns", id],
     queryFn: () => fetchJobRuns(id!),
     enabled: !!id,
+    refetchInterval: pollingInterval,
   });
 
   if (jobLoading) {
