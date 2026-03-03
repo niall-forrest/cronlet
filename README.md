@@ -460,6 +460,12 @@ pnpm build
 # Run tests
 pnpm test
 
+# Run end-to-end CLI fixture smoke tests
+pnpm test:fixtures
+
+# Run full release gate locally
+pnpm release:check
+
 # Link CLI globally for local development
 cd packages/cronlet-cli && pnpm link --global
 
