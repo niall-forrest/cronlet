@@ -6,6 +6,7 @@ import {
   findJobsDirectory,
   loadConfig,
   resolveJobsDirectory,
+  resolveWatchDirectories,
 } from "../src/config/index.js";
 
 function createTempDir(): string {
@@ -123,6 +124,28 @@ describe("jobs directory resolution", () => {
       const absoluteJobsPath = join(root, "absolute-jobs");
       const resolved = resolveJobsDirectory(undefined, { jobsDir: absoluteJobsPath }, root);
       expect(resolved).toBe("absolute-jobs");
+    } finally {
+      cleanupTempDir(root);
+    }
+  });
+
+  it("resolves watch directories from defaults when no explicit directory is set", () => {
+    const root = createTempDir();
+
+    try {
+      const watchDirs = resolveWatchDirectories(undefined, null, root);
+      expect(watchDirs).toEqual(["./jobs", "./src/jobs", "./app/jobs"]);
+    } finally {
+      cleanupTempDir(root);
+    }
+  });
+
+  it("resolves watch directories from config", () => {
+    const root = createTempDir();
+
+    try {
+      const watchDirs = resolveWatchDirectories(undefined, { jobsDir: "./my-jobs" }, root);
+      expect(watchDirs).toEqual(["./my-jobs"]);
     } finally {
       cleanupTempDir(root);
     }

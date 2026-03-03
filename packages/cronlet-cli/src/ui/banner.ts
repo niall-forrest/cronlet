@@ -48,6 +48,14 @@ export function printWatching(): void {
 }
 
 /**
+ * Print watched directories
+ */
+export function printWatchDirectories(paths: string[]): void {
+  const unique = [...new Set(paths)];
+  console.log(`  ${pc.dim("Watch paths:")} ${pc.white(unique.join(", "))}`);
+}
+
+/**
  * Print job execution start
  */
 export function printJobStart(jobId: string, runId: string): void {

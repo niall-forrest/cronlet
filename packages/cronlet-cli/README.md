@@ -32,6 +32,12 @@ cronlet dev --port 4000        # Custom port (default: 3141)
   Watching for changes...
 ```
 
+Directory resolution is consistent across all commands:
+
+1. `--dir <path>`
+2. `cronlet.config.*` `jobsDir`
+3. auto-detect from `./jobs`, `./src/jobs`, `./app/jobs`
+
 ### `cronlet list`
 
 List all discovered jobs.
@@ -64,7 +70,7 @@ The dev server includes a local dashboard at `http://localhost:3141` with:
 - Job list with schedules and status
 - Manual "Run Now" buttons
 - Execution history
-- Real-time updates via SSE
+- Automatic updates while developing
 
 ## License
 

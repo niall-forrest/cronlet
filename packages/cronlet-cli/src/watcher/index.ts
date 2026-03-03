@@ -5,8 +5,8 @@ import { extname } from "node:path";
  * Watcher options
  */
 export interface WatcherOptions {
-  /** Directory to watch */
-  directory: string;
+  /** Directory (or directories) to watch */
+  directory: string | string[];
   /** File extensions to watch */
   extensions?: string[];
   /** Callback when files change */
@@ -26,8 +26,12 @@ export function createWatcher(options: WatcherOptions): chokidar.FSWatcher {
     debounce = 300,
   } = options;
 
+  const directories = Array.isArray(directory) ? directory : [directory];
+
   // Create glob patterns for each extension
-  const patterns = extensions.map((ext) => `${directory}/**/*${ext}`);
+  const patterns = directories.flatMap((dir) =>
+    extensions.map((ext) => `${dir}/**/*${ext}`)
+  );
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingPath: string | null = null;

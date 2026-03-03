@@ -108,6 +108,22 @@ export function resolveJobsDirectory(
   return normalizeDirectoryPath(resolved, rootDir);
 }
 
+export function resolveWatchDirectories(
+  cliDirectory: string | undefined,
+  config: CronletConfig | null,
+  rootDir: string = process.cwd()
+): string[] {
+  if (cliDirectory) {
+    return [normalizeDirectoryPath(cliDirectory, rootDir)];
+  }
+
+  if (config?.jobsDir) {
+    return [normalizeDirectoryPath(config.jobsDir, rootDir)];
+  }
+
+  return [...DEFAULT_JOB_DIRECTORIES];
+}
+
 export async function loadConfig(rootDir: string = process.cwd()): Promise<LoadedConfig> {
   const warnings: string[] = [];
 
