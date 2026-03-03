@@ -1,0 +1,94 @@
+@import url("https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --background: 224 41% 7%;
+    --foreground: 210 33% 98%;
+    --card: 223 32% 11%;
+    --card-foreground: 210 33% 98%;
+    --popover: 223 32% 11%;
+    --popover-foreground: 210 33% 98%;
+    --primary: 189 92% 55%;
+    --primary-foreground: 223 41% 7%;
+    --secondary: 222 22% 18%;
+    --secondary-foreground: 210 33% 95%;
+    --muted: 222 20% 16%;
+    --muted-foreground: 217 11% 65%;
+    --accent: 190 100% 14%;
+    --accent-foreground: 188 100% 85%;
+    --destructive: 0 74% 49%;
+    --destructive-foreground: 210 33% 98%;
+    --border: 217 16% 23%;
+    --input: 217 16% 23%;
+    --ring: 189 92% 55%;
+    --radius: 0.5rem;
+  }
+
+  html,
+  body,
+  #root {
+    @apply min-h-screen;
+  }
+
+  body {
+    @apply m-0 bg-background font-mono text-foreground antialiased;
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  * {
+    @apply border-border;
+  }
+}
+
+@layer components {
+  .display-title {
+    font-family: "Syne", ui-sans-serif, system-ui, sans-serif;
+    @apply text-2xl font-bold tracking-tight text-cyan-200;
+  }
+
+  .panel {
+    @apply rounded-xl border bg-card p-4 shadow-[0_16px_44px_-24px_rgba(0,0,0,0.85)];
+  }
+
+  .table-shell {
+    @apply w-full min-w-full border-collapse text-sm;
+  }
+
+  .table-shell thead tr {
+    @apply text-left text-xs uppercase tracking-wide text-muted-foreground;
+  }
+
+  .table-shell th,
+  .table-shell td {
+    @apply border-b px-3 py-2;
+  }
+
+  .field {
+    @apply w-full rounded-md border bg-background/70 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20;
+  }
+
+  .select-field {
+    @apply field appearance-none;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md border px-3 py-2 text-xs uppercase tracking-wide transition;
+  }
+
+  .btn-primary {
+    @apply btn border-primary/40 bg-primary/15 text-primary hover:border-primary/70 hover:bg-primary/20;
+  }
+
+  .btn-quiet {
+    @apply btn border-input bg-secondary text-secondary-foreground hover:border-primary/40 hover:text-primary;
+  }
+
+  .btn-danger {
+    @apply btn border-rose-500/40 bg-rose-500/15 text-rose-200 hover:border-rose-400/70 hover:bg-rose-400/20;
+  }
+}
