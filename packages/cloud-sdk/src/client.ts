@@ -44,7 +44,7 @@ export class CloudClient {
       ...init,
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${this.apiKey}`,
+        "x-internal-token": this.apiKey,
         ...(this.orgId ? { "x-org-id": this.orgId } : {}),
         ...(this.userId ? { "x-user-id": this.userId } : {}),
         ...(this.role ? { "x-role": this.role } : {}),

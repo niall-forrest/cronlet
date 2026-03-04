@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "cronlet": {
+      "type": "http",
+      "url": "https://passionate-bravery-production.up.railway.app",
+      "headers": {
+        "X-MCP-Token": "5wmq6ikFwUrtDqw7lAyFVPv6w82xFWUerGMjBMQzynI="
+      }
+    }
+  }
+}
