@@ -24,11 +24,8 @@ RUN pnpm --filter @cronlet/cloud-shared build
 RUN pnpm --filter @cronlet/cloud-api prisma:generate
 RUN pnpm --filter @cronlet/cloud-api build
 
-# Production stage
-FROM node:20-alpine AS runner
-
-# Install OpenSSL 1.1 compatibility libraries for Prisma
-RUN apk add --no-cache openssl1.1-compat
+# Production stage - use slim (Debian) for OpenSSL 1.1 compatibility with Prisma
+FROM node:20-slim AS runner
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
