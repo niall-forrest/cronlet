@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cronlet — Scheduled Tasks for AI Agents and Developers</title>
+  <meta name="description" content="The scheduling platform for AI agents and the developers who build them. Create tasks visually or via API. Run webhooks, multi-step workflows, or JavaScript. No infrastructure to manage.">
+  <meta name="keywords" content="cron jobs, scheduled tasks, AI agents, MCP, scheduling API, task automation, background jobs, serverless cron">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Cronlet — Scheduled Tasks for AI Agents and Developers">
+  <meta property="og:description" content="The scheduling platform that gives AI agents temporal superpowers. Create, manage, and monitor recurring tasks through dashboard, API, or MCP.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cronlet.dev">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Cronlet — Scheduled Tasks for AI Agents and Developers">
+  <meta name="twitter:description" content="The scheduling platform that gives AI agents temporal superpowers. No cron syntax. No infrastructure.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-deep: #050810;
+      --bg-primary: #0a0f1a;
+      --bg-elevated: #111827;
+      --bg-card: #151c2c;
+      --bg-hover: #1a2235;
+
+      --cyan-glow: #00f5d4;
+      --cyan-primary: #06d6a0;
+      --cyan-muted: #0891b2;
+      --violet-accent: #8b5cf6;
+      --violet-muted: #6366f1;
+      --amber-accent: #f59e0b;
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+
+      --border-subtle: rgba(148, 163, 184, 0.1);
+      --border-accent: rgba(6, 214, 160, 0.3);
+
+      --font-display: 'Outfit', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--bg-hover); }
+
+    ::selection {
+      background: var(--cyan-primary);
+      color: var(--bg-deep);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      background: rgba(5, 8, 16, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      position: relative;
+    }
+
+    .logo-icon::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--cyan-primary);
+      border-radius: 50%;
+      animation: orbit-pulse 3s ease-in-out infinite;
+    }
+
+    .logo-icon::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background: var(--cyan-glow);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    @keyframes orbit-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    .logo-text {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--cyan-primary);
+    }
+
+    .nav-cta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.2s var(--ease-out-expo);
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    .btn-ghost:hover {
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+    }
+
+    .btn-primary {
+      background: var(--cyan-primary);
+      color: var(--bg-deep);
+    }
+
+    .btn-primary:hover {
+      background: var(--cyan-glow);
+      box-shadow: 0 0 30px rgba(0, 245, 212, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--cyan-primary);
+      background: rgba(6, 214, 160, 0.05);
+    }
+
+    .btn-large {
+      padding: 14px 28px;
+      font-size: 0.9375rem;
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 120px 0 80px;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .hero-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, black, transparent);
+    }
+
+    .hero-glow {
+      position: absolute;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(6, 214, 160, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-content {
+      max-width: 560px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 100px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      animation: fade-up 0.6s var(--ease-out-expo) backwards;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--cyan-primary);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.25rem, 5vw, 3.25rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+      animation: fade-up 0.6s var(--ease-out-expo) 0.1s backwards;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--cyan-glow) 0%, var(--cyan-primary) 50%, var(--violet-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-description {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 32px;
+      animation: fade-up 0.6s var(--ease-out-expo) 0.2s backwards;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 40px;
+      animation: fade-up 0.6s var(--ease-out-expo) 0.3s backwards;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 32px;
+      animation: fade-up 0.6s var(--ease-out-expo) 0.4s backwards;
+    }
+
+    .hero-stat {
+      text-align: left;
+    }
+
+    .hero-stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--cyan-primary);
+    }
+
+    .hero-stat-label {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    /* Dashboard Preview */
+    .hero-dashboard {
+      position: relative;
+      animation: fade-up 0.8s var(--ease-out-expo) 0.3s backwards;
+    }
+
+    .dashboard-window {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 20px 50px -20px rgba(0, 0, 0, 0.5),
+        0 0 100px -50px rgba(6, 214, 160, 0.3);
+    }
+
+    .dashboard-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .window-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .window-dot:nth-child(1) { background: #ff5f57; }
+    .window-dot:nth-child(2) { background: #ffbd2e; }
+    .window-dot:nth-child(3) { background: #28c840; }
+
+    .dashboard-url {
+      flex: 1;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .dashboard-body {
+      padding: 20px;
+    }
+
+    .dashboard-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .dashboard-nav-item {
+      padding: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: transparent;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .dashboard-nav-item.active {
+      background: var(--bg-hover);
+      color: var(--cyan-primary);
+    }
+
+    .dashboard-tasks {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .dashboard-task {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .dashboard-task:hover {
+      border-color: var(--border-accent);
+    }
+
+    .task-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .task-status.success { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+    .task-status.running { background: var(--cyan-primary); box-shadow: 0 0 8px rgba(6, 214, 160, 0.5); animation: pulse 1.5s ease-in-out infinite; }
+    .task-status.pending { background: var(--text-muted); }
+
+    .task-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .task-name {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .task-schedule {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+    }
+
+    .task-meta {
+      text-align: right;
+    }
+
+    .task-last-run {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+    }
+
+    .task-duration {
+      font-size: 0.625rem;
+      color: var(--text-muted);
+    }
+
+    @keyframes fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Social Proof */
+    .social-proof {
+      padding: 60px 0;
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-primary);
+    }
+
+    .social-proof-label {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 32px;
+    }
+
+    .social-proof-grid {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 48px;
+    }
+
+    .proof-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .proof-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-elevated);
+      border-radius: 10px;
+      color: var(--cyan-primary);
+    }
+
+    .proof-text {
+      font-size: 0.9375rem;
+      color: var(--text-secondary);
+    }
+
+    .proof-text strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* Section Label */
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+    }
+
+    .section-label::before {
+      content: '';
+      width: 24px;
+      height: 1px;
+      background: var(--cyan-primary);
+    }
+
+    /* How It Works */
+    .how-it-works {
+      padding: 120px 0;
+    }
+
+    .how-it-works-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 80px;
+    }
+
+    .how-it-works h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .how-it-works-header p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .step-card {
+      position: relative;
+      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      transition: all 0.3s var(--ease-out-expo);
+    }
+
+    .step-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+    }
+
+    .step-number {
+      position: absolute;
+      top: -16px;
+      left: 24px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--cyan-primary), var(--violet-accent));
+      border-radius: 50%;
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--bg-deep);
+    }
+
+    .step-card h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      margin-top: 8px;
+    }
+
+    .step-card p {
+      color: var(--text-secondary);
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+
+    .step-code {
+      background: var(--bg-elevated);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+
+    .code-keyword { color: var(--violet-accent); }
+    .code-function { color: var(--cyan-primary); }
+    .code-string { color: #fbbf24; }
+    .code-comment { color: var(--text-muted); font-style: italic; }
+    .code-number { color: #f472b6; }
+
+    /* Handlers Section */
+    .handlers {
+      padding: 120px 0;
+      background: var(--bg-primary);
+    }
+
+    .handlers-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 64px;
+    }
+
+    .handlers h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .handlers-header p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+    }
+
+    .handlers-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .handler-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.3s var(--ease-out-expo);
+    }
+
+    .handler-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+    }
+
+    .handler-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .handler-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(6, 214, 160, 0.1);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--cyan-primary);
+      margin-bottom: 12px;
+    }
+
+    .handler-header h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .handler-header p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .handler-code {
+      padding: 20px;
+      background: var(--bg-card);
+    }
+
+    .handler-code pre {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+
+    /* AI Agents Section */
+    .agents {
+      padding: 120px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .agents::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      right: -200px;
+      width: 600px;
+      height: 600px;
+      transform: translateY(-50%);
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .agents-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .agents-content h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .agents-content > p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+    }
+
+    .agents-features {
+      list-style: none;
+    }
+
+    .agents-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .agents-features li:last-child {
+      border-bottom: none;
+    }
+
+    .agents-features svg {
+      width: 24px;
+      height: 24px;
+      color: var(--violet-accent);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .agents-features h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .agents-features p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .agents-visual {
+      position: relative;
+    }
+
+    .mcp-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .mcp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .mcp-title {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    .mcp-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(139, 92, 246, 0.15);
+      border-radius: 100px;
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--violet-accent);
+    }
+
+    .mcp-body {
+      padding: 24px;
+    }
+
+    .mcp-tools {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .mcp-tool {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg-card);
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+
+    .mcp-tool:hover {
+      background: var(--bg-hover);
+      color: var(--cyan-primary);
+    }
+
+    .mcp-tool svg {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+    }
+
+    /* Features Section */
+    .features {
+      padding: 120px 0;
+      background: var(--bg-primary);
+    }
+
+    .features-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 80px;
+    }
+
+    .features h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .features-header p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      padding: 32px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      transition: all 0.3s var(--ease-out-expo);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan-primary), var(--violet-accent));
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .feature-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+    }
+
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(6, 214, 160, 0.15), rgba(139, 92, 246, 0.15));
+      border-radius: 12px;
+      margin-bottom: 20px;
+      color: var(--cyan-primary);
+    }
+
+    .feature-card h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.9375rem;
+      line-height: 1.7;
+    }
+
+    /* Pricing Section */
+    .pricing {
+      padding: 120px 0;
+    }
+
+    .pricing-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 64px;
+    }
+
+    .pricing h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .pricing-header p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .pricing-card {
+      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      transition: all 0.3s var(--ease-out-expo);
+    }
+
+    .pricing-card:hover {
+      transform: translateY(-4px);
+    }
+
+    .pricing-card.featured {
+      border-color: var(--cyan-primary);
+      position: relative;
+    }
+
+    .pricing-card.featured::before {
+      content: 'Most Popular';
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 16px;
+      background: var(--cyan-primary);
+      color: var(--bg-deep);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      border-radius: 100px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .pricing-tier {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .pricing-price {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .pricing-amount {
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+
+    .pricing-period {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .pricing-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .pricing-features {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+
+    .pricing-features li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      font-size: 0.9375rem;
+      color: var(--text-secondary);
+    }
+
+    .pricing-features svg {
+      width: 18px;
+      height: 18px;
+      color: var(--cyan-primary);
+      flex-shrink: 0;
+    }
+
+    .pricing-features .highlight {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .pricing-cta {
+      width: 100%;
+    }
+
+    /* Enterprise Section */
+    .enterprise {
+      padding: 80px 0;
+      background: var(--bg-primary);
+    }
+
+    .enterprise-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 48px;
+      padding: 48px;
+      background: linear-gradient(135deg, var(--bg-elevated), var(--bg-card));
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+    }
+
+    .enterprise-content h3 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .enterprise-content p {
+      color: var(--text-secondary);
+      max-width: 500px;
+    }
+
+    .enterprise-features {
+      display: flex;
+      gap: 32px;
+    }
+
+    .enterprise-feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .enterprise-feature svg {
+      width: 20px;
+      height: 20px;
+      color: var(--cyan-primary);
+    }
+
+    /* CTA Section */
+    .cta {
+      padding: 160px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 100%, rgba(6, 214, 160, 0.1) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 20% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+    }
+
+    .cta-inner {
+      position: relative;
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .cta h2 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .cta h2 span {
+      background: linear-gradient(135deg, var(--cyan-glow), var(--violet-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .cta-inner > p {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+    }
+
+    .cta-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .cta-actions .btn {
+      padding: 16px 32px;
+      font-size: 1rem;
+    }
+
+    /* Footer */
+    footer {
+      padding: 60px 0;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .footer-logo .logo-text {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--cyan-primary);
+    }
+
+    .footer-copy {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero-inner,
+      .agents-inner {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .hero-dashboard {
+        order: -1;
+        max-width: 500px;
+        margin: 0 auto;
+      }
+
+      .features-grid,
+      .handlers-grid,
+      .steps-grid,
+      .pricing-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .mcp-tools {
+        grid-template-columns: 1fr;
+      }
+
+      .enterprise-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .enterprise-features {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .features-grid,
+      .handlers-grid,
+      .steps-grid,
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-actions,
+      .cta-actions {
+        flex-direction: column;
+      }
+
+      .hero-stats {
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        gap: 24px;
+        text-align: center;
+      }
+
+      .social-proof-grid {
+        flex-direction: column;
+        gap: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="container nav-inner">
+      <a href="/" class="logo">
+        <div class="logo-icon"></div>
+        <span class="logo-text">cronlet</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#how-it-works">How it Works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="https://docs.cronlet.dev">Docs</a></li>
+      </ul>
+
+      <div class="nav-cta">
+        <a href="https://dashboard.cronlet.dev/sign-in" class="btn btn-ghost">Sign In</a>
+        <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary">Start Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="hero-grid"></div>
+      <div class="hero-glow"></div>
+    </div>
+
+    <div class="container">
+      <div class="hero-inner">
+        <div class="hero-content">
+          <div class="hero-badge">
+            <span class="hero-badge-dot"></span>
+            <span>Works with Claude via MCP</span>
+          </div>
+
+          <h1>The scheduling platform for <span>AI agents</span> and developers</h1>
+
+          <p class="hero-description">
+            Create tasks visually or via API. Run webhooks, multi-step workflows, or JavaScript on schedule.
+            No cron syntax. No infrastructure. Just tasks that run.
+          </p>
+
+          <div class="hero-actions">
+            <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary btn-large">
+              Start Free
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a href="https://docs.cronlet.dev" class="btn btn-outline btn-large">
+              View Docs
+            </a>
+          </div>
+
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <div class="hero-stat-value">1,000</div>
+              <div class="hero-stat-label">Free runs/month</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-value">&lt;100ms</div>
+              <div class="hero-stat-label">Scheduling latency</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-value">99.9%</div>
+              <div class="hero-stat-label">Uptime SLA</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-dashboard">
+          <div class="dashboard-window">
+            <div class="dashboard-header">
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+              <span class="dashboard-url">dashboard.cronlet.dev</span>
+            </div>
+            <div class="dashboard-body">
+              <div class="dashboard-nav">
+                <span class="dashboard-nav-item active">Tasks</span>
+                <span class="dashboard-nav-item">Runs</span>
+                <span class="dashboard-nav-item">Alerts</span>
+                <span class="dashboard-nav-item">Settings</span>
+              </div>
+              <div class="dashboard-tasks">
+                <div class="dashboard-task">
+                  <span class="task-status success"></span>
+                  <div class="task-info">
+                    <div class="task-name">sync-stripe-data</div>
+                    <div class="task-schedule">Every day at 00:00 UTC</div>
+                  </div>
+                  <div class="task-meta">
+                    <div class="task-last-run">2 min ago</div>
+                    <div class="task-duration">1.2s</div>
+                  </div>
+                </div>
+                <div class="dashboard-task">
+                  <span class="task-status running"></span>
+                  <div class="task-info">
+                    <div class="task-name">weekly-digest-email</div>
+                    <div class="task-schedule">Fridays at 09:00 EST</div>
+                  </div>
+                  <div class="task-meta">
+                    <div class="task-last-run">Running...</div>
+                    <div class="task-duration">—</div>
+                  </div>
+                </div>
+                <div class="dashboard-task">
+                  <span class="task-status success"></span>
+                  <div class="task-info">
+                    <div class="task-name">monitor-competitor-api</div>
+                    <div class="task-schedule">Every 15 minutes</div>
+                  </div>
+                  <div class="task-meta">
+                    <div class="task-last-run">12 min ago</div>
+                    <div class="task-duration">0.8s</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Social Proof -->
+  <section class="social-proof">
+    <div class="container">
+      <p class="social-proof-label">Built for modern development workflows</p>
+      <div class="social-proof-grid">
+        <div class="proof-item">
+          <div class="proof-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+          </div>
+          <span class="proof-text"><strong>Retries</strong> with backoff</span>
+        </div>
+        <div class="proof-item">
+          <div class="proof-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <span class="proof-text"><strong>Timeouts</strong> per task</span>
+        </div>
+        <div class="proof-item">
+          <div class="proof-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+          </div>
+          <span class="proof-text"><strong>Email alerts</strong> on failure</span>
+        </div>
+        <div class="proof-item">
+          <div class="proof-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <span class="proof-text"><strong>Secrets</strong> encrypted</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="how-it-works-header">
+        <span class="section-label">How It Works</span>
+        <h2>Create a task. Define a schedule. We run it.</h2>
+        <p>Three ways to create tasks: visual dashboard, REST API, or connect AI agents via MCP.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <span class="step-number">1</span>
+          <h3>Create a task</h3>
+          <p>Use the dashboard, API, or SDK. Define what to run: a webhook, a multi-step workflow, or JavaScript code.</p>
+          <div class="step-code">
+<code><span class="code-keyword">POST</span> /v1/tasks
+{
+  <span class="code-string">"name"</span>: <span class="code-string">"sync-stripe"</span>,
+  <span class="code-string">"handler"</span>: {
+    <span class="code-string">"type"</span>: <span class="code-string">"webhook"</span>,
+    <span class="code-string">"url"</span>: <span class="code-string">"https://..."</span>
+  }
+}</code>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <span class="step-number">2</span>
+          <h3>Set a schedule</h3>
+          <p>Pick from intervals, daily times, weekly days, or cron expressions. Add timezone support.</p>
+          <div class="step-code">
+<code><span class="code-string">"schedule"</span>: {
+  <span class="code-string">"type"</span>: <span class="code-string">"daily"</span>,
+  <span class="code-string">"times"</span>: [<span class="code-string">"09:00"</span>, <span class="code-string">"17:00"</span>],
+  <span class="code-string">"timezone"</span>: <span class="code-string">"America/New_York"</span>
+}</code>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <span class="step-number">3</span>
+          <h3>We handle the rest</h3>
+          <p>Cronlet runs your task on time, retries on failure, and sends you the results via callback or dashboard.</p>
+          <div class="step-code">
+<code><span class="code-comment">// Callback payload</span>
+{
+  <span class="code-string">"event"</span>: <span class="code-string">"task.run.completed"</span>,
+  <span class="code-string">"status"</span>: <span class="code-string">"success"</span>,
+  <span class="code-string">"output"</span>: { ... }
+}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Handlers Section -->
+  <section class="handlers" id="handlers">
+    <div class="container">
+      <div class="handlers-header">
+        <span class="section-label">Handler Types</span>
+        <h2>Three ways to handle scheduled tasks</h2>
+        <p>From simple webhooks to multi-step workflows with data passing between steps.</p>
+      </div>
+
+      <div class="handlers-grid">
+        <div class="handler-card">
+          <div class="handler-header">
+            <span class="handler-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              webhook
+            </span>
+            <h3>Webhook</h3>
+            <p>Call your own endpoints on schedule with auth headers</p>
+          </div>
+          <div class="handler-code">
+            <pre><code>{
+  <span class="code-string">"type"</span>: <span class="code-string">"webhook"</span>,
+  <span class="code-string">"url"</span>: <span class="code-string">"https://api.example.com/sync"</span>,
+  <span class="code-string">"auth"</span>: {
+    <span class="code-string">"type"</span>: <span class="code-string">"bearer"</span>,
+    <span class="code-string">"secretName"</span>: <span class="code-string">"API_TOKEN"</span>
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="handler-card">
+          <div class="handler-header">
+            <span class="handler-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              tools
+            </span>
+            <h3>Tools</h3>
+            <p>Chain HTTP, email, Slack steps with data passing</p>
+          </div>
+          <div class="handler-code">
+            <pre><code>{
+  <span class="code-string">"type"</span>: <span class="code-string">"tools"</span>,
+  <span class="code-string">"steps"</span>: [
+    { <span class="code-string">"tool"</span>: <span class="code-string">"http.get"</span>, ... },
+    { <span class="code-string">"tool"</span>: <span class="code-string">"slack.send"</span>, ... }
+  ]
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="handler-card">
+          <div class="handler-header">
+            <span class="handler-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              code
+            </span>
+            <h3>Code</h3>
+            <p>Run JavaScript directly on our infrastructure</p>
+          </div>
+          <div class="handler-code">
+            <pre><code>{
+  <span class="code-string">"type"</span>: <span class="code-string">"code"</span>,
+  <span class="code-string">"runtime"</span>: <span class="code-string">"javascript"</span>,
+  <span class="code-string">"code"</span>: <span class="code-string">`
+    const res = await fetch(url);
+    return res.json();
+  `</span>
+}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Agents Section -->
+  <section class="agents" id="agents">
+    <div class="container">
+      <div class="agents-inner">
+        <div class="agents-content">
+          <span class="section-label">For AI Agents</span>
+          <h2>Give agents temporal superpowers</h2>
+          <p>Connect via MCP and your AI agents can create, manage, and monitor scheduled tasks autonomously. Results flow back via callbacks, enabling self-maintaining systems.</p>
+
+          <ul class="agents-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <div>
+                <h4>Natural language schedules</h4>
+                <p>"every 15 minutes", "weekdays at 9am", "last friday of the month"</p>
+              </div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div>
+                <h4>Callback-driven loops</h4>
+                <p>Task completes → agent receives results → agent reacts → creates new tasks</p>
+              </div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <div>
+                <h4>Approval workflows</h4>
+                <p>Critical operations require human approval before execution</p>
+              </div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <div>
+                <h4>Context preserved</h4>
+                <p>Attach metadata to tasks—intent, conversation ID—returned in every callback</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="agents-visual">
+          <div class="mcp-card">
+            <div class="mcp-header">
+              <span class="mcp-title">MCP Tools</span>
+              <span class="mcp-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                11 tools available
+              </span>
+            </div>
+            <div class="mcp-body">
+              <div class="mcp-tools">
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                  create_task
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M9 9h6v6H9z"/></svg>
+                  list_tasks
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  trigger_task
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                  pause_task
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  resume_task
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                  delete_task
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                  list_runs
+                </div>
+                <div class="mcp-tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                  parse_schedule
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">Platform Features</span>
+        <h2>Everything you need for reliable scheduling</h2>
+        <p>Enterprise-grade infrastructure without the enterprise complexity.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+          </div>
+          <h3>Configurable Retries</h3>
+          <p>Linear or exponential backoff. Set max attempts, initial delays, and let us handle transient failures.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h3>Execution Timeouts</h3>
+          <p>Per-task timeout limits prevent runaway jobs. Tasks are terminated cleanly when limits are exceeded.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+          </div>
+          <h3>Failure Alerts</h3>
+          <p>Email or webhook notifications when tasks fail. Never miss a broken job again.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Encrypted Secrets</h3>
+          <p>Store API tokens and credentials securely. Reference them in your tasks without exposing values.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <h3>Audit Logging</h3>
+          <p>Complete audit trail of every action. Filter by actor, action type, or date range for compliance.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>Team Access Control</h3>
+          <p>Role-based permissions: owner, admin, member, viewer. Manage who can create, edit, or view tasks.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Section -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <div class="pricing-header">
+        <span class="section-label">Pricing</span>
+        <h2>Start free. Scale as you grow.</h2>
+        <p>No credit card required. Upgrade when you need more runs or longer retention.</p>
+      </div>
+
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <div class="pricing-tier">Free</div>
+          <div class="pricing-price">
+            <span class="pricing-amount">$0</span>
+            <span class="pricing-period">/month</span>
+          </div>
+          <p class="pricing-description">Perfect for prototyping and personal projects</p>
+          <ul class="pricing-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span class="highlight">1,000 runs/month</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              7 days data retention
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              All handler types
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              MCP access
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              Community support
+            </li>
+          </ul>
+          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-outline pricing-cta">Get Started</a>
+        </div>
+
+        <div class="pricing-card featured">
+          <div class="pricing-tier">Pro</div>
+          <div class="pricing-price">
+            <span class="pricing-amount">$29</span>
+            <span class="pricing-period">/month</span>
+          </div>
+          <p class="pricing-description">For production workloads and growing teams</p>
+          <ul class="pricing-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span class="highlight">25,000 runs/month</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              90 days data retention
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              All handler types
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              MCP access
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              Email support
+            </li>
+          </ul>
+          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary pricing-cta">Start Free Trial</a>
+        </div>
+
+        <div class="pricing-card">
+          <div class="pricing-tier">Team</div>
+          <div class="pricing-price">
+            <span class="pricing-amount">$99</span>
+            <span class="pricing-period">/month</span>
+          </div>
+          <p class="pricing-description">For teams needing scale and compliance</p>
+          <ul class="pricing-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span class="highlight">100,000 runs/month</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              365 days data retention
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              Team access control
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              Audit logging
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              Priority support
+            </li>
+          </ul>
+          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-outline pricing-cta">Start Free Trial</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Enterprise Section -->
+  <section class="enterprise">
+    <div class="container">
+      <div class="enterprise-inner">
+        <div class="enterprise-content">
+          <h3>Need more? Let's talk.</h3>
+          <p>Custom run limits, dedicated infrastructure, SLAs, and SSO for enterprise teams.</p>
+        </div>
+        <div class="enterprise-features">
+          <div class="enterprise-feature">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Custom limits
+          </div>
+          <div class="enterprise-feature">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            99.99% SLA
+          </div>
+          <div class="enterprise-feature">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            SSO/SAML
+          </div>
+        </div>
+        <a href="mailto:enterprise@cronlet.dev" class="btn btn-outline">Contact Sales</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta">
+    <div class="cta-bg"></div>
+    <div class="container">
+      <div class="cta-inner">
+        <h2>Start scheduling in <span>30 seconds</span></h2>
+        <p>No credit card required. 1,000 free runs every month.</p>
+
+        <div class="cta-actions">
+          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary btn-large">
+            Create Free Account
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          <a href="https://docs.cronlet.dev" class="btn btn-outline btn-large">
+            Read the Docs
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container footer-inner">
+      <a href="/" class="footer-logo">
+        <div class="logo-icon"></div>
+        <span class="logo-text">cronlet</span>
+      </a>
+
+      <ul class="footer-links">
+        <li><a href="https://docs.cronlet.dev">Docs</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="https://github.com/cronlet/cronlet">GitHub</a></li>
+        <li><a href="mailto:support@cronlet.dev">Support</a></li>
+      </ul>
+
+      <p class="footer-copy">© 2024 Cronlet. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Smooth scroll
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Intersection Observer for animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.feature-card, .step-card, .handler-card, .pricing-card').forEach(card => {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(20px)';
+      card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(card);
+    });
+  </script>
+</body>
+</html>

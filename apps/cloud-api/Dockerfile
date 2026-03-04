@@ -40,10 +40,10 @@ COPY --from=builder /app/packages/cloud-shared/dist ./packages/cloud-shared/dist
 COPY --from=builder /app/apps/cloud-api/package.json ./apps/cloud-api/
 COPY --from=builder /app/apps/cloud-api/dist ./apps/cloud-api/dist
 COPY --from=builder /app/apps/cloud-api/prisma ./apps/cloud-api/prisma
-COPY --from=builder /app/apps/cloud-api/node_modules/.prisma ./apps/cloud-api/node_modules/.prisma
 
-# Install production dependencies only
+# Install production dependencies and generate Prisma client
 RUN pnpm install --frozen-lockfile --prod
+RUN pnpm --filter @cronlet/cloud-api prisma:generate
 
 WORKDIR /app/apps/cloud-api
 
