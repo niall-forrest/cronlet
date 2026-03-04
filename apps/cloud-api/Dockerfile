@@ -27,6 +27,9 @@ RUN pnpm --filter @cronlet/cloud-api build
 # Production stage
 FROM node:20-alpine AS runner
 
+# Install OpenSSL 1.1 compatibility libraries for Prisma
+RUN apk add --no-cache openssl1.1-compat
+
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
