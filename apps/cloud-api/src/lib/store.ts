@@ -68,6 +68,18 @@ export class InMemoryCloudStore implements CloudStore {
     return created;
   }
 
+  private isGracePeriodActive(entitlement: OrgEntitlement, nowMs = Date.now()): boolean {
+    if (!entitlement.delinquent) {
+      return true;
+    }
+
+    if (!entitlement.graceEndsAt) {
+      return false;
+    }
+
+    return new Date(entitlement.graceEndsAt).getTime() > nowMs;
+  }
+
   private assertProjectAccess(orgId: string, projectId: string): ProjectRecord {
     const project = this.projects.get(projectId);
     if (!project || project.orgId !== orgId) {
@@ -78,12 +90,7 @@ export class InMemoryCloudStore implements CloudStore {
 
   private assertWritable(orgId: string): void {
     const entitlement = this.getEntitlement(orgId);
-    if (!entitlement.delinquent) {
-      return;
-    }
-
-    const graceEndsAt = entitlement.graceEndsAt ? new Date(entitlement.graceEndsAt) : null;
-    if (graceEndsAt && graceEndsAt.getTime() > Date.now()) {
+    if (this.isGracePeriodActive(entitlement)) {
       return;
     }
 
@@ -497,7 +504,7 @@ export class InMemoryCloudStore implements CloudStore {
       }
 
       const entitlement = this.getEntitlement(schedule.orgId);
-      if (entitlement.delinquent) {
+      if (!this.isGracePeriodActive(entitlement, now.getTime())) {
         continue;
       }
 

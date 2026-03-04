@@ -11,6 +11,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@clerk/clerk-react": "5.61.3",
     "@phosphor-icons/react": "^2.1.10",
     "@cronlet/cloud-shared": "workspace:*",
     "@tanstack/react-query": "^5.90.2",

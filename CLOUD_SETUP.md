@@ -57,6 +57,10 @@ pnpm --filter @cronlet/cloud-mcp dev
 - Internal worker endpoints are protected by `x-internal-token` (`CLOUD_INTERNAL_TOKEN`).
 - Clerk JWT verification is enabled when `CLERK_JWKS_URL` is set.
 - Clerk billing/org webhooks are accepted at `POST /webhooks/clerk` and can verify Svix signatures via `CLERK_WEBHOOK_SECRET`.
+- Clerk Billing plan-key aliases can be tuned via:
+  - `CLERK_BILLING_FREE_PLAN_KEYS` (default: `free,free_user`)
+  - `CLERK_BILLING_PRO_PLAN_KEYS` (default: `pro,cronlet_pro`)
+  - `CLERK_BILLING_TEAM_PLAN_KEYS` (default: `team,cronlet_team`)
 - API authorization is now hardened for control-plane writes:
   - role checks (`viewer`/`member`/`admin`/`owner`) are enforced on endpoint/job/schedule CRUD.
   - API key actors must include required scopes (for example, `jobs:write`, `schedules:write`).

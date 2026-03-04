@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Webhook } from "svix";
 import { buildServer } from "../src/server.js";
+import { personalOrgIdForUser } from "../src/lib/tenancy.js";
 
 function signedHeaders(secret: string, payload: string): Record<string, string> {
   const webhook = new Webhook(secret);
@@ -127,6 +128,74 @@ describe("Clerk webhooks", () => {
       expect(delinquentBody.data.delinquent).toBe(true);
       expect(delinquentBody.data.graceEndsAt).toBeTypeOf("string");
       expect(new Date(delinquentBody.data.graceEndsAt).getTime()).toBeGreaterThan(Date.now());
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("maps B2C plan keys to tiers for user-scoped billing events", async () => {
+    const app = await buildServer();
+    try {
+      const clerkUserId = "user_b2c_123";
+      const scopedOrgId = personalOrgIdForUser(clerkUserId);
+
+      const payloadPro = JSON.stringify({
+        type: "billing.subscription.updated",
+        data: {
+          user_id: clerkUserId,
+          plan_key: "cronlet_pro",
+          status: "active",
+        },
+      });
+
+      const responsePro = await app.inject({
+        method: "POST",
+        url: "/webhooks/clerk",
+        payload: payloadPro,
+        headers: signedHeaders(secret, payloadPro),
+      });
+      expect(responsePro.statusCode).toBe(200);
+
+      const usageAfterPro = await app.inject({
+        method: "GET",
+        url: "/v1/usage",
+        headers: {
+          "x-org-id": scopedOrgId,
+          "x-user-id": clerkUserId,
+          "x-role": "owner",
+        },
+      });
+      expect(usageAfterPro.statusCode).toBe(200);
+      expect(usageAfterPro.json().data.tier).toBe("pro");
+
+      const payloadFree = JSON.stringify({
+        type: "billing.subscription.updated",
+        data: {
+          user_id: clerkUserId,
+          plan_key: "free_user",
+          status: "active",
+        },
+      });
+
+      const responseFree = await app.inject({
+        method: "POST",
+        url: "/webhooks/clerk",
+        payload: payloadFree,
+        headers: signedHeaders(secret, payloadFree),
+      });
+      expect(responseFree.statusCode).toBe(200);
+
+      const usageAfterFree = await app.inject({
+        method: "GET",
+        url: "/v1/usage",
+        headers: {
+          "x-org-id": scopedOrgId,
+          "x-user-id": clerkUserId,
+          "x-role": "owner",
+        },
+      });
+      expect(usageAfterFree.statusCode).toBe(200);
+      expect(usageAfterFree.json().data.tier).toBe("free");
     } finally {
       await app.close();
     }

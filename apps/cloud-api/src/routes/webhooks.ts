@@ -5,30 +5,68 @@ import { ERROR_CODES } from "@cronlet/cloud-shared";
 import { AppError } from "../lib/errors.js";
 import { handleError, ok } from "../lib/http.js";
 import { recordAuditEvent } from "../lib/audit.js";
+import { personalOrgIdForUser } from "../lib/tenancy.js";
 
 interface ClerkWebhookEvent {
   type?: string;
   data?: Record<string, unknown>;
 }
 
-function parsePlanTier(value: unknown): PlanTier | null {
-  if (value === "free" || value === "pro" || value === "team") {
-    return value;
+function parseAliases(raw: string | undefined, fallback: string[]): string[] {
+  if (!raw) {
+    return fallback;
   }
+
+  return raw
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getPlanAliases(): Record<PlanTier, string[]> {
+  return {
+    free: parseAliases(process.env.CLERK_BILLING_FREE_PLAN_KEYS, ["free", "free_user"]),
+    pro: parseAliases(process.env.CLERK_BILLING_PRO_PLAN_KEYS, ["pro", "cronlet_pro"]),
+    team: parseAliases(process.env.CLERK_BILLING_TEAM_PLAN_KEYS, ["team", "cronlet_team"]),
+  };
+}
+
+function parsePlanTier(value: unknown, aliases: Record<PlanTier, string[]>): PlanTier | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  for (const tier of ["free", "pro", "team"] as const) {
+    if (aliases[tier].includes(normalized)) {
+      return tier;
+    }
+  }
+
   return null;
 }
 
-function resolvePlanFromEvent(data: Record<string, unknown>): PlanTier | null {
+function resolvePlanFromEvent(data: Record<string, unknown>, aliases: Record<PlanTier, string[]>): PlanTier | null {
+  const nestedPlan = typeof data.plan === "object" && data.plan ? (data.plan as Record<string, unknown>) : null;
   const candidates = [
     data.plan,
+    data.plan_key,
+    data.planKey,
     data.plan_slug,
     data.planSlug,
     data.tier,
+    nestedPlan?.key,
+    nestedPlan?.slug,
+    nestedPlan?.name,
     typeof data.public_metadata === "object" && data.public_metadata ? (data.public_metadata as Record<string, unknown>).plan : null,
   ];
 
   for (const candidate of candidates) {
-    const parsed = parsePlanTier(candidate);
+    const parsed = parsePlanTier(candidate, aliases);
     if (parsed) {
       return parsed;
     }
@@ -64,6 +102,19 @@ function resolveOrgId(data: Record<string, unknown>): string | null {
     return id;
   }
 
+  const userIdCandidates = [
+    data.user_id,
+    data.userId,
+    typeof data.user === "object" && data.user ? (data.user as Record<string, unknown>).id : null,
+    typeof data.customer === "object" && data.customer ? (data.customer as Record<string, unknown>).id : null,
+  ];
+
+  for (const candidate of userIdCandidates) {
+    if (typeof candidate === "string" && candidate.length > 0) {
+      return personalOrgIdForUser(candidate);
+    }
+  }
+
   return null;
 }
 
@@ -74,6 +125,8 @@ function resolveOrgFields(data: Record<string, unknown>): { name?: string; slug?
 }
 
 export async function registerWebhookRoutes(app: FastifyInstance): Promise<void> {
+  const planAliases = getPlanAliases();
+
   app.post(
     "/webhooks/clerk",
     {
@@ -147,7 +200,7 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
         });
       }
 
-      const plan = resolvePlanFromEvent(data);
+      const plan = resolvePlanFromEvent(data, planAliases);
       if (plan) {
         const delinquent = isDelinquentStatus(data);
         const graceEndsAt = delinquent ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null;

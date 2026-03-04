@@ -13,19 +13,65 @@ import type {
 const BASE_URL = (import.meta.env.VITE_CLOUD_API_BASE_URL as string | undefined)?.replace(/\/$/, "")
   ?? "http://127.0.0.1:4050";
 
-const DEFAULT_HEADERS: Record<string, string> = {
-  "content-type": "application/json",
-  "x-org-id": "org_demo",
-  "x-user-id": "user_demo",
+interface CloudAuthSnapshot {
+  token: string | null;
+  orgId: string | null;
+  userId: string | null;
+}
+
+const DEFAULT_AUTH_SNAPSHOT: CloudAuthSnapshot = {
+  token: null,
+  orgId: null,
+  userId: null,
 };
 
+let authProvider: () => Promise<CloudAuthSnapshot> | CloudAuthSnapshot = () => DEFAULT_AUTH_SNAPSHOT;
+
+export function setCloudAuthProvider(
+  provider: () => Promise<CloudAuthSnapshot> | CloudAuthSnapshot
+): void {
+  authProvider = provider;
+}
+
+export function resetCloudAuthProvider(): void {
+  authProvider = () => DEFAULT_AUTH_SNAPSHOT;
+}
+
+async function resolveHeaders(init?: RequestInit): Promise<Headers> {
+  const snapshot = await authProvider();
+  const headers = new Headers();
+  headers.set("content-type", "application/json");
+
+  if (snapshot.token) {
+    headers.set("authorization", `Bearer ${snapshot.token}`);
+  }
+
+  if (snapshot.orgId) {
+    headers.set("x-org-id", snapshot.orgId);
+  }
+
+  if (snapshot.userId) {
+    headers.set("x-user-id", snapshot.userId);
+  }
+
+  if (!snapshot.token) {
+    headers.set("x-org-id", snapshot.orgId ?? "org_demo");
+    headers.set("x-user-id", snapshot.userId ?? "user_demo");
+  }
+
+  if (init?.headers) {
+    const extra = new Headers(init.headers);
+    extra.forEach((value, key) => headers.set(key, value));
+  }
+
+  return headers;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = await resolveHeaders(init);
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: {
-      ...DEFAULT_HEADERS,
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   const payload = (await response.json()) as ApiResponse<T>;

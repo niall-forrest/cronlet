@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { ClerkProvider } from "@clerk/clerk-react";
 import {
   RouterProvider,
   createRootRoute,
@@ -7,6 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ClerkAuthBridge } from "./components/ClerkAuthBridge";
 import { Layout } from "./components/Layout";
 import { ApiKeysPage } from "./routes/ApiKeysPage";
 import { EndpointsPage } from "./routes/EndpointsPage";
@@ -15,6 +17,7 @@ import { JobsPage } from "./routes/JobsPage";
 import { RunsPage } from "./routes/RunsPage";
 import { SchedulesPage } from "./routes/SchedulesPage";
 import { UsagePage } from "./routes/UsagePage";
+import { BillingPage } from "./routes/BillingPage";
 import "./index.css";
 
 const rootRoute = createRootRoute({
@@ -63,6 +66,12 @@ const usageRoute = createRoute({
   component: UsagePage,
 });
 
+const billingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/billing",
+  component: BillingPage,
+});
+
 const routeTree = rootRoute.addChildren([
   projectsRoute,
   endpointsRoute,
@@ -71,11 +80,18 @@ const routeTree = rootRoute.addChildren([
   runsRoute,
   apiKeysRoute,
   usageRoute,
+  billingRoute,
 ]);
 
 const router = createRouter({ routeTree });
 
 const queryClient = new QueryClient();
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing Clerk publishable key. Set VITE_CLERK_PUBLISHABLE_KEY in apps/cloud-web/.env.local.");
+}
+
 document.documentElement.classList.add("dark");
 
 declare module "@tanstack/react-router" {
@@ -86,8 +102,11 @@ declare module "@tanstack/react-router" {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+      <QueryClientProvider client={queryClient}>
+        <ClerkAuthBridge />
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ClerkProvider>
   </React.StrictMode>
 );

@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { AppError } from "../lib/errors.js";
 import { recordAuditEvent } from "../lib/audit.js";
 import { hashApiKey } from "../lib/api-keys.js";
+import { personalOrgIdForUser } from "../lib/tenancy.js";
 
 const DEFAULT_ORG_ID = "org_demo";
 const DEFAULT_USER_ID = "user_demo";
@@ -186,7 +187,7 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
         const payload = verifyResult.payload;
         const orgIdHeader = request.headers["x-org-id"];
         const orgIdFromHeader = typeof orgIdHeader === "string" ? orgIdHeader : null;
-        const orgId = orgFromPayload(payload) ?? orgIdFromHeader;
+        const orgId = orgFromPayload(payload) ?? orgIdFromHeader ?? personalOrgIdForUser(payload.sub ?? "");
 
         if (!orgId) {
           throw new AppError(401, ERROR_CODES.UNAUTHORIZED, "No organization selected");
