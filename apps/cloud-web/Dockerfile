@@ -37,8 +37,8 @@ RUN pnpm --filter @cronlet/cloud-web build
 # Production stage - serve with nginx
 FROM nginx:alpine AS runner
 
-# Copy custom nginx config
-COPY apps/cloud-web/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy custom nginx config template
+COPY apps/cloud-web/nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copy built static files
 COPY --from=builder /app/apps/cloud-web/dist /usr/share/nginx/html
@@ -46,6 +46,10 @@ COPY --from=builder /app/apps/cloud-web/dist /usr/share/nginx/html
 # Add health check file
 RUN echo '{"ok":true,"service":"cloud-web"}' > /usr/share/nginx/html/health.json
 
+# Default port (Railway will override via PORT env var)
+ENV PORT=80
+
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Use envsubst to substitute PORT at runtime, then start nginx
+CMD ["/bin/sh", "-c", "envsubst '${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
