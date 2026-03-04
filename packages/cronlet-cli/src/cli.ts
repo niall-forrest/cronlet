@@ -5,6 +5,7 @@ import { listCommand } from "./commands/list.js";
 import { runCommand } from "./commands/run.js";
 import { validateCommand } from "./commands/validate.js";
 import { deployCommand } from "./commands/deploy.js";
+import { cloudCommand } from "./commands/cloud.js";
 
 const program = new Command();
 
@@ -19,5 +20,6 @@ program.addCommand(listCommand);
 program.addCommand(runCommand);
 program.addCommand(validateCommand);
 program.addCommand(deployCommand);
+program.addCommand(cloudCommand);
 
 program.parse();

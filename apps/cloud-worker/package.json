@@ -1,0 +1,28 @@
+{
+  "name": "@cronlet/cloud-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "set -a; [ -f .env ] && . ./.env; set +a; tsx watch src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@cronlet/cloud-shared": "workspace:*",
+    "bullmq": "^5.12.12",
+    "ioredis": "5.9.3"
+  },
+  "devDependencies": {
+    "@cronlet/eslint-config": "workspace:*",
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.5.0"
+  }
+}

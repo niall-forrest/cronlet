@@ -4,6 +4,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "cloud:dev": "turbo run dev --filter=@cronlet/cloud-api --filter=@cronlet/cloud-worker --filter=@cronlet/cloud-web --filter=@cronlet/cloud-mcp",
+    "cloud:build": "turbo run build --filter=@cronlet/cloud-*",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "docs:build": "pnpm --filter @cronlet/docs build",
