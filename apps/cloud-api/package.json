@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "set -a; [ -f .env ] && . ./.env; set +a; tsx watch src/index.ts",
     "build": "tsup",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
@@ -17,6 +17,7 @@
     "prisma:migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
+    "@fastify/cors": "^9.0.1",
     "@prisma/client": "^5.22.0",
     "@cronlet/cloud-shared": "workspace:*",
     "croner": "^8.1.2",

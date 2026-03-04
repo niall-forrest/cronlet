@@ -32,14 +32,22 @@ export class CloudApiClient {
     return payload.data;
   }
 
-  claimDueDispatches(limit: number): Promise<DispatchInstruction[]> {
-    return this.request<DispatchInstruction[]>(`/internal/schedules/due?limit=${limit}`);
+  claimDueTasks(limit: number): Promise<DispatchInstruction[]> {
+    return this.request<DispatchInstruction[]>(`/internal/tasks/due?limit=${limit}`);
   }
 
   updateRunStatus(runId: string, input: InternalRunStatusInput): Promise<void> {
     return this.request<void>(`/internal/runs/${runId}/status`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  }
+
+  getSecretValue(orgId: string, name: string): Promise<{ value: string }> {
+    return this.request<{ value: string }>(`/internal/secrets/${name}`, {
+      headers: {
+        "x-org-id": orgId,
+      },
     });
   }
 }

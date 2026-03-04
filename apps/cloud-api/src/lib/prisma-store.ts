@@ -8,22 +8,25 @@ import {
   type ApiKeyRotateInput,
   type ApiKeyWithToken,
   formatYearMonth,
+  parseDuration,
   type AlertCreateInput,
   type AlertRecord,
+  type CreatedBy,
   type DispatchInstruction,
-  type EndpointCreateInput,
-  type EndpointPatchInput,
-  type EndpointRecord,
-  type JobCreateInput,
-  type JobPatchInput,
-  type JobRecord,
+  type HandlerConfig,
+  type HandlerType,
+  type InternalRunStatusInput,
   type ProjectCreateInput,
   type ProjectRecord,
   type RunRecord,
-  type RunStatus,
-  type ScheduleCreateInput,
-  type SchedulePatchInput,
-  type ScheduleRecord,
+  type ScheduleConfig,
+  type ScheduleType,
+  type SecretCreateInput,
+  type SecretPatchInput,
+  type SecretRecord,
+  type TaskCreateInput,
+  type TaskPatchInput,
+  type TaskRecord,
   type UsageSnapshot,
 } from "@cronlet/cloud-shared";
 import { ERROR_CODES } from "@cronlet/cloud-shared";
@@ -69,94 +72,45 @@ function toProjectRecord(value: {
   };
 }
 
-function toEndpointRecord(value: {
+function toTaskRecord(value: {
   id: string;
   organizationId: string;
   projectId: string;
   name: string;
-  url: string;
-  authMode: EndpointRecord["authMode"];
-  authSecretRef: string | null;
-  timeoutMs: number;
-  createdAt: Date;
-  updatedAt: Date;
-  environment: { name: string } | null;
-}): EndpointRecord {
-  return {
-    id: value.id,
-    orgId: value.organizationId,
-    projectId: value.projectId,
-    environment: value.environment?.name ?? "prod",
-    name: value.name,
-    url: value.url,
-    authMode: value.authMode,
-    authSecretRef: value.authSecretRef,
-    timeoutMs: value.timeoutMs,
-    createdAt: iso(value.createdAt),
-    updatedAt: iso(value.updatedAt),
-  };
-}
-
-function toJobRecord(value: {
-  id: string;
-  organizationId: string;
-  projectId: string;
-  endpointId: string;
-  name: string;
-  jobKey: string;
-  concurrency: JobRecord["concurrency"];
-  catchup: boolean;
+  description: string | null;
+  handlerType: string;
+  handlerConfig: unknown;
+  scheduleType: string;
+  scheduleConfig: unknown;
+  timezone: string;
+  nextRunAt: Date | null;
   retryAttempts: number;
   retryBackoff: string;
-  retryInitialDelay: string;
+  retryDelay: string;
   timeout: string;
   active: boolean;
+  createdBy: unknown;
   createdAt: Date;
   updatedAt: Date;
-  environment: { name: string } | null;
-}): JobRecord {
-  const retryBackoff = value.retryBackoff === "exponential" ? "exponential" : "linear";
+}): TaskRecord {
   return {
     id: value.id,
     orgId: value.organizationId,
     projectId: value.projectId,
-    environment: value.environment?.name ?? "prod",
-    endpointId: value.endpointId,
     name: value.name,
-    key: value.jobKey,
-    concurrency: value.concurrency,
-    catchup: value.catchup,
+    description: value.description,
+    handlerType: value.handlerType as HandlerType,
+    handlerConfig: value.handlerConfig as HandlerConfig,
+    scheduleType: value.scheduleType as ScheduleType,
+    scheduleConfig: value.scheduleConfig as ScheduleConfig,
+    timezone: value.timezone,
+    nextRunAt: isoNullable(value.nextRunAt),
     retryAttempts: value.retryAttempts,
-    retryBackoff,
-    retryInitialDelay: value.retryInitialDelay,
+    retryBackoff: value.retryBackoff as "linear" | "exponential",
+    retryDelay: value.retryDelay,
     timeout: value.timeout,
     active: value.active,
-    createdAt: iso(value.createdAt),
-    updatedAt: iso(value.updatedAt),
-  };
-}
-
-function toScheduleRecord(value: {
-  id: string;
-  organizationId: string;
-  projectId: string;
-  jobId: string;
-  cron: string;
-  timezone: string;
-  active: boolean;
-  nextRunAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): ScheduleRecord {
-  return {
-    id: value.id,
-    orgId: value.organizationId,
-    projectId: value.projectId,
-    jobId: value.jobId,
-    cron: value.cron,
-    timezone: value.timezone,
-    active: value.active,
-    nextRunAt: isoNullable(value.nextRunAt),
+    createdBy: value.createdBy as CreatedBy | null,
     createdAt: iso(value.createdAt),
     updatedAt: iso(value.updatedAt),
   };
@@ -166,32 +120,49 @@ function toRunRecord(value: {
   id: string;
   organizationId: string;
   projectId: string;
-  jobId: string;
-  scheduleId: string | null;
-  status: RunStatus;
+  taskId: string;
+  status: string;
+  trigger: string;
   attempt: number;
+  scheduledAt: Date | null;
   startedAt: Date | null;
   completedAt: Date | null;
   durationMs: number | null;
+  output: unknown;
+  logs: string | null;
   errorMessage: string | null;
-  trigger: string;
   createdAt: Date;
-  updatedAt: Date;
 }): RunRecord {
-  const trigger = value.trigger === "schedule" ? "schedule" : "manual";
   return {
     id: value.id,
     orgId: value.organizationId,
     projectId: value.projectId,
-    jobId: value.jobId,
-    scheduleId: value.scheduleId,
-    status: value.status,
+    taskId: value.taskId,
+    status: value.status as RunRecord["status"],
+    trigger: value.trigger as RunRecord["trigger"],
     attempt: value.attempt,
+    scheduledAt: isoNullable(value.scheduledAt),
     startedAt: isoNullable(value.startedAt),
     completedAt: isoNullable(value.completedAt),
     durationMs: value.durationMs,
+    output: value.output as Record<string, unknown> | null,
+    logs: value.logs,
     errorMessage: value.errorMessage,
-    trigger,
+    createdAt: iso(value.createdAt),
+  };
+}
+
+function toSecretRecord(value: {
+  id: string;
+  organizationId: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): SecretRecord {
+  return {
+    id: value.id,
+    orgId: value.organizationId,
+    name: value.name,
     createdAt: iso(value.createdAt),
     updatedAt: iso(value.updatedAt),
   };
@@ -284,7 +255,7 @@ interface BillingState {
 
 export class PrismaCloudStore implements CloudStore {
   private readonly dispatchQueue: DispatchInstruction[] = [];
-  private readonly claimLockId = "cronlet_claim_due_schedules";
+  private readonly claimLockId = "cronlet_claim_due_tasks";
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -321,18 +292,6 @@ export class PrismaCloudStore implements CloudStore {
         slug: orgSlug(orgId, slug),
       },
     });
-  }
-
-  private async ensureEnvironment(projectId: string, name: string): Promise<{ id: string; name: string }> {
-    const environment = await this.prisma.environment.upsert({
-      where: { projectId_name: { projectId, name } },
-      update: {},
-      create: { projectId, name },
-    });
-    return {
-      id: environment.id,
-      name: environment.name,
-    };
   }
 
   private async assertProjectAccess(orgId: string, projectId: string): Promise<void> {
@@ -433,6 +392,10 @@ export class PrismaCloudStore implements CloudStore {
     });
   }
 
+  // ============================================
+  // PROJECTS
+  // ============================================
+
   async listProjects(orgId: string): Promise<ProjectRecord[]> {
     const projects = await this.prisma.project.findMany({
       where: { organizationId: orgId },
@@ -459,278 +422,149 @@ export class PrismaCloudStore implements CloudStore {
     }
   }
 
-  async listEndpoints(orgId: string): Promise<EndpointRecord[]> {
-    const endpoints = await this.prisma.endpoint.findMany({
-      where: { organizationId: orgId },
-      include: {
-        environment: {
-          select: { name: true },
-        },
+  // ============================================
+  // TASKS
+  // ============================================
+
+  async listTasks(orgId: string, projectId?: string): Promise<TaskRecord[]> {
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        organizationId: orgId,
+        ...(projectId ? { projectId } : {}),
       },
       orderBy: { createdAt: "desc" },
     });
-    return endpoints.map(toEndpointRecord);
+    return tasks.map(toTaskRecord);
   }
 
-  async createEndpoint(orgId: string, input: EndpointCreateInput): Promise<EndpointRecord> {
+  async getTask(orgId: string, taskId: string): Promise<TaskRecord> {
+    const task = await this.prisma.task.findFirst({
+      where: {
+        id: taskId,
+        organizationId: orgId,
+      },
+    });
+    if (!task) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+    }
+    return toTaskRecord(task);
+  }
+
+  async createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> {
     await this.assertWritable(orgId);
     await this.assertProjectAccess(orgId, input.projectId);
 
-    const environment = await this.ensureEnvironment(input.projectId, input.environment);
-    const created = await this.prisma.endpoint.create({
+    const scheduleConfig = input.schedule;
+    const handlerConfig = input.handler;
+    const active = input.active !== false;
+
+    const nextRunAt = active
+      ? computeNextRun(scheduleConfig, input.timezone ?? "UTC")
+      : null;
+
+    const created = await this.prisma.task.create({
       data: {
         organizationId: orgId,
         projectId: input.projectId,
-        environmentId: environment.id,
         name: input.name,
-        url: input.url,
-        authMode: input.authMode,
-        authSecretRef: input.authSecretRef ?? null,
-        timeoutMs: input.timeoutMs,
-      },
-      include: {
-        environment: {
-          select: { name: true },
-        },
+        description: input.description ?? null,
+        handlerType: handlerConfig.type,
+        handlerConfig: handlerConfig as unknown as Prisma.InputJsonValue,
+        scheduleType: scheduleConfig.type,
+        scheduleConfig: scheduleConfig as unknown as Prisma.InputJsonValue,
+        timezone: input.timezone ?? "UTC",
+        nextRunAt: nextRunAt ? new Date(nextRunAt) : null,
+        retryAttempts: input.retryAttempts ?? 1,
+        retryBackoff: input.retryBackoff ?? "linear",
+        retryDelay: input.retryDelay ?? "1s",
+        timeout: input.timeout ?? "30s",
+        active,
+        createdBy: createdBy ? (createdBy as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
     });
 
-    return toEndpointRecord(created);
+    return toTaskRecord(created);
   }
 
-  async patchEndpoint(orgId: string, endpointId: string, input: EndpointPatchInput): Promise<EndpointRecord> {
+  async patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> {
     await this.assertWritable(orgId);
 
-    const existing = await this.prisma.endpoint.findFirst({
+    const existing = await this.prisma.task.findFirst({
       where: {
-        id: endpointId,
+        id: taskId,
         organizationId: orgId,
-      },
-      include: {
-        environment: {
-          select: { name: true },
-        },
       },
     });
     if (!existing) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Endpoint not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
 
-    const updated = await this.prisma.endpoint.update({
-      where: { id: endpointId },
+    const scheduleConfig = input.schedule ?? (existing.scheduleConfig as unknown as ScheduleConfig);
+    const handlerConfig = input.handler ?? (existing.handlerConfig as unknown as HandlerConfig);
+    const timezone = input.timezone ?? existing.timezone;
+    const active = input.active ?? existing.active;
+
+    // Recompute nextRunAt if schedule, timezone, or active status changed
+    const needsNextRunUpdate =
+      input.schedule !== undefined ||
+      input.timezone !== undefined ||
+      input.active !== undefined;
+
+    const nextRunAt = needsNextRunUpdate
+      ? (active ? computeNextRun(scheduleConfig, timezone) : null)
+      : isoNullable(existing.nextRunAt);
+
+    const updated = await this.prisma.task.update({
+      where: { id: taskId },
       data: {
         name: input.name ?? existing.name,
-        url: input.url ?? existing.url,
-        authMode: input.authMode ?? existing.authMode,
-        authSecretRef: input.authSecretRef ?? existing.authSecretRef,
-        timeoutMs: input.timeoutMs ?? existing.timeoutMs,
-      },
-      include: {
-        environment: {
-          select: { name: true },
-        },
+        description: input.description === null ? null : (input.description ?? existing.description),
+        handlerType: handlerConfig.type,
+        handlerConfig: handlerConfig as unknown as Prisma.InputJsonValue,
+        scheduleType: scheduleConfig.type,
+        scheduleConfig: scheduleConfig as unknown as Prisma.InputJsonValue,
+        timezone,
+        nextRunAt: nextRunAt ? new Date(nextRunAt) : null,
+        retryAttempts: input.retryAttempts ?? existing.retryAttempts,
+        retryBackoff: input.retryBackoff ?? existing.retryBackoff,
+        retryDelay: input.retryDelay ?? existing.retryDelay,
+        timeout: input.timeout ?? existing.timeout,
+        active,
       },
     });
 
-    return toEndpointRecord(updated);
+    return toTaskRecord(updated);
   }
 
-  async listJobs(orgId: string): Promise<JobRecord[]> {
-    const jobs = await this.prisma.job.findMany({
-      where: { organizationId: orgId },
-      include: {
-        environment: {
-          select: { name: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    return jobs.map(toJobRecord);
-  }
-
-  async createJob(orgId: string, input: JobCreateInput): Promise<JobRecord> {
-    await this.assertWritable(orgId);
-    await this.assertProjectAccess(orgId, input.projectId);
-
-    const endpoint = await this.prisma.endpoint.findFirst({
+  async deleteTask(orgId: string, taskId: string): Promise<void> {
+    const existing = await this.prisma.task.findFirst({
       where: {
-        id: input.endpointId,
+        id: taskId,
         organizationId: orgId,
-        projectId: input.projectId,
       },
       select: { id: true },
     });
-    if (!endpoint) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Endpoint not found for project");
-    }
-
-    const environment = await this.ensureEnvironment(input.projectId, input.environment);
-
-    try {
-      const created = await this.prisma.job.create({
-        data: {
-          organizationId: orgId,
-          projectId: input.projectId,
-          environmentId: environment.id,
-          endpointId: input.endpointId,
-          name: input.name,
-          jobKey: input.key,
-          concurrency: input.concurrency,
-          catchup: input.catchup,
-          retryAttempts: input.retryAttempts,
-          retryBackoff: input.retryBackoff,
-          retryInitialDelay: input.retryInitialDelay,
-          timeout: input.timeout,
-          active: true,
-        },
-        include: {
-          environment: {
-            select: { name: true },
-          },
-        },
-      });
-      return toJobRecord(created);
-    } catch {
-      throw new AppError(409, ERROR_CODES.VALIDATION_ERROR, "Job key already exists for organization");
-    }
-  }
-
-  async patchJob(orgId: string, jobId: string, input: JobPatchInput): Promise<JobRecord> {
-    await this.assertWritable(orgId);
-
-    const existing = await this.prisma.job.findFirst({
-      where: {
-        id: jobId,
-        organizationId: orgId,
-      },
-      include: {
-        environment: {
-          select: { name: true },
-        },
-      },
-    });
     if (!existing) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Job not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
 
-    const updated = await this.prisma.job.update({
-      where: { id: jobId },
-      data: {
-        name: input.name ?? existing.name,
-        concurrency: input.concurrency ?? existing.concurrency,
-        catchup: input.catchup ?? existing.catchup,
-        retryAttempts: input.retryAttempts ?? existing.retryAttempts,
-        retryBackoff: input.retryBackoff ?? existing.retryBackoff,
-        retryInitialDelay: input.retryInitialDelay ?? existing.retryInitialDelay,
-        timeout: input.timeout ?? existing.timeout,
-        active: input.active ?? existing.active,
-      },
-      include: {
-        environment: {
-          select: { name: true },
-        },
-      },
+    await this.prisma.task.delete({
+      where: { id: taskId },
     });
-
-    return toJobRecord(updated);
   }
 
-  async listSchedules(orgId: string): Promise<ScheduleRecord[]> {
-    const schedules = await this.prisma.schedule.findMany({
-      where: { organizationId: orgId },
-      orderBy: { createdAt: "desc" },
-    });
-    return schedules.map(toScheduleRecord);
-  }
-
-  async createSchedule(orgId: string, input: ScheduleCreateInput): Promise<ScheduleRecord> {
-    await this.assertWritable(orgId);
-
-    const job = await this.prisma.job.findFirst({
-      where: {
-        id: input.jobId,
-        organizationId: orgId,
-      },
-      select: {
-        id: true,
-        projectId: true,
-      },
-    });
-    if (!job) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Job not found");
-    }
-
-    const created = await this.prisma.schedule.create({
-      data: {
-        organizationId: orgId,
-        projectId: job.projectId,
-        jobId: job.id,
-        cron: input.cron,
-        timezone: input.timezone,
-        active: input.active,
-        nextRunAt: input.active ? new Date(computeNextRun(input.cron, input.timezone) ?? Date.now()) : null,
-      },
-    });
-    return toScheduleRecord(created);
-  }
-
-  async patchSchedule(orgId: string, scheduleId: string, input: SchedulePatchInput): Promise<ScheduleRecord> {
-    await this.assertWritable(orgId);
-
-    const existing = await this.prisma.schedule.findFirst({
-      where: {
-        id: scheduleId,
-        organizationId: orgId,
-      },
-    });
-    if (!existing) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Schedule not found");
-    }
-
-    const cron = input.cron ?? existing.cron;
-    const timezone = input.timezone ?? existing.timezone;
-    const active = input.active ?? existing.active;
-    const nextRunAt = active ? computeNextRun(cron, timezone) : null;
-
-    const updated = await this.prisma.schedule.update({
-      where: { id: scheduleId },
-      data: {
-        cron,
-        timezone,
-        active,
-        nextRunAt: nextRunAt ? new Date(nextRunAt) : null,
-      },
-    });
-    return toScheduleRecord(updated);
-  }
-
-  async triggerJob(
-    orgId: string,
-    jobId: string,
-    trigger: "manual" | "schedule",
-    scheduleId: string | null
-  ): Promise<RunRecord> {
+  async triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): Promise<RunRecord> {
     await this.assertWritable(orgId);
     await this.assertWithinRunLimit(orgId);
 
-    const job = await this.prisma.job.findFirst({
+    const task = await this.prisma.task.findFirst({
       where: {
-        id: jobId,
+        id: taskId,
         organizationId: orgId,
       },
-      include: {
-        endpoint: {
-          select: {
-            url: true,
-            authMode: true,
-            authSecretRef: true,
-            timeoutMs: true,
-          },
-        },
-      },
     });
-    if (!job) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Job not found");
+    if (!task) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
 
     await this.incrementUsage(orgId);
@@ -738,38 +572,46 @@ export class PrismaCloudStore implements CloudStore {
     const run = await this.prisma.run.create({
       data: {
         organizationId: orgId,
-        projectId: job.projectId,
-        jobId: job.id,
-        scheduleId,
+        projectId: task.projectId,
+        taskId: task.id,
         status: "queued",
-        attempt: 0,
         trigger,
+        attempt: 1,
       },
     });
+
+    const timeoutMs = parseDuration(task.timeout);
 
     this.dispatchQueue.push({
       runId: run.id,
       orgId,
-      projectId: job.projectId,
-      jobId: job.id,
-      endpointUrl: job.endpoint.url,
-      authMode: job.endpoint.authMode,
-      authSecretRef: job.endpoint.authSecretRef,
-      timeoutMs: job.endpoint.timeoutMs,
-      retryAttempts: job.retryAttempts,
-      retryBackoff: job.retryBackoff as "linear" | "exponential",
-      retryInitialDelay: job.retryInitialDelay,
+      projectId: task.projectId,
+      taskId: task.id,
+      handlerType: task.handlerType as HandlerType,
+      handlerConfig: task.handlerConfig as unknown as HandlerConfig,
+      timeoutMs,
+      retryAttempts: task.retryAttempts,
+      retryBackoff: task.retryBackoff as "linear" | "exponential",
+      retryDelay: task.retryDelay,
     });
 
     return toRunRecord(run);
   }
 
-  async listRuns(orgId: string): Promise<RunRecord[]> {
+  // ============================================
+  // RUNS
+  // ============================================
+
+  async listRuns(orgId: string, taskId?: string, limit = 100): Promise<RunRecord[]> {
     const runs = await this.prisma.run.findMany({
-      where: { organizationId: orgId },
+      where: {
+        organizationId: orgId,
+        ...(taskId ? { taskId } : {}),
+      },
       orderBy: { createdAt: "desc" },
+      take: limit,
     });
-    return runs.map((run) => toRunRecord(run as Parameters<typeof toRunRecord>[0]));
+    return runs.map(toRunRecord);
   }
 
   async getRun(orgId: string, runId: string): Promise<RunRecord> {
@@ -782,41 +624,154 @@ export class PrismaCloudStore implements CloudStore {
     if (!run) {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, "Run not found");
     }
-    return toRunRecord(run as Parameters<typeof toRunRecord>[0]);
+    return toRunRecord(run);
   }
 
-  async updateRunStatus(
-    runId: string,
-    status: RunStatus,
-    attempt: number,
-    durationMs?: number,
-    errorMessage?: string
-  ): Promise<RunRecord> {
+  async updateRunStatus(runId: string, input: InternalRunStatusInput): Promise<RunRecord> {
     const existing = await this.prisma.run.findUnique({ where: { id: runId } });
     if (!existing) {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, "Run not found");
     }
+
+    // Don't update if already in terminal state
     if (existing.status === "success" || existing.status === "failure" || existing.status === "timeout") {
-      return toRunRecord(existing as Parameters<typeof toRunRecord>[0]);
+      return toRunRecord(existing);
     }
-    if (attempt < existing.attempt) {
-      return toRunRecord(existing as Parameters<typeof toRunRecord>[0]);
+
+    // Don't process old attempts
+    if (input.attempt < existing.attempt) {
+      return toRunRecord(existing);
     }
+
+    const isTerminal = input.status === "success" || input.status === "failure" || input.status === "timeout";
 
     const updated = await this.prisma.run.update({
       where: { id: runId },
       data: {
-        status,
-        attempt,
-        startedAt: status === "running" && !existing.startedAt ? new Date() : undefined,
-        completedAt: status === "success" || status === "failure" || status === "timeout" ? new Date() : null,
-        durationMs: durationMs ?? undefined,
-        errorMessage: errorMessage ?? (status === "success" ? null : undefined),
+        status: input.status,
+        attempt: input.attempt,
+        startedAt: input.status === "running" && !existing.startedAt ? new Date() : undefined,
+        completedAt: isTerminal ? new Date() : undefined,
+        durationMs: input.durationMs ?? undefined,
+        output: input.output ? (input.output as Prisma.InputJsonValue) : undefined,
+        logs: input.logs ?? undefined,
+        errorMessage: input.errorMessage ?? (input.status === "success" ? null : undefined),
       },
     });
 
-    return toRunRecord(updated as Parameters<typeof toRunRecord>[0]);
+    return toRunRecord(updated);
   }
+
+  // ============================================
+  // SECRETS
+  // ============================================
+
+  async listSecrets(orgId: string): Promise<SecretRecord[]> {
+    const secrets = await this.prisma.secret.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return secrets.map(toSecretRecord);
+  }
+
+  async getSecretValue(orgId: string, name: string): Promise<string> {
+    const secret = await this.prisma.secret.findFirst({
+      where: {
+        organizationId: orgId,
+        name,
+      },
+      select: { encryptedValue: true },
+    });
+    if (!secret) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+    }
+    // In real implementation, this would decrypt the value
+    return secret.encryptedValue;
+  }
+
+  async createSecret(orgId: string, input: SecretCreateInput): Promise<SecretRecord> {
+    await this.assertWritable(orgId);
+    await this.ensureOrganization(orgId);
+
+    try {
+      const created = await this.prisma.secret.create({
+        data: {
+          organizationId: orgId,
+          name: input.name,
+          encryptedValue: input.value, // In real implementation, this would be encrypted
+        },
+        select: {
+          id: true,
+          organizationId: true,
+          name: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      return toSecretRecord(created);
+    } catch {
+      throw new AppError(409, ERROR_CODES.VALIDATION_ERROR, "Secret with this name already exists");
+    }
+  }
+
+  async patchSecret(orgId: string, name: string, input: SecretPatchInput): Promise<SecretRecord> {
+    await this.assertWritable(orgId);
+
+    const existing = await this.prisma.secret.findFirst({
+      where: {
+        organizationId: orgId,
+        name,
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+    }
+
+    const updated = await this.prisma.secret.update({
+      where: { id: existing.id },
+      data: {
+        encryptedValue: input.value, // In real implementation, this would be encrypted
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return toSecretRecord(updated);
+  }
+
+  async deleteSecret(orgId: string, name: string): Promise<void> {
+    const existing = await this.prisma.secret.findFirst({
+      where: {
+        organizationId: orgId,
+        name,
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+    }
+
+    await this.prisma.secret.delete({
+      where: { id: existing.id },
+    });
+  }
+
+  // ============================================
+  // ALERTS
+  // ============================================
 
   async listAlerts(orgId: string): Promise<AlertRecord[]> {
     const alerts = await this.prisma.alert.findMany({
@@ -842,6 +797,10 @@ export class PrismaCloudStore implements CloudStore {
     });
     return toAlertRecord(created);
   }
+
+  // ============================================
+  // API KEYS
+  // ============================================
 
   async listApiKeys(orgId: string): Promise<ApiKeyRecord[]> {
     const keys = await this.prisma.apiKey.findMany({
@@ -919,11 +878,16 @@ export class PrismaCloudStore implements CloudStore {
     });
   }
 
+  // ============================================
+  // AUDIT EVENTS
+  // ============================================
+
   async listAuditEvents(orgId: string, input: AuditEventListInput): Promise<AuditEventRecord[]> {
     const where = {
       organizationId: orgId,
       ...(input.actorType ? { actorType: input.actorType } : {}),
       ...(input.action ? { action: input.action } : {}),
+      ...(input.actionPrefix ? { action: { startsWith: input.actionPrefix } } : {}),
       ...(input.from || input.to
         ? {
           createdAt: {
@@ -940,26 +904,13 @@ export class PrismaCloudStore implements CloudStore {
       take: input.limit ?? 100,
     });
 
-    return events.map((event) =>
-      toAuditEventRecord({
-        id: event.id,
-        organizationId: event.organizationId,
-        actorType: event.actorType,
-        actorId: event.actorId,
-        action: event.action,
-        targetType: event.targetType,
-        targetId: event.targetId,
-        payloadHash: event.payloadHash,
-        metadata: event.metadata,
-        createdAt: event.createdAt,
-      })
-    );
+    return events.map(toAuditEventRecord);
   }
 
   async createAuditEvent(input: {
     organizationId: string;
-    actorType: string;
-    actorId: string;
+    actorType?: string;
+    actorId?: string;
     action: string;
     targetType: string;
     targetId: string;
@@ -970,8 +921,8 @@ export class PrismaCloudStore implements CloudStore {
     await this.prisma.auditEvent.create({
       data: {
         organizationId: input.organizationId,
-        actorType: input.actorType,
-        actorId: input.actorId,
+        actorType: input.actorType ?? "internal",
+        actorId: input.actorId ?? "system",
         action: input.action,
         targetType: input.targetType,
         targetId: input.targetId,
@@ -981,6 +932,10 @@ export class PrismaCloudStore implements CloudStore {
       },
     });
   }
+
+  // ============================================
+  // USAGE & BILLING
+  // ============================================
 
   async getUsage(orgId: string): Promise<UsageSnapshot> {
     const entitlement = await this.getBillingState(orgId);
@@ -1006,128 +961,6 @@ export class PrismaCloudStore implements CloudStore {
     };
   }
 
-  async claimDueDispatches(limit = 100): Promise<DispatchInstruction[]> {
-    const lockAcquired = await this.tryClaimDispatchLock();
-    if (!lockAcquired) {
-      return [];
-    }
-
-    try {
-      const now = new Date();
-      const dueSchedules = await this.prisma.schedule.findMany({
-        where: {
-          active: true,
-          nextRunAt: { lte: now },
-        },
-        include: {
-          job: {
-            include: {
-              endpoint: true,
-            },
-          },
-        },
-        orderBy: { nextRunAt: "asc" },
-        take: limit,
-      });
-
-      for (const schedule of dueSchedules) {
-        const entitlement = await this.getBillingState(schedule.organizationId);
-        if (entitlement.delinquent && !this.isGracePeriodActive(entitlement.graceEndsAt, now)) {
-          continue;
-        }
-
-        const nextRunAt = computeNextRun(schedule.cron, schedule.timezone, now);
-        const run = await this.prisma.$transaction(async (tx) => {
-          const cas = await tx.schedule.updateMany({
-            where: {
-              id: schedule.id,
-              active: true,
-              nextRunAt: schedule.nextRunAt,
-            },
-            data: {
-              nextRunAt: nextRunAt ? new Date(nextRunAt) : null,
-            },
-          });
-          if (cas.count === 0) {
-            return null;
-          }
-
-          const billing = await tx.billingEntitlement.findUnique({
-            where: { organizationId: schedule.organizationId },
-            select: { tier: true },
-          });
-          const tier = billing?.tier ?? "free";
-          const month = formatYearMonth(now);
-          const usageCounter = await tx.usageCounter.findUnique({
-            where: {
-              organizationId_yearMonth: {
-                organizationId: schedule.organizationId,
-                yearMonth: month,
-              },
-            },
-            select: { runAttempts: true },
-          });
-          if ((usageCounter?.runAttempts ?? 0) >= PLAN_LIMITS[tier].runAttemptsPerMonth) {
-            return null;
-          }
-
-          await tx.usageCounter.upsert({
-            where: {
-              organizationId_yearMonth: {
-                organizationId: schedule.organizationId,
-                yearMonth: month,
-              },
-            },
-            update: {
-              runAttempts: {
-                increment: 1,
-              },
-            },
-            create: {
-              organizationId: schedule.organizationId,
-              yearMonth: month,
-              runAttempts: 1,
-            },
-          });
-
-          return tx.run.create({
-            data: {
-              organizationId: schedule.organizationId,
-              projectId: schedule.projectId,
-              jobId: schedule.jobId,
-              scheduleId: schedule.id,
-              status: "queued",
-              attempt: 0,
-              trigger: "schedule",
-            },
-          });
-        });
-
-        if (!run) {
-          continue;
-        }
-
-        this.dispatchQueue.push({
-          runId: run.id,
-          orgId: schedule.organizationId,
-          projectId: schedule.projectId,
-          jobId: schedule.jobId,
-          endpointUrl: schedule.job.endpoint.url,
-          authMode: schedule.job.endpoint.authMode,
-          authSecretRef: schedule.job.endpoint.authSecretRef,
-          timeoutMs: schedule.job.endpoint.timeoutMs,
-          retryAttempts: schedule.job.retryAttempts,
-          retryBackoff: schedule.job.retryBackoff === "exponential" ? "exponential" : "linear",
-          retryInitialDelay: schedule.job.retryInitialDelay,
-        });
-      }
-
-      return this.dispatchQueue.splice(0, limit);
-    } finally {
-      await this.releaseDispatchLock();
-    }
-  }
-
   async upsertOrganization(input: OrganizationUpsertInput): Promise<void> {
     await this.ensureOrganization(input.orgId, input.name, input.slug);
   }
@@ -1148,5 +981,131 @@ export class PrismaCloudStore implements CloudStore {
         graceEndsAt: input.graceEndsAt ? new Date(input.graceEndsAt) : null,
       },
     });
+  }
+
+  // ============================================
+  // WORKER DISPATCH
+  // ============================================
+
+  async claimDueDispatches(limit = 100): Promise<DispatchInstruction[]> {
+    const lockAcquired = await this.tryClaimDispatchLock();
+    if (!lockAcquired) {
+      return [];
+    }
+
+    try {
+      const now = new Date();
+      const dueTasks = await this.prisma.task.findMany({
+        where: {
+          active: true,
+          nextRunAt: { lte: now },
+        },
+        orderBy: { nextRunAt: "asc" },
+        take: limit,
+      });
+
+      for (const task of dueTasks) {
+        const entitlement = await this.getBillingState(task.organizationId);
+        if (entitlement.delinquent && !this.isGracePeriodActive(entitlement.graceEndsAt, now)) {
+          continue;
+        }
+
+        const scheduleConfig = task.scheduleConfig as unknown as ScheduleConfig;
+        const nextRunAt = computeNextRun(scheduleConfig, task.timezone, now);
+
+        const run = await this.prisma.$transaction(async (tx) => {
+          // Optimistic lock - only update if nextRunAt hasn't changed
+          const cas = await tx.task.updateMany({
+            where: {
+              id: task.id,
+              active: true,
+              nextRunAt: task.nextRunAt,
+            },
+            data: {
+              nextRunAt: nextRunAt ? new Date(nextRunAt) : null,
+            },
+          });
+          if (cas.count === 0) {
+            return null;
+          }
+
+          // Check usage limit
+          const billing = await tx.billingEntitlement.findUnique({
+            where: { organizationId: task.organizationId },
+            select: { tier: true },
+          });
+          const tier = billing?.tier ?? "free";
+          const month = formatYearMonth(now);
+          const usageCounter = await tx.usageCounter.findUnique({
+            where: {
+              organizationId_yearMonth: {
+                organizationId: task.organizationId,
+                yearMonth: month,
+              },
+            },
+            select: { runAttempts: true },
+          });
+          if ((usageCounter?.runAttempts ?? 0) >= PLAN_LIMITS[tier].runAttemptsPerMonth) {
+            return null;
+          }
+
+          // Increment usage
+          await tx.usageCounter.upsert({
+            where: {
+              organizationId_yearMonth: {
+                organizationId: task.organizationId,
+                yearMonth: month,
+              },
+            },
+            update: {
+              runAttempts: {
+                increment: 1,
+              },
+            },
+            create: {
+              organizationId: task.organizationId,
+              yearMonth: month,
+              runAttempts: 1,
+            },
+          });
+
+          // Create run
+          return tx.run.create({
+            data: {
+              organizationId: task.organizationId,
+              projectId: task.projectId,
+              taskId: task.id,
+              status: "queued",
+              trigger: "schedule",
+              attempt: 1,
+              scheduledAt: task.nextRunAt,
+            },
+          });
+        });
+
+        if (!run) {
+          continue;
+        }
+
+        const timeoutMs = parseDuration(task.timeout);
+
+        this.dispatchQueue.push({
+          runId: run.id,
+          orgId: task.organizationId,
+          projectId: task.projectId,
+          taskId: task.id,
+          handlerType: task.handlerType as HandlerType,
+          handlerConfig: task.handlerConfig as unknown as HandlerConfig,
+          timeoutMs,
+          retryAttempts: task.retryAttempts,
+          retryBackoff: task.retryBackoff as "linear" | "exponential",
+          retryDelay: task.retryDelay,
+        });
+      }
+
+      return this.dispatchQueue.splice(0, limit);
+    } finally {
+      await this.releaseDispatchLock();
+    }
   }
 }

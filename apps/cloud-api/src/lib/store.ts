@@ -9,22 +9,23 @@ import {
   formatYearMonth,
   type AlertCreateInput,
   type AlertRecord,
-  type EndpointCreateInput,
-  type EndpointPatchInput,
-  type EndpointRecord,
+  type CreatedBy,
   type DispatchInstruction,
-  type JobCreateInput,
-  type JobPatchInput,
-  type JobRecord,
+  type HandlerType,
+  type InternalRunStatusInput,
   type PlanTier,
   type ProjectCreateInput,
   type ProjectRecord,
   type RunRecord,
-  type RunStatus,
-  type ScheduleCreateInput,
-  type SchedulePatchInput,
-  type ScheduleRecord,
+  type ScheduleType,
+  type SecretCreateInput,
+  type SecretPatchInput,
+  type SecretRecord,
+  type TaskCreateInput,
+  type TaskPatchInput,
+  type TaskRecord,
   type UsageSnapshot,
+  parseDuration,
 } from "@cronlet/cloud-shared";
 import { ERROR_CODES } from "@cronlet/cloud-shared";
 import { nanoid } from "nanoid";
@@ -39,12 +40,19 @@ interface OrgEntitlement {
   graceEndsAt: string | null;
 }
 
+interface InternalTaskRecord extends TaskRecord {
+  // Internal fields not exposed via API
+}
+
+interface InternalSecretRecord extends SecretRecord {
+  encryptedValue: string;
+}
+
 export class InMemoryCloudStore implements CloudStore {
   private readonly projects = new Map<string, ProjectRecord>();
-  private readonly endpoints = new Map<string, EndpointRecord>();
-  private readonly jobs = new Map<string, JobRecord>();
-  private readonly schedules = new Map<string, ScheduleRecord>();
+  private readonly tasks = new Map<string, InternalTaskRecord>();
   private readonly runs = new Map<string, RunRecord>();
+  private readonly secrets = new Map<string, InternalSecretRecord>();
   private readonly alerts = new Map<string, AlertRecord>();
   private readonly apiKeys = new Map<string, ApiKeyRecord & { keyHash: string }>();
   private readonly auditEvents = new Map<string, AuditEventRecord>();
@@ -55,6 +63,7 @@ export class InMemoryCloudStore implements CloudStore {
   private usageKey(orgId: string, yearMonth: string): string {
     return `${orgId}:${yearMonth}`;
   }
+
 
   private getEntitlement(orgId: string): OrgEntitlement {
     const existing = this.entitlements.get(orgId);
@@ -122,6 +131,10 @@ export class InMemoryCloudStore implements CloudStore {
     this.usage.set(key, current + 1);
   }
 
+  // ============================================
+  // PROJECTS
+  // ============================================
+
   listProjects(orgId: string): ProjectRecord[] {
     return Array.from(this.projects.values()).filter((item) => item.orgId === orgId);
   }
@@ -150,235 +163,173 @@ export class InMemoryCloudStore implements CloudStore {
     return created;
   }
 
-  listEndpoints(orgId: string): EndpointRecord[] {
-    return Array.from(this.endpoints.values()).filter((item) => item.orgId === orgId);
+  // ============================================
+  // TASKS
+  // ============================================
+
+  listTasks(orgId: string, projectId?: string): TaskRecord[] {
+    return Array.from(this.tasks.values())
+      .filter((task) => task.orgId === orgId && (!projectId || task.projectId === projectId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  createEndpoint(orgId: string, input: EndpointCreateInput): EndpointRecord {
-    this.assertWritable(orgId);
-    this.assertProjectAccess(orgId, input.projectId);
-    const now = nowIso();
-
-    const created: EndpointRecord = {
-      id: nanoid(),
-      orgId,
-      projectId: input.projectId,
-      environment: input.environment,
-      name: input.name,
-      url: input.url,
-      authMode: input.authMode,
-      authSecretRef: input.authSecretRef ?? null,
-      timeoutMs: input.timeoutMs,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.endpoints.set(created.id, created);
-    return created;
-  }
-
-  patchEndpoint(orgId: string, endpointId: string, input: EndpointPatchInput): EndpointRecord {
-    this.assertWritable(orgId);
-
-    const endpoint = this.endpoints.get(endpointId);
-    if (!endpoint || endpoint.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Endpoint not found");
+  getTask(orgId: string, taskId: string): TaskRecord {
+    const task = this.tasks.get(taskId);
+    if (!task || task.orgId !== orgId) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
-
-    const updated: EndpointRecord = {
-      ...endpoint,
-      name: input.name ?? endpoint.name,
-      url: input.url ?? endpoint.url,
-      authMode: input.authMode ?? endpoint.authMode,
-      authSecretRef: input.authSecretRef ?? endpoint.authSecretRef,
-      timeoutMs: input.timeoutMs ?? endpoint.timeoutMs,
-      updatedAt: nowIso(),
-    };
-
-    this.endpoints.set(endpointId, updated);
-    return updated;
+    return task;
   }
 
-  listJobs(orgId: string): JobRecord[] {
-    return Array.from(this.jobs.values()).filter((item) => item.orgId === orgId);
-  }
-
-  listSchedules(orgId: string): ScheduleRecord[] {
-    return Array.from(this.schedules.values()).filter((item) => item.orgId === orgId);
-  }
-
-  createJob(orgId: string, input: JobCreateInput): JobRecord {
+  createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): TaskRecord {
     this.assertWritable(orgId);
     this.assertProjectAccess(orgId, input.projectId);
 
-    const endpoint = this.endpoints.get(input.endpointId);
-    if (!endpoint || endpoint.orgId !== orgId || endpoint.projectId !== input.projectId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Endpoint not found for project");
-    }
-
     const now = nowIso();
-    const duplicateKey = Array.from(this.jobs.values()).some(
-      (job) => job.orgId === orgId && job.key === input.key
-    );
-    if (duplicateKey) {
-      throw new AppError(409, ERROR_CODES.VALIDATION_ERROR, "Job key already exists for organization");
-    }
+    const scheduleConfig = input.schedule;
+    const handlerConfig = input.handler;
 
-    const created: JobRecord = {
+    const nextRunAt = input.active !== false
+      ? computeNextRun(scheduleConfig, input.timezone ?? "UTC")
+      : null;
+
+    const task: InternalTaskRecord = {
       id: nanoid(),
       orgId,
       projectId: input.projectId,
-      environment: input.environment,
-      endpointId: input.endpointId,
       name: input.name,
-      key: input.key,
-      concurrency: input.concurrency,
-      catchup: input.catchup,
-      retryAttempts: input.retryAttempts,
-      retryBackoff: input.retryBackoff,
-      retryInitialDelay: input.retryInitialDelay,
-      timeout: input.timeout,
-      active: true,
+      description: input.description ?? null,
+      handlerType: handlerConfig.type as HandlerType,
+      handlerConfig,
+      scheduleType: scheduleConfig.type as ScheduleType,
+      scheduleConfig,
+      timezone: input.timezone ?? "UTC",
+      nextRunAt,
+      retryAttempts: input.retryAttempts ?? 1,
+      retryBackoff: input.retryBackoff ?? "linear",
+      retryDelay: input.retryDelay ?? "1s",
+      timeout: input.timeout ?? "30s",
+      active: input.active !== false,
+      createdBy: createdBy ?? null,
       createdAt: now,
       updatedAt: now,
     };
 
-    this.jobs.set(created.id, created);
-    return created;
+    this.tasks.set(task.id, task);
+    return task;
   }
 
-  patchJob(orgId: string, jobId: string, input: JobPatchInput): JobRecord {
+  patchTask(orgId: string, taskId: string, input: TaskPatchInput): TaskRecord {
     this.assertWritable(orgId);
 
-    const job = this.jobs.get(jobId);
-    if (!job || job.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Job not found");
+    const task = this.tasks.get(taskId);
+    if (!task || task.orgId !== orgId) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
 
-    const updated: JobRecord = {
-      ...job,
-      name: input.name ?? job.name,
-      concurrency: input.concurrency ?? job.concurrency,
-      catchup: input.catchup ?? job.catchup,
-      retryAttempts: input.retryAttempts ?? job.retryAttempts,
-      retryBackoff: input.retryBackoff ?? job.retryBackoff,
-      retryInitialDelay: input.retryInitialDelay ?? job.retryInitialDelay,
-      timeout: input.timeout ?? job.timeout,
-      active: input.active ?? job.active,
+    const scheduleConfig = input.schedule ?? task.scheduleConfig;
+    const handlerConfig = input.handler ?? task.handlerConfig;
+    const timezone = input.timezone ?? task.timezone;
+    const active = input.active ?? task.active;
+
+    // Recompute nextRunAt if schedule, timezone, or active status changed
+    const needsNextRunUpdate =
+      input.schedule !== undefined ||
+      input.timezone !== undefined ||
+      input.active !== undefined;
+
+    const nextRunAt = needsNextRunUpdate
+      ? (active ? computeNextRun(scheduleConfig, timezone) : null)
+      : task.nextRunAt;
+
+    const updated: InternalTaskRecord = {
+      ...task,
+      name: input.name ?? task.name,
+      description: input.description === null ? null : (input.description ?? task.description),
+      handlerType: handlerConfig.type as HandlerType,
+      handlerConfig,
+      scheduleType: scheduleConfig.type as ScheduleType,
+      scheduleConfig,
+      timezone,
+      nextRunAt,
+      retryAttempts: input.retryAttempts ?? task.retryAttempts,
+      retryBackoff: input.retryBackoff ?? task.retryBackoff,
+      retryDelay: input.retryDelay ?? task.retryDelay,
+      timeout: input.timeout ?? task.timeout,
+      active,
       updatedAt: nowIso(),
     };
 
-    this.jobs.set(jobId, updated);
+    this.tasks.set(taskId, updated);
     return updated;
   }
 
-  createSchedule(orgId: string, input: ScheduleCreateInput): ScheduleRecord {
-    this.assertWritable(orgId);
-
-    const job = this.jobs.get(input.jobId);
-    if (!job || job.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Job not found");
+  deleteTask(orgId: string, taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task || task.orgId !== orgId) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
-
-    const now = nowIso();
-    const created: ScheduleRecord = {
-      id: nanoid(),
-      orgId,
-      projectId: job.projectId,
-      jobId: job.id,
-      cron: input.cron,
-      timezone: input.timezone,
-      active: input.active,
-      nextRunAt: input.active ? computeNextRun(input.cron, input.timezone) : null,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.schedules.set(created.id, created);
-    return created;
+    this.tasks.delete(taskId);
   }
 
-  patchSchedule(orgId: string, scheduleId: string, input: SchedulePatchInput): ScheduleRecord {
-    this.assertWritable(orgId);
-
-    const schedule = this.schedules.get(scheduleId);
-    if (!schedule || schedule.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Schedule not found");
-    }
-
-    const nextCron = input.cron ?? schedule.cron;
-    const nextTimezone = input.timezone ?? schedule.timezone;
-    const nextActive = input.active ?? schedule.active;
-
-    const updated: ScheduleRecord = {
-      ...schedule,
-      cron: nextCron,
-      timezone: nextTimezone,
-      active: nextActive,
-      nextRunAt: nextActive ? computeNextRun(nextCron, nextTimezone) : null,
-      updatedAt: nowIso(),
-    };
-
-    this.schedules.set(scheduleId, updated);
-    return updated;
-  }
-
-  triggerJob(orgId: string, jobId: string, trigger: "manual" | "schedule", scheduleId: string | null): RunRecord {
+  triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): RunRecord {
     this.assertWritable(orgId);
     this.assertWithinRunLimit(orgId);
 
-    const job = this.jobs.get(jobId);
-    if (!job || job.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Job not found");
-    }
-
-    const endpoint = this.endpoints.get(job.endpointId);
-    if (!endpoint || endpoint.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Endpoint for job not found");
+    const task = this.tasks.get(taskId);
+    if (!task || task.orgId !== orgId) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
 
     const now = nowIso();
     const run: RunRecord = {
       id: nanoid(),
       orgId,
-      projectId: job.projectId,
-      jobId: job.id,
-      scheduleId,
+      projectId: task.projectId,
+      taskId: task.id,
       status: "queued",
-      attempt: 0,
+      trigger,
+      attempt: 1,
+      scheduledAt: null,
       startedAt: null,
       completedAt: null,
       durationMs: null,
+      output: null,
+      logs: null,
       errorMessage: null,
-      trigger,
       createdAt: now,
-      updatedAt: now,
     };
 
     this.runs.set(run.id, run);
     this.incrementUsage(orgId);
 
+    const timeoutMs = parseDuration(task.timeout);
+
     this.dispatchQueue.push({
       runId: run.id,
       orgId,
-      projectId: job.projectId,
-      jobId: job.id,
-      endpointUrl: endpoint.url,
-      authMode: endpoint.authMode,
-      authSecretRef: endpoint.authSecretRef,
-      timeoutMs: endpoint.timeoutMs,
-      retryAttempts: job.retryAttempts,
-      retryBackoff: job.retryBackoff,
-      retryInitialDelay: job.retryInitialDelay,
+      projectId: task.projectId,
+      taskId: task.id,
+      handlerType: task.handlerType,
+      handlerConfig: task.handlerConfig,
+      timeoutMs,
+      retryAttempts: task.retryAttempts,
+      retryBackoff: task.retryBackoff,
+      retryDelay: task.retryDelay,
     });
 
     return run;
   }
 
-  listRuns(orgId: string): RunRecord[] {
+  // ============================================
+  // RUNS
+  // ============================================
+
+  listRuns(orgId: string, taskId?: string, limit = 100): RunRecord[] {
     return Array.from(this.runs.values())
-      .filter((run) => run.orgId === orgId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .filter((run) => run.orgId === orgId && (!taskId || run.taskId === taskId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
   getRun(orgId: string, runId: string): RunRecord {
@@ -388,6 +339,125 @@ export class InMemoryCloudStore implements CloudStore {
     }
     return run;
   }
+
+  updateRunStatus(runId: string, input: InternalRunStatusInput): RunRecord {
+    const run = this.runs.get(runId);
+    if (!run) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Run not found");
+    }
+
+    // Don't update if already in a terminal state
+    if (run.status === "success" || run.status === "failure" || run.status === "timeout") {
+      return run;
+    }
+
+    // Don't process old attempts
+    if (input.attempt < run.attempt) {
+      return run;
+    }
+
+    const now = nowIso();
+    const isTerminal = input.status === "success" || input.status === "failure" || input.status === "timeout";
+
+    const updated: RunRecord = {
+      ...run,
+      status: input.status,
+      attempt: input.attempt,
+      startedAt: input.status === "running" && !run.startedAt ? now : run.startedAt,
+      completedAt: isTerminal ? now : null,
+      durationMs: input.durationMs ?? run.durationMs,
+      output: input.output ?? run.output,
+      logs: input.logs ?? run.logs,
+      errorMessage: input.errorMessage ?? (input.status === "success" ? null : run.errorMessage),
+    };
+
+    this.runs.set(run.id, updated);
+    return updated;
+  }
+
+  // ============================================
+  // SECRETS
+  // ============================================
+
+  listSecrets(orgId: string): SecretRecord[] {
+    return Array.from(this.secrets.values())
+      .filter((secret) => secret.orgId === orgId)
+      .map(({ encryptedValue: _, ...record }) => record)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getSecretValue(orgId: string, name: string): string {
+    const secret = Array.from(this.secrets.values()).find(
+      (s) => s.orgId === orgId && s.name === name
+    );
+    if (!secret) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+    }
+    // In real implementation, this would decrypt the value
+    return secret.encryptedValue;
+  }
+
+  createSecret(orgId: string, input: SecretCreateInput): SecretRecord {
+    this.assertWritable(orgId);
+
+    const existing = Array.from(this.secrets.values()).find(
+      (s) => s.orgId === orgId && s.name === input.name
+    );
+    if (existing) {
+      throw new AppError(409, ERROR_CODES.VALIDATION_ERROR, "Secret with this name already exists");
+    }
+
+    const now = nowIso();
+    const secret: InternalSecretRecord = {
+      id: nanoid(),
+      orgId,
+      name: input.name,
+      encryptedValue: input.value, // In real implementation, this would be encrypted
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.secrets.set(secret.id, secret);
+
+    const { encryptedValue: _, ...record } = secret;
+    return record;
+  }
+
+  patchSecret(orgId: string, name: string, input: SecretPatchInput): SecretRecord {
+    this.assertWritable(orgId);
+
+    const secret = Array.from(this.secrets.values()).find(
+      (s) => s.orgId === orgId && s.name === name
+    );
+    if (!secret) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+    }
+
+    const updated: InternalSecretRecord = {
+      ...secret,
+      encryptedValue: input.value, // In real implementation, this would be encrypted
+      updatedAt: nowIso(),
+    };
+
+    this.secrets.set(secret.id, updated);
+
+    const { encryptedValue: _, ...record } = updated;
+    return record;
+  }
+
+  deleteSecret(orgId: string, name: string): void {
+    const secret = Array.from(this.secrets.values()).find(
+      (s) => s.orgId === orgId && s.name === name
+    );
+    if (!secret) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+    }
+    this.secrets.delete(secret.id);
+  }
+
+  // ============================================
+  // ALERTS
+  // ============================================
 
   listAlerts(orgId: string): AlertRecord[] {
     return Array.from(this.alerts.values()).filter((item) => item.orgId === orgId);
@@ -413,6 +483,10 @@ export class InMemoryCloudStore implements CloudStore {
     this.alerts.set(created.id, created);
     return created;
   }
+
+  // ============================================
+  // API KEYS
+  // ============================================
 
   listApiKeys(orgId: string): ApiKeyRecord[] {
     return Array.from(this.apiKeys.values())
@@ -476,6 +550,10 @@ export class InMemoryCloudStore implements CloudStore {
     this.apiKeys.delete(keyId);
   }
 
+  // ============================================
+  // AUDIT EVENTS
+  // ============================================
+
   listAuditEvents(orgId: string, input: AuditEventListInput): AuditEventRecord[] {
     const fromTime = input.from ? new Date(input.from).getTime() : null;
     const toTime = input.to ? new Date(input.to).getTime() : null;
@@ -495,6 +573,10 @@ export class InMemoryCloudStore implements CloudStore {
           return false;
         }
 
+        if (input.actionPrefix && !event.action.startsWith(input.actionPrefix)) {
+          return false;
+        }
+
         const createdAtTime = new Date(event.createdAt).getTime();
         if (fromTime !== null && createdAtTime < fromTime) {
           return false;
@@ -511,8 +593,8 @@ export class InMemoryCloudStore implements CloudStore {
 
   createAuditEvent(input: {
     organizationId: string;
-    actorType: string;
-    actorId: string;
+    actorType?: string;
+    actorId?: string;
     action: string;
     targetType: string;
     targetId: string;
@@ -527,7 +609,7 @@ export class InMemoryCloudStore implements CloudStore {
       id,
       orgId: input.organizationId,
       actorType: (input.actorType ?? "internal") as AuditEventRecord["actorType"],
-      actorId: input.actorId,
+      actorId: input.actorId ?? "system",
       action: input.action,
       targetType: input.targetType,
       targetId: input.targetId,
@@ -536,6 +618,10 @@ export class InMemoryCloudStore implements CloudStore {
       createdAt,
     });
   }
+
+  // ============================================
+  // USAGE & BILLING
+  // ============================================
 
   getUsage(orgId: string): UsageSnapshot {
     const entitlement = this.getEntitlement(orgId);
@@ -554,66 +640,6 @@ export class InMemoryCloudStore implements CloudStore {
     };
   }
 
-  claimDueDispatches(limit = 100): DispatchInstruction[] {
-    const now = new Date();
-
-    for (const schedule of this.schedules.values()) {
-      if (!schedule.active || !schedule.nextRunAt) {
-        continue;
-      }
-
-      const dueAt = new Date(schedule.nextRunAt);
-      if (dueAt.getTime() > now.getTime()) {
-        continue;
-      }
-
-      const entitlement = this.getEntitlement(schedule.orgId);
-      if (!this.isGracePeriodActive(entitlement, now.getTime())) {
-        continue;
-      }
-
-      this.triggerJob(schedule.orgId, schedule.jobId, "schedule", schedule.id);
-
-      const nextRunAt = computeNextRun(schedule.cron, schedule.timezone, now);
-      this.schedules.set(schedule.id, {
-        ...schedule,
-        nextRunAt,
-        updatedAt: nowIso(),
-      });
-    }
-
-    return this.dispatchQueue.splice(0, limit);
-  }
-
-  updateRunStatus(runId: string, status: RunStatus, attempt: number, durationMs?: number, errorMessage?: string): RunRecord {
-    const run = this.runs.get(runId);
-    if (!run) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Run not found");
-    }
-
-    if (run.status === "success" || run.status === "failure" || run.status === "timeout") {
-      return run;
-    }
-    if (attempt < run.attempt) {
-      return run;
-    }
-
-    const now = nowIso();
-    const next: RunRecord = {
-      ...run,
-      status,
-      attempt,
-      startedAt: status === "running" && !run.startedAt ? now : run.startedAt,
-      completedAt: status === "success" || status === "failure" || status === "timeout" ? now : null,
-      durationMs: durationMs ?? run.durationMs,
-      errorMessage: errorMessage ?? (status === "success" ? null : run.errorMessage),
-      updatedAt: now,
-    };
-
-    this.runs.set(run.id, next);
-    return next;
-  }
-
   upsertOrganization(_input: OrganizationUpsertInput): void {
     // In-memory mode uses org identifiers directly from request auth context.
   }
@@ -624,5 +650,76 @@ export class InMemoryCloudStore implements CloudStore {
       delinquent: input.delinquent,
       graceEndsAt: input.graceEndsAt,
     });
+  }
+
+  // ============================================
+  // WORKER DISPATCH
+  // ============================================
+
+  claimDueDispatches(limit = 100): DispatchInstruction[] {
+    const now = new Date();
+
+    for (const task of this.tasks.values()) {
+      if (!task.active || !task.nextRunAt) {
+        continue;
+      }
+
+      const dueAt = new Date(task.nextRunAt);
+      if (dueAt.getTime() > now.getTime()) {
+        continue;
+      }
+
+      const entitlement = this.getEntitlement(task.orgId);
+      if (!this.isGracePeriodActive(entitlement, now.getTime())) {
+        continue;
+      }
+
+      // Create the run
+      const runNow = nowIso();
+      const run: RunRecord = {
+        id: nanoid(),
+        orgId: task.orgId,
+        projectId: task.projectId,
+        taskId: task.id,
+        status: "queued",
+        trigger: "schedule",
+        attempt: 1,
+        scheduledAt: task.nextRunAt,
+        startedAt: null,
+        completedAt: null,
+        durationMs: null,
+        output: null,
+        logs: null,
+        errorMessage: null,
+        createdAt: runNow,
+      };
+      this.runs.set(run.id, run);
+      this.incrementUsage(task.orgId);
+
+      const timeoutMs = parseDuration(task.timeout);
+
+      this.dispatchQueue.push({
+        runId: run.id,
+        orgId: task.orgId,
+        projectId: task.projectId,
+        taskId: task.id,
+        handlerType: task.handlerType,
+        handlerConfig: task.handlerConfig,
+        timeoutMs,
+        retryAttempts: task.retryAttempts,
+        retryBackoff: task.retryBackoff,
+        retryDelay: task.retryDelay,
+      });
+
+      // Update next run time
+      const nextRunAt = computeNextRun(task.scheduleConfig, task.timezone, now);
+      this.tasks.set(task.id, {
+        ...task,
+        nextRunAt,
+        updatedAt: nowIso(),
+      });
+    }
+
+    return this.dispatchQueue.splice(0, limit);
   }
 }

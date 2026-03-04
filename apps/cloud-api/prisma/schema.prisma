@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// ENUMS
+// ============================================
+
 enum PlanTier {
   free
   pro
@@ -20,17 +24,19 @@ enum MemberRole {
   viewer
 }
 
-enum EndpointAuthMode {
-  none
-  bearer
-  basic
-  header
+enum HandlerType {
+  tools
+  code
+  webhook
 }
 
-enum JobConcurrency {
-  allow
-  skip
-  queue
+enum ScheduleType {
+  every
+  daily
+  weekly
+  monthly
+  once
+  cron
 }
 
 enum RunStatus {
@@ -45,6 +51,10 @@ enum AlertChannel {
   email
   webhook
 }
+
+// ============================================
+// USER & ORGANIZATION
+// ============================================
 
 model User {
   id          String               @id @default(cuid())
@@ -64,10 +74,9 @@ model Organization {
   updatedAt     DateTime             @updatedAt
   memberships   OrganizationMember[]
   projects      Project[]
-  endpoints     Endpoint[]
-  jobs          Job[]
-  schedules     Schedule[]
+  tasks         Task[]
   runs          Run[]
+  secrets       Secret[]
   alerts        Alert[]
   apiKeys       ApiKey[]
   auditEvents   AuditEvent[]
@@ -88,130 +97,130 @@ model OrganizationMember {
   @@unique([organizationId, userId])
 }
 
-model Project {
-  id           String        @id @default(cuid())
-  organizationId String
-  name         String
-  slug         String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+// ============================================
+// PROJECT
+// ============================================
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  environments Environment[]
-  endpoints    Endpoint[]
-  jobs         Job[]
-  schedules    Schedule[]
+model Project {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks        Task[]
   runs         Run[]
   alerts       Alert[]
 
   @@unique([organizationId, slug])
 }
 
-model Environment {
-  id          String   @id @default(cuid())
-  projectId   String
-  name        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ============================================
+// TASK (replaces Endpoint + Job + Schedule)
+// ============================================
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  endpoints   Endpoint[]
-  jobs        Job[]
-
-  @@unique([projectId, name])
-}
-
-model Endpoint {
-  id            String           @id @default(cuid())
-  organizationId String
-  projectId     String
-  environmentId String?
-  name          String
-  url           String
-  authMode      EndpointAuthMode @default(none)
-  authSecretRef String?
-  timeoutMs     Int              @default(30000)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  environment  Environment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
-  jobs         Job[]
-}
-
-model Job {
-  id                String         @id @default(cuid())
-  organizationId    String
-  projectId         String
-  environmentId     String?
-  endpointId        String
-  name              String
-  jobKey            String
-  concurrency       JobConcurrency @default(skip)
-  catchup           Boolean        @default(false)
-  retryAttempts     Int            @default(1)
-  retryBackoff      String         @default("linear")
-  retryInitialDelay String         @default("1s")
-  timeout           String         @default("30s")
-  active            Boolean        @default(true)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  environment  Environment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
-  endpoint     Endpoint     @relation(fields: [endpointId], references: [id], onDelete: Restrict)
-  schedules    Schedule[]
-  runs         Run[]
-
-  @@unique([organizationId, jobKey])
-}
-
-model Schedule {
-  id             String   @id @default(cuid())
+model Task {
+  id             String       @id @default(cuid())
   organizationId String
   projectId      String
-  jobId          String
-  cron           String
-  timezone       String   @default("UTC")
-  active         Boolean  @default(true)
-  nextRunAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
 
+  // Identity
+  name           String
+  description    String?
+
+  // Handler: WHAT to do
+  handlerType    HandlerType
+  handlerConfig  Json
+
+  // Schedule: WHEN to do it
+  scheduleType   ScheduleType
+  scheduleConfig Json
+  timezone       String       @default("UTC")
+  nextRunAt      DateTime?
+
+  // Config: HOW to handle failures
+  retryAttempts  Int          @default(1)
+  retryBackoff   String       @default("linear")
+  retryDelay     String       @default("1s")
+  timeout        String       @default("30s")
+
+  // State
+  active         Boolean      @default(true)
+
+  // Tracking
+  createdBy      Json?        // { type: "user" | "agent", id, name }
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   runs         Run[]
 
+  @@index([organizationId, active])
   @@index([active, nextRunAt])
 }
+
+// ============================================
+// RUN (execution of a Task)
+// ============================================
 
 model Run {
   id             String    @id @default(cuid())
   organizationId String
   projectId      String
-  jobId          String
-  scheduleId     String?
+  taskId         String
+
+  // Execution
   status         RunStatus @default(queued)
-  attempt        Int       @default(0)
-  trigger        String
+  trigger        String    // "schedule" | "manual" | "api"
+  attempt        Int       @default(1)
+
+  // Timing
+  scheduledAt    DateTime?
   startedAt      DateTime?
   completedAt    DateTime?
   durationMs     Int?
+
+  // Results
+  output         Json?     // Structured result from handler
+  logs           String?   // stdout/stderr
   errorMessage   String?
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  schedule     Schedule?    @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
+  @@index([taskId, createdAt])
   @@index([organizationId, createdAt])
-  @@index([jobId, createdAt])
 }
+
+// ============================================
+// SECRET (for tool credentials)
+// ============================================
+
+model Secret {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // e.g., "SLACK_TOKEN"
+  encryptedValue String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+}
+
+// ============================================
+// ALERTS
+// ============================================
 
 model Alert {
   id             String       @id @default(cuid())
@@ -228,18 +237,26 @@ model Alert {
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
+// ============================================
+// API KEYS
+// ============================================
+
 model ApiKey {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   label          String
   keyHash        String
   scopes         String[]
   lastUsedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
+
+// ============================================
+// AUDIT
+// ============================================
 
 model AuditEvent {
   id             String   @id @default(cuid())
@@ -258,6 +275,10 @@ model AuditEvent {
   @@index([organizationId, createdAt])
 }
 
+// ============================================
+// BILLING & USAGE
+// ============================================
+
 model UsageCounter {
   id             String   @id @default(cuid())
   organizationId String
@@ -272,13 +293,13 @@ model UsageCounter {
 }
 
 model BillingEntitlement {
-  id             String   @id @default(cuid())
-  organizationId String   @unique
-  tier           PlanTier @default(free)
-  delinquent     Boolean  @default(false)
+  id             String    @id @default(cuid())
+  organizationId String    @unique
+  tier           PlanTier  @default(free)
+  delinquent     Boolean   @default(false)
   graceEndsAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

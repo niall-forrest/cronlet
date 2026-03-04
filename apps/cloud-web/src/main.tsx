@@ -10,14 +10,14 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClerkAuthBridge } from "./components/ClerkAuthBridge";
 import { Layout } from "./components/Layout";
-import { ApiKeysPage } from "./routes/ApiKeysPage";
+import { OverviewPage } from "./routes/OverviewPage";
+import { TasksPage } from "./routes/TasksPage";
+import { CreateTaskPage } from "./routes/CreateTaskPage";
+import { RunsPage } from "./routes/RunsPage";
+import { ProjectsPage } from "./routes/ProjectsPage";
+import { SettingsPage } from "./routes/SettingsPage";
 import { AlertsPage } from "./routes/AlertsPage";
 import { AuditEventsPage } from "./routes/AuditEventsPage";
-import { EndpointsPage } from "./routes/EndpointsPage";
-import { ProjectsPage } from "./routes/ProjectsPage";
-import { JobsPage } from "./routes/JobsPage";
-import { RunsPage } from "./routes/RunsPage";
-import { SchedulesPage } from "./routes/SchedulesPage";
 import { UsagePage } from "./routes/UsagePage";
 import { BillingPage } from "./routes/BillingPage";
 import "./index.css";
@@ -26,60 +26,70 @@ const rootRoute = createRootRoute({
   component: Layout,
 });
 
-const projectsRoute = createRoute({
+// Overview is the landing page
+const overviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: ProjectsPage,
+  component: OverviewPage,
 });
 
-const jobsRoute = createRoute({
+// Tasks - the primary entity
+const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/jobs",
-  component: JobsPage,
+  path: "/tasks",
+  component: TasksPage,
 });
 
-const endpointsRoute = createRoute({
+// Create task wizard
+const createTaskRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/endpoints",
-  component: EndpointsPage,
+  path: "/tasks/create",
+  component: CreateTaskPage,
 });
 
-const schedulesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/schedules",
-  component: SchedulesPage,
-});
-
+// Runs - execution history
 const runsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/runs",
   component: RunsPage,
 });
 
-const apiKeysRoute = createRoute({
+// Projects - organization container
+const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/api-keys",
-  component: ApiKeysPage,
+  path: "/projects",
+  component: ProjectsPage,
 });
 
+// Settings - secrets, API keys
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
+// Alerts
 const alertsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/alerts",
   component: AlertsPage,
 });
 
+// Audit events
 const auditEventsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/audit-events",
   component: AuditEventsPage,
 });
 
+// Usage
 const usageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/usage",
   component: UsagePage,
 });
 
+// Billing
 const billingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/billing",
@@ -87,14 +97,14 @@ const billingRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  projectsRoute,
-  endpointsRoute,
-  jobsRoute,
-  schedulesRoute,
+  overviewRoute,
+  tasksRoute,
+  createTaskRoute,
   runsRoute,
+  projectsRoute,
+  settingsRoute,
   alertsRoute,
   auditEventsRoute,
-  apiKeysRoute,
   usageRoute,
   billingRoute,
 ]);

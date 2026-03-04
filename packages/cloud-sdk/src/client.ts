@@ -1,32 +1,42 @@
 import type {
+  AuditEventCreateInput,
+  AuditEventRecord,
   AlertCreateInput,
   ApiResponse,
-  EndpointCreateInput,
-  JobCreateInput,
   ProjectCreateInput,
-  ScheduleCreateInput,
-  SchedulePatchInput,
+  TaskCreateInput,
+  TaskPatchInput,
+  SecretCreateInput,
   AlertRecord,
-  EndpointRecord,
-  JobRecord,
   ProjectRecord,
+  TaskRecord,
   RunRecord,
-  ScheduleRecord,
+  SecretRecord,
   UsageSnapshot,
+  CreatedBy,
 } from "@cronlet/cloud-shared";
 
 export interface CloudClientOptions {
   baseUrl: string;
   apiKey: string;
+  orgId?: string;
+  userId?: string;
+  role?: "owner" | "admin" | "member" | "viewer";
 }
 
 export class CloudClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly orgId: string | null;
+  private readonly userId: string | null;
+  private readonly role: "owner" | "admin" | "member" | "viewer" | null;
 
   constructor(options: CloudClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.apiKey = options.apiKey;
+    this.orgId = options.orgId ?? null;
+    this.userId = options.userId ?? null;
+    this.role = options.role ?? null;
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -35,6 +45,9 @@ export class CloudClient {
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${this.apiKey}`,
+        ...(this.orgId ? { "x-org-id": this.orgId } : {}),
+        ...(this.userId ? { "x-user-id": this.userId } : {}),
+        ...(this.role ? { "x-role": this.role } : {}),
         ...(init?.headers ?? {}),
       },
     });
@@ -56,44 +69,55 @@ export class CloudClient {
     list: (): Promise<ProjectRecord[]> => this.request<ProjectRecord[]>("/v1/projects"),
   };
 
-  readonly endpoints = {
-    create: (input: EndpointCreateInput): Promise<EndpointRecord> =>
-      this.request<EndpointRecord>("/v1/endpoints", {
+  readonly tasks = {
+    create: (input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> =>
+      this.request<TaskRecord>("/v1/tasks", {
         method: "POST",
-        body: JSON.stringify(input),
+        body: JSON.stringify({ ...input, createdBy }),
       }),
-    list: (): Promise<EndpointRecord[]> => this.request<EndpointRecord[]>("/v1/endpoints"),
-  };
-
-  readonly jobs = {
-    create: (input: JobCreateInput): Promise<JobRecord> =>
-      this.request<JobRecord>("/v1/jobs", {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
-    list: (): Promise<JobRecord[]> => this.request<JobRecord[]>("/v1/jobs"),
-    trigger: (jobId: string): Promise<RunRecord> =>
-      this.request<RunRecord>(`/v1/jobs/${jobId}/trigger`, {
-        method: "POST",
-      }),
-  };
-
-  readonly schedules = {
-    create: (input: ScheduleCreateInput): Promise<ScheduleRecord> =>
-      this.request<ScheduleRecord>("/v1/schedules", {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
-    patch: (scheduleId: string, input: SchedulePatchInput): Promise<ScheduleRecord> =>
-      this.request<ScheduleRecord>(`/v1/schedules/${scheduleId}`, {
+    list: (projectId?: string): Promise<TaskRecord[]> => {
+      const query = projectId ? `?projectId=${projectId}` : "";
+      return this.request<TaskRecord[]>(`/v1/tasks${query}`);
+    },
+    get: (taskId: string): Promise<TaskRecord> =>
+      this.request<TaskRecord>(`/v1/tasks/${taskId}`),
+    patch: (taskId: string, input: TaskPatchInput): Promise<TaskRecord> =>
+      this.request<TaskRecord>(`/v1/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify(input),
+      }),
+    delete: (taskId: string): Promise<{ deleted: boolean }> =>
+      this.request<{ deleted: boolean }>(`/v1/tasks/${taskId}`, {
+        method: "DELETE",
+      }),
+    trigger: (taskId: string): Promise<RunRecord> =>
+      this.request<RunRecord>(`/v1/tasks/${taskId}/trigger`, {
+        method: "POST",
       }),
   };
 
   readonly runs = {
-    list: (): Promise<RunRecord[]> => this.request<RunRecord[]>("/v1/runs"),
+    list: (taskId?: string, limit?: number): Promise<RunRecord[]> => {
+      const params = new URLSearchParams();
+      if (taskId) params.set("taskId", taskId);
+      if (limit) params.set("limit", String(limit));
+      const query = params.toString() ? `?${params.toString()}` : "";
+      return this.request<RunRecord[]>(`/v1/runs${query}`);
+    },
     get: (runId: string): Promise<RunRecord> => this.request<RunRecord>(`/v1/runs/${runId}`),
+  };
+
+  readonly secrets = {
+    list: (): Promise<SecretRecord[]> => this.request<SecretRecord[]>("/v1/secrets"),
+    create: (input: SecretCreateInput): Promise<SecretRecord> =>
+      this.request<SecretRecord>("/v1/secrets", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    delete: (name: string): Promise<{ deleted: boolean }> =>
+      this.request<{ deleted: boolean }>(`/v1/secrets/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      }),
   };
 
   readonly alerts = {
@@ -107,5 +131,43 @@ export class CloudClient {
 
   readonly usage = {
     get: (): Promise<UsageSnapshot> => this.request<UsageSnapshot>("/v1/usage"),
+  };
+
+  readonly audit = {
+    list: (input: {
+      actorType?: "user" | "api_key" | "internal" | "webhook";
+      action?: string;
+      actionPrefix?: string;
+      from?: string;
+      to?: string;
+      limit?: number;
+    } = {}): Promise<AuditEventRecord[]> => {
+      const query = new URLSearchParams();
+      if (input.actorType) {
+        query.set("actorType", input.actorType);
+      }
+      if (input.action) {
+        query.set("action", input.action);
+      }
+      if (input.actionPrefix) {
+        query.set("actionPrefix", input.actionPrefix);
+      }
+      if (input.from) {
+        query.set("from", input.from);
+      }
+      if (input.to) {
+        query.set("to", input.to);
+      }
+      if (typeof input.limit === "number") {
+        query.set("limit", String(input.limit));
+      }
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      return this.request<AuditEventRecord[]>(`/v1/audit-events${suffix}`);
+    },
+    record: (input: AuditEventCreateInput): Promise<{ recorded: boolean }> =>
+      this.request<{ recorded: boolean }>("/v1/audit-events", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   };
 }

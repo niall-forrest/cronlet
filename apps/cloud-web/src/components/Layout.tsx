@@ -7,34 +7,40 @@ import {
   UserButton,
 } from "@clerk/clerk-react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-const navItems = [
-  { to: "/", label: "Projects" },
-  { to: "/endpoints", label: "Endpoints" },
-  { to: "/jobs", label: "Jobs" },
-  { to: "/schedules", label: "Schedules" },
+// Simplified navigation - Task-centric model
+interface NavItem {
+  to: string;
+  label: string;
+  exact?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { to: "/", label: "Overview", exact: true },
+  { to: "/tasks", label: "Tasks" },
   { to: "/runs", label: "Runs" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/audit-events", label: "Audit" },
-  { to: "/api-keys", label: "API Keys" },
-  { to: "/usage", label: "Usage" },
-  { to: "/billing", label: "Billing" },
-] as const;
+  { to: "/projects", label: "Projects" },
+  { to: "/settings", label: "Settings" },
+];
 
 export function Layout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  const isActive = (to: string, exact?: boolean) => {
+    if (exact) return pathname === to;
+    return pathname === to || pathname.startsWith(`${to}/`);
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b border-border/70 bg-background/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <strong className="text-sm font-semibold tracking-wide text-primary">Cronlet Cloud</strong>
-            <Badge variant="outline">Control Plane</Badge>
-          </div>
+          <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <strong className="text-sm font-semibold tracking-wide text-primary">Cronlet</strong>
+          </Link>
           <SignedOut>
             <div className="ml-auto flex items-center gap-2">
               <SignInButton mode="modal">
@@ -50,23 +56,23 @@ export function Layout() {
             </div>
           </SignedOut>
           <SignedIn>
-            <nav className="ml-auto flex flex-wrap items-center gap-1">
-              {navItems.map((item) => {
-                const active = pathname === item.to;
-                return (
-                  <Button
-                    key={item.to}
-                    asChild
-                    size="sm"
-                    variant={active ? "secondary" : "ghost"}
-                    className="font-medium"
-                  >
-                    <Link to={item.to}>{item.label}</Link>
-                  </Button>
-                );
-              })}
+            <nav className="ml-4 flex flex-wrap items-center gap-1">
+              {navItems.map((item) => (
+                <Button
+                  key={item.to}
+                  asChild
+                  size="sm"
+                  variant={isActive(item.to, item.exact) ? "secondary" : "ghost"}
+                  className={cn(
+                    "font-medium",
+                    isActive(item.to, item.exact) && "bg-secondary"
+                  )}
+                >
+                  <Link to={item.to}>{item.label}</Link>
+                </Button>
+              ))}
             </nav>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <OrganizationSwitcher />
               <UserButton />
             </div>
@@ -79,7 +85,7 @@ export function Layout() {
             <CardHeader>
               <CardTitle className="display-title">Sign In To Continue</CardTitle>
               <CardDescription>
-                Authenticate with Clerk to access the Cronlet Cloud control plane.
+                Login to your account to continue.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex gap-2">

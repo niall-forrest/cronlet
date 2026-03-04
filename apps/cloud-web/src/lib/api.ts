@@ -4,12 +4,15 @@ import type {
   ApiKeyRecord,
   ApiKeyWithToken,
   ApiResponse,
-  EndpointRecord,
-  JobRecord,
   ProjectRecord,
   RunRecord,
-  ScheduleRecord,
+  TaskRecord,
+  SecretRecord,
   UsageSnapshot,
+  TaskCreateInput,
+  TaskPatchInput,
+  SecretCreateInput,
+  SecretPatchInput,
 } from "@cronlet/cloud-shared";
 
 const BASE_URL = (import.meta.env.VITE_CLOUD_API_BASE_URL as string | undefined)?.replace(/\/$/, "")
@@ -84,6 +87,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload.data;
 }
 
+// ============================================
+// PROJECTS
+// ============================================
+
 export function listProjects(): Promise<ProjectRecord[]> {
   return request<ProjectRecord[]>("/v1/projects");
 }
@@ -95,122 +102,92 @@ export function createProject(input: { name: string; slug: string }): Promise<Pr
   });
 }
 
-export function listEndpoints(): Promise<EndpointRecord[]> {
-  return request<EndpointRecord[]>("/v1/endpoints");
+// ============================================
+// TASKS
+// ============================================
+
+export function listTasks(projectId?: string): Promise<TaskRecord[]> {
+  const query = projectId ? `?projectId=${projectId}` : "";
+  return request<TaskRecord[]>(`/v1/tasks${query}`);
 }
 
-export function createEndpoint(input: {
-  projectId: string;
-  environment: string;
-  name: string;
-  url: string;
-  authMode: "none" | "bearer" | "basic" | "header";
-  authSecretRef?: string | null;
-  timeoutMs: number;
-}): Promise<EndpointRecord> {
-  return request<EndpointRecord>("/v1/endpoints", {
+export function getTask(taskId: string): Promise<TaskRecord> {
+  return request<TaskRecord>(`/v1/tasks/${taskId}`);
+}
+
+export function createTask(input: TaskCreateInput): Promise<TaskRecord> {
+  return request<TaskRecord>("/v1/tasks", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export function patchEndpoint(
-  endpointId: string,
-  input: {
-    name?: string;
-    url?: string;
-    authMode?: "none" | "bearer" | "basic" | "header";
-    authSecretRef?: string | null;
-    timeoutMs?: number;
-  }
-): Promise<EndpointRecord> {
-  return request<EndpointRecord>(`/v1/endpoints/${endpointId}`, {
+export function patchTask(taskId: string, input: TaskPatchInput): Promise<TaskRecord> {
+  return request<TaskRecord>(`/v1/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   });
 }
 
-export function listJobs(): Promise<JobRecord[]> {
-  return request<JobRecord[]>("/v1/jobs");
+export function deleteTask(taskId: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/v1/tasks/${taskId}`, {
+    method: "DELETE",
+  });
 }
 
-export function createJob(input: {
-  projectId: string;
-  environment: string;
-  endpointId: string;
-  name: string;
-  key: string;
-  concurrency: "allow" | "skip" | "queue";
-  catchup: boolean;
-  retryAttempts: number;
-  retryBackoff: "linear" | "exponential";
-  retryInitialDelay: string;
-  timeout: string;
-}): Promise<JobRecord> {
-  return request<JobRecord>("/v1/jobs", {
+export function triggerTask(taskId: string): Promise<RunRecord> {
+  return request<RunRecord>(`/v1/tasks/${taskId}/trigger`, {
+    method: "POST",
+  });
+}
+
+// ============================================
+// RUNS
+// ============================================
+
+export function listRuns(taskId?: string, limit?: number): Promise<RunRecord[]> {
+  const params = new URLSearchParams();
+  if (taskId) params.set("taskId", taskId);
+  if (limit) params.set("limit", String(limit));
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return request<RunRecord[]>(`/v1/runs${query}`);
+}
+
+export function getRun(runId: string): Promise<RunRecord> {
+  return request<RunRecord>(`/v1/runs/${runId}`);
+}
+
+// ============================================
+// SECRETS
+// ============================================
+
+export function listSecrets(): Promise<SecretRecord[]> {
+  return request<SecretRecord[]>("/v1/secrets");
+}
+
+export function createSecret(input: SecretCreateInput): Promise<SecretRecord> {
+  return request<SecretRecord>("/v1/secrets", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export function patchJob(
-  jobId: string,
-  input: {
-    name?: string;
-    concurrency?: "allow" | "skip" | "queue";
-    catchup?: boolean;
-    retryAttempts?: number;
-    retryBackoff?: "linear" | "exponential";
-    retryInitialDelay?: string;
-    timeout?: string;
-    active?: boolean;
-  }
-): Promise<JobRecord> {
-  return request<JobRecord>(`/v1/jobs/${jobId}`, {
+export function patchSecret(name: string, input: SecretPatchInput): Promise<SecretRecord> {
+  return request<SecretRecord>(`/v1/secrets/${name}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   });
 }
 
-export function triggerJob(jobId: string): Promise<RunRecord> {
-  return request<RunRecord>(`/v1/jobs/${jobId}/trigger`, {
-    method: "POST",
+export function deleteSecret(name: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/v1/secrets/${name}`, {
+    method: "DELETE",
   });
 }
 
-export function listSchedules(): Promise<ScheduleRecord[]> {
-  return request<ScheduleRecord[]>("/v1/schedules");
-}
-
-export function createSchedule(input: {
-  jobId: string;
-  cron: string;
-  timezone: string;
-  active: boolean;
-}): Promise<ScheduleRecord> {
-  return request<ScheduleRecord>("/v1/schedules", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export function patchSchedule(
-  scheduleId: string,
-  input: { cron?: string; timezone?: string; active?: boolean }
-): Promise<ScheduleRecord> {
-  return request<ScheduleRecord>(`/v1/schedules/${scheduleId}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
-}
-
-export function listRuns(): Promise<RunRecord[]> {
-  return request<RunRecord[]>("/v1/runs");
-}
-
-export function getUsage(): Promise<UsageSnapshot> {
-  return request<UsageSnapshot>("/v1/usage");
-}
+// ============================================
+// ALERTS
+// ============================================
 
 export function listAlerts(): Promise<AlertRecord[]> {
   return request<AlertRecord[]>("/v1/alerts");
@@ -229,33 +206,9 @@ export function createAlert(input: {
   });
 }
 
-export function listAuditEvents(input: {
-  actorType?: "user" | "api_key" | "internal" | "webhook";
-  action?: string;
-  from?: string;
-  to?: string;
-  limit?: number;
-} = {}): Promise<AuditEventRecord[]> {
-  const query = new URLSearchParams();
-  if (input.actorType) {
-    query.set("actorType", input.actorType);
-  }
-  if (input.action) {
-    query.set("action", input.action);
-  }
-  if (input.from) {
-    query.set("from", input.from);
-  }
-  if (input.to) {
-    query.set("to", input.to);
-  }
-  if (typeof input.limit === "number") {
-    query.set("limit", String(input.limit));
-  }
-
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<AuditEventRecord[]>(`/v1/audit-events${suffix}`);
-}
+// ============================================
+// API KEYS
+// ============================================
 
 export function listApiKeys(): Promise<ApiKeyRecord[]> {
   return request<ApiKeyRecord[]>("/v1/api-keys");
@@ -282,4 +235,34 @@ export function revokeApiKey(apiKeyId: string): Promise<{ revoked: boolean }> {
   return request<{ revoked: boolean }>(`/v1/api-keys/${apiKeyId}`, {
     method: "DELETE",
   });
+}
+
+// ============================================
+// USAGE
+// ============================================
+
+export function getUsage(): Promise<UsageSnapshot> {
+  return request<UsageSnapshot>("/v1/usage");
+}
+
+// ============================================
+// AUDIT
+// ============================================
+
+export function listAuditEvents(input: {
+  actorType?: "user" | "api_key" | "agent" | "internal" | "webhook";
+  action?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+} = {}): Promise<AuditEventRecord[]> {
+  const query = new URLSearchParams();
+  if (input.actorType) query.set("actorType", input.actorType);
+  if (input.action) query.set("action", input.action);
+  if (input.from) query.set("from", input.from);
+  if (input.to) query.set("to", input.to);
+  if (typeof input.limit === "number") query.set("limit", String(input.limit));
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<AuditEventRecord[]>(`/v1/audit-events${suffix}`);
 }

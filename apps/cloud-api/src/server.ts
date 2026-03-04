@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import fastifyCors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import fastifyRawBody from "fastify-raw-body";
 import { InMemoryCloudStore } from "./lib/store.js";
@@ -6,10 +7,9 @@ import { PrismaCloudStore } from "./lib/prisma-store.js";
 import { registerAuthPlugin } from "./plugins/auth.js";
 import { registerIdempotencyPlugin } from "./plugins/idempotency.js";
 import { registerProjectRoutes } from "./routes/projects.js";
-import { registerEndpointRoutes } from "./routes/endpoints.js";
-import { registerJobRoutes } from "./routes/jobs.js";
-import { registerScheduleRoutes } from "./routes/schedules.js";
+import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerRunRoutes } from "./routes/runs.js";
+import { registerSecretRoutes } from "./routes/secrets.js";
 import { registerAlertRoutes } from "./routes/alerts.js";
 import { registerUsageRoutes } from "./routes/usage.js";
 import { registerInternalRoutes } from "./routes/internal.js";
@@ -17,8 +17,44 @@ import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerApiKeyRoutes } from "./routes/api-keys.js";
 import { registerAuditEventRoutes } from "./routes/audit-events.js";
 
+const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const CORS_ALLOWED_HEADERS = [
+  "authorization",
+  "content-type",
+  "x-org-id",
+  "x-user-id",
+  "x-role",
+  "x-api-key",
+  "x-idempotency-key",
+  "x-internal-token",
+];
+
+function parseCorsOrigins(rawValue: string | undefined): Set<string> {
+  if (!rawValue) {
+    return new Set();
+  }
+
+  return new Set(
+    rawValue
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0),
+  );
+}
+
 export async function buildServer() {
   const app = Fastify({ logger: true });
+  const configuredCorsOrigins = parseCorsOrigins(process.env.CLOUD_WEB_ORIGINS);
+  const corsOrigin = configuredCorsOrigins.size > 0
+    ? Array.from(configuredCorsOrigins)
+    : LOCAL_ORIGIN_PATTERN;
+
+  await app.register(fastifyCors, {
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: CORS_ALLOWED_HEADERS,
+    origin: corsOrigin,
+  });
 
   await app.register(fastifyRawBody, {
     field: "rawBody",
@@ -50,10 +86,9 @@ export async function buildServer() {
 
   await registerWebhookRoutes(app);
   await registerProjectRoutes(app);
-  await registerEndpointRoutes(app);
-  await registerJobRoutes(app);
-  await registerScheduleRoutes(app);
+  await registerTaskRoutes(app);
   await registerRunRoutes(app);
+  await registerSecretRoutes(app);
   await registerAlertRoutes(app);
   await registerUsageRoutes(app);
   await registerApiKeyRoutes(app);

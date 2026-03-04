@@ -66,6 +66,8 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
   const clerkJwksUrl = process.env.CLERK_JWKS_URL;
   const clerkIssuer = process.env.CLERK_ISSUER;
   const clerkJwks = clerkJwksUrl ? createRemoteJWKSet(new URL(clerkJwksUrl)) : null;
+  const internalToken = process.env.CLOUD_INTERNAL_TOKEN
+    ?? (process.env.NODE_ENV === "production" ? undefined : "dev-internal-token");
 
   app.addHook("preHandler", async (request) => {
     if (request.url.startsWith("/health")) {
@@ -93,9 +95,8 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
     }
 
     if (request.url.startsWith("/internal/")) {
-      const expected = process.env.CLOUD_INTERNAL_TOKEN;
       const provided = request.headers["x-internal-token"];
-      if (!expected || provided !== expected) {
+      if (!internalToken || provided !== internalToken) {
         throw new AppError(401, ERROR_CODES.UNAUTHORIZED, "Invalid internal token");
       }
       request.auth = {

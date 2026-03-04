@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "set -a; [ -f .env ] && . ./.env; set +a; tsx watch src/index.ts",
     "build": "tsup",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@cronlet/cloud-sdk": "workspace:*",
+    "@cronlet/cloud-shared": "workspace:*",
     "fastify": "^4.28.1"
   },
   "devDependencies": {
