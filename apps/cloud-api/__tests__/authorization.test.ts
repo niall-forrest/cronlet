@@ -11,9 +11,10 @@ describe("Cloud API authorization", () => {
     delete process.env.CLOUD_STORE_MODE;
   });
 
-  it("blocks viewer role from endpoint/job/schedule CRUD while allowing owner/admin", async () => {
+  it("blocks viewer role from task CRUD while allowing owner/admin", async () => {
     const app = await buildServer();
     try {
+      // Owner creates project
       const createProject = await app.inject({
         method: "POST",
         url: "/v1/projects",
@@ -30,9 +31,10 @@ describe("Cloud API authorization", () => {
       expect(createProject.statusCode).toBe(201);
       const projectId = createProject.json().data.id as string;
 
-      const viewerEndpointCreate = await app.inject({
+      // Viewer cannot create tasks
+      const viewerTaskCreate = await app.inject({
         method: "POST",
-        url: "/v1/endpoints",
+        url: "/v1/tasks",
         headers: {
           "x-org-id": "org_authz",
           "x-user-id": "viewer_1",
@@ -40,19 +42,25 @@ describe("Cloud API authorization", () => {
         },
         payload: {
           projectId,
-          environment: "prod",
-          name: "Main Endpoint",
-          url: "https://example.com/cronlet",
-          authMode: "none",
-          timeoutMs: 30000,
+          name: "Viewer Task",
+          handler: {
+            type: "webhook",
+            url: "https://example.com/cronlet",
+          },
+          schedule: {
+            type: "daily",
+            times: ["09:00"],
+          },
+          timezone: "UTC",
         },
       });
-      expect(viewerEndpointCreate.statusCode).toBe(403);
-      expect(viewerEndpointCreate.json().error.code).toBe("FORBIDDEN");
+      expect(viewerTaskCreate.statusCode).toBe(403);
+      expect(viewerTaskCreate.json().error.code).toBe("FORBIDDEN");
 
-      const adminEndpointCreate = await app.inject({
+      // Admin can create tasks
+      const adminTaskCreate = await app.inject({
         method: "POST",
-        url: "/v1/endpoints",
+        url: "/v1/tasks",
         headers: {
           "x-org-id": "org_authz",
           "x-user-id": "admin_1",
@@ -60,75 +68,56 @@ describe("Cloud API authorization", () => {
         },
         payload: {
           projectId,
-          environment: "prod",
-          name: "Main Endpoint",
-          url: "https://example.com/cronlet",
-          authMode: "none",
-          timeoutMs: 30000,
+          name: "Admin Task",
+          handler: {
+            type: "webhook",
+            url: "https://example.com/cronlet",
+          },
+          schedule: {
+            type: "daily",
+            times: ["09:00"],
+          },
+          timezone: "UTC",
         },
       });
-      expect(adminEndpointCreate.statusCode).toBe(201);
-      const endpointId = adminEndpointCreate.json().data.id as string;
+      expect(adminTaskCreate.statusCode).toBe(201);
+      const taskId = adminTaskCreate.json().data.id as string;
 
-      const adminJobCreate = await app.inject({
-        method: "POST",
-        url: "/v1/jobs",
-        headers: {
-          "x-org-id": "org_authz",
-          "x-user-id": "admin_1",
-          "x-role": "admin",
-        },
-        payload: {
-          projectId,
-          environment: "prod",
-          endpointId,
-          name: "Digest Job",
-          key: "digest-job",
-          concurrency: "skip",
-          catchup: false,
-          retryAttempts: 1,
-          retryBackoff: "linear",
-          retryInitialDelay: "1s",
-          timeout: "30s",
-        },
-      });
-      expect(adminJobCreate.statusCode).toBe(201);
-      const jobId = adminJobCreate.json().data.id as string;
-
-      const viewerScheduleCreate = await app.inject({
-        method: "POST",
-        url: "/v1/schedules",
+      // Viewer cannot delete tasks
+      const viewerTaskDelete = await app.inject({
+        method: "DELETE",
+        url: `/v1/tasks/${taskId}`,
         headers: {
           "x-org-id": "org_authz",
           "x-user-id": "viewer_1",
           "x-role": "viewer",
         },
-        payload: {
-          jobId,
-          cron: "*/5 * * * *",
-          timezone: "UTC",
-          active: true,
+      });
+      expect(viewerTaskDelete.statusCode).toBe(403);
+
+      // Viewer can read tasks
+      const viewerTaskGet = await app.inject({
+        method: "GET",
+        url: `/v1/tasks/${taskId}`,
+        headers: {
+          "x-org-id": "org_authz",
+          "x-user-id": "viewer_1",
+          "x-role": "viewer",
         },
       });
-      expect(viewerScheduleCreate.statusCode).toBe(403);
-      expect(viewerScheduleCreate.json().error.code).toBe("FORBIDDEN");
+      expect(viewerTaskGet.statusCode).toBe(200);
 
-      const adminScheduleCreate = await app.inject({
-        method: "POST",
-        url: "/v1/schedules",
+      // Admin can delete tasks
+      const adminTaskDelete = await app.inject({
+        method: "DELETE",
+        url: `/v1/tasks/${taskId}`,
         headers: {
           "x-org-id": "org_authz",
           "x-user-id": "admin_1",
           "x-role": "admin",
         },
-        payload: {
-          jobId,
-          cron: "*/5 * * * *",
-          timezone: "UTC",
-          active: true,
-        },
       });
-      expect(adminScheduleCreate.statusCode).toBe(201);
+      expect(adminTaskDelete.statusCode).toBe(200);
     } finally {
       await app.close();
     }

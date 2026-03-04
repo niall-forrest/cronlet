@@ -9,57 +9,42 @@ function setupStore(orgId: string) {
     slug: `test-project-${orgId}`,
   });
 
-  const endpoint = store.createEndpoint(orgId, {
+  const task = store.createTask(orgId, {
     projectId: project.id,
-    environment: "prod",
-    name: "Primary",
-    url: "https://example.com/cronlet",
-    authMode: "none",
-    timeoutMs: 30000,
-  });
-
-  const job = store.createJob(orgId, {
-    projectId: project.id,
-    environment: "prod",
-    endpointId: endpoint.id,
-    name: "Job",
-    key: `job-${orgId}`,
-    concurrency: "skip",
-    catchup: false,
-    retryAttempts: 2,
-    retryBackoff: "linear",
-    retryInitialDelay: "1s",
-    timeout: "30s",
-  });
-
-  const schedule = store.createSchedule(orgId, {
-    jobId: job.id,
-    cron: "0 0 * * *",
+    name: "Test Task",
+    handler: {
+      type: "webhook",
+      url: "https://example.com/cronlet",
+    },
+    schedule: {
+      type: "daily",
+      times: ["09:00"],
+    },
     timezone: "UTC",
-    active: true,
   });
 
-  return { store, project, endpoint, job, schedule };
+  return { store, project, task };
 }
 
 describe("InMemoryCloudStore dispatch semantics", () => {
-  it("claims a due schedule once and keeps subsequent claims deduped", () => {
-    const { store, schedule } = setupStore("org_due");
+  it("claims a due task once and keeps subsequent claims deduped", () => {
+    const { store, task } = setupStore("org_due");
 
-    const schedules = (store as unknown as { schedules: Map<string, Record<string, unknown>> }).schedules;
-    const current = schedules.get(schedule.id);
+    // Access internal tasks map to set nextRunAt in the past
+    const tasks = (store as unknown as { tasks: Map<string, Record<string, unknown>> }).tasks;
+    const current = tasks.get(task.id);
     if (!current) {
-      throw new Error("schedule missing in test setup");
+      throw new Error("task missing in test setup");
     }
 
-    schedules.set(schedule.id, {
+    tasks.set(task.id, {
       ...current,
       nextRunAt: new Date(Date.now() - 60_000).toISOString(),
     });
 
     const firstClaim = store.claimDueDispatches(10);
     expect(firstClaim).toHaveLength(1);
-    expect(firstClaim[0]?.jobId).toBe(schedule.jobId);
+    expect(firstClaim[0]?.taskId).toBe(task.id);
 
     const secondClaim = store.claimDueDispatches(10);
     expect(secondClaim).toHaveLength(0);
@@ -68,16 +53,15 @@ describe("InMemoryCloudStore dispatch semantics", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0]?.status).toBe("queued");
     expect(runs[0]?.trigger).toBe("schedule");
-    expect(runs[0]?.scheduleId).toBe(schedule.id);
   });
 
   it("allows due dispatch during delinquent grace and blocks after grace expiry", () => {
-    const { store, schedule } = setupStore("org_grace");
+    const { store, task } = setupStore("org_grace");
 
-    const schedules = (store as unknown as { schedules: Map<string, Record<string, unknown>> }).schedules;
-    const current = schedules.get(schedule.id);
+    const tasks = (store as unknown as { tasks: Map<string, Record<string, unknown>> }).tasks;
+    const current = tasks.get(task.id);
     if (!current) {
-      throw new Error("schedule missing in test setup");
+      throw new Error("task missing in test setup");
     }
 
     store.upsertEntitlementForOrg("org_grace", {
@@ -86,7 +70,7 @@ describe("InMemoryCloudStore dispatch semantics", () => {
       graceEndsAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
-    schedules.set(schedule.id, {
+    tasks.set(task.id, {
       ...current,
       nextRunAt: new Date(Date.now() - 60_000).toISOString(),
     });
@@ -100,12 +84,12 @@ describe("InMemoryCloudStore dispatch semantics", () => {
       graceEndsAt: new Date(Date.now() - 60_000).toISOString(),
     });
 
-    const refreshed = schedules.get(schedule.id);
+    const refreshed = tasks.get(task.id);
     if (!refreshed) {
-      throw new Error("schedule missing after first claim");
+      throw new Error("task missing after first claim");
     }
 
-    schedules.set(schedule.id, {
+    tasks.set(task.id, {
       ...refreshed,
       nextRunAt: new Date(Date.now() - 60_000).toISOString(),
     });
@@ -115,19 +99,19 @@ describe("InMemoryCloudStore dispatch semantics", () => {
   });
 
   it("prevents stale updates from overriding terminal run status", () => {
-    const { store, job } = setupStore("org_run_status");
+    const { store, task } = setupStore("org_run_status");
 
-    const run = store.triggerJob("org_run_status", job.id, "manual", null);
+    const run = store.triggerTask("org_run_status", task.id, "manual");
 
-    store.updateRunStatus(run.id, "running", 1);
-    store.updateRunStatus(run.id, "queued", 1, 150, "Retrying: network");
-    const success = store.updateRunStatus(run.id, "success", 2, 320);
+    store.updateRunStatus(run.id, { status: "running", attempt: 1 });
+    store.updateRunStatus(run.id, { status: "queued", attempt: 1, durationMs: 150, errorMessage: "Retrying: network" });
+    const success = store.updateRunStatus(run.id, { status: "success", attempt: 2, durationMs: 320 });
 
     expect(success.status).toBe("success");
     expect(success.attempt).toBe(2);
     expect(success.completedAt).toBeTypeOf("string");
 
-    const stale = store.updateRunStatus(run.id, "failure", 1, 999, "stale failure");
+    const stale = store.updateRunStatus(run.id, { status: "failure", attempt: 1, durationMs: 999, errorMessage: "stale failure" });
     expect(stale.status).toBe("success");
     expect(stale.attempt).toBe(2);
     expect(stale.durationMs).toBe(320);

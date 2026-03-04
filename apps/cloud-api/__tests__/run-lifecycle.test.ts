@@ -4,7 +4,7 @@ import { buildServer } from "../src/server.js";
 const ORG_ID = "org_demo";
 const INTERNAL_TOKEN = "internal-test-token";
 
-function userHeaders(role: "owner" | "admin" | "member" = "owner"): Record<string, string> {
+function userHeaders(role: "owner" | "admin" | "member" | "viewer" = "owner"): Record<string, string> {
   return {
     "x-org-id": ORG_ID,
     "x-user-id": "user_test",
@@ -26,6 +26,7 @@ describe("run lifecycle API boundary", () => {
   it("preserves monotonic attempts and terminal state across internal status updates", async () => {
     const app = await buildServer();
     try {
+      // Create project
       const projectRes = await app.inject({
         method: "POST",
         url: "/v1/projects",
@@ -38,51 +39,39 @@ describe("run lifecycle API boundary", () => {
       expect(projectRes.statusCode).toBe(201);
       const projectId = projectRes.json().data.id as string;
 
-      const endpointRes = await app.inject({
+      // Create task (replaces endpoint + job)
+      const taskRes = await app.inject({
         method: "POST",
-        url: "/v1/endpoints",
+        url: "/v1/tasks",
         headers: userHeaders("admin"),
         payload: {
           projectId,
-          environment: "prod",
-          name: "Primary Endpoint",
-          url: "https://example.com/cronlet",
-          authMode: "none",
-          timeoutMs: 30000,
-        },
-      });
-      expect(endpointRes.statusCode).toBe(201);
-      const endpointId = endpointRes.json().data.id as string;
-
-      const jobRes = await app.inject({
-        method: "POST",
-        url: "/v1/jobs",
-        headers: userHeaders("admin"),
-        payload: {
-          projectId,
-          environment: "prod",
-          endpointId,
-          name: "Digest",
-          key: "digest",
-          concurrency: "skip",
-          catchup: false,
+          name: "Digest Task",
+          handler: {
+            type: "webhook",
+            url: "https://example.com/cronlet",
+          },
+          schedule: {
+            type: "daily",
+            times: ["09:00"],
+          },
+          timezone: "UTC",
           retryAttempts: 2,
-          retryBackoff: "linear",
-          retryInitialDelay: "1s",
-          timeout: "30s",
         },
       });
-      expect(jobRes.statusCode).toBe(201);
-      const jobId = jobRes.json().data.id as string;
+      expect(taskRes.statusCode).toBe(201);
+      const taskId = taskRes.json().data.id as string;
 
+      // Trigger task
       const triggerRes = await app.inject({
         method: "POST",
-        url: `/v1/jobs/${jobId}/trigger`,
+        url: `/v1/tasks/${taskId}/trigger`,
         headers: userHeaders("member"),
       });
       expect(triggerRes.statusCode).toBe(201);
       const runId = triggerRes.json().data.id as string;
 
+      // Update run status: running
       const runningRes = await app.inject({
         method: "POST",
         url: `/internal/runs/${runId}/status`,
@@ -96,6 +85,7 @@ describe("run lifecycle API boundary", () => {
       });
       expect(runningRes.statusCode).toBe(200);
 
+      // Update run status: queued (retry)
       const retryQueuedRes = await app.inject({
         method: "POST",
         url: `/internal/runs/${runId}/status`,
@@ -111,6 +101,7 @@ describe("run lifecycle API boundary", () => {
       });
       expect(retryQueuedRes.statusCode).toBe(200);
 
+      // Update run status: success (attempt 2)
       const successRes = await app.inject({
         method: "POST",
         url: `/internal/runs/${runId}/status`,
@@ -132,6 +123,7 @@ describe("run lifecycle API boundary", () => {
       expect(successRun.durationMs).toBe(450);
       expect(successRun.errorMessage).toBeNull();
 
+      // Stale failure update should be ignored
       const staleFailureRes = await app.inject({
         method: "POST",
         url: `/internal/runs/${runId}/status`,
@@ -147,6 +139,7 @@ describe("run lifecycle API boundary", () => {
       });
       expect(staleFailureRes.statusCode).toBe(200);
 
+      // Verify final state is preserved
       const latestRunRes = await app.inject({
         method: "GET",
         url: `/v1/runs/${runId}`,
