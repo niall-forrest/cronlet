@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 
 export interface AuditEventInput {
@@ -10,7 +9,7 @@ export interface AuditEventInput {
   targetType: string;
   targetId: string;
   payload?: unknown;
-  metadata?: Prisma.InputJsonValue;
+  metadata?: Record<string, unknown> | null;
 }
 
 function hashPayload(payload: unknown): string | null {
@@ -23,22 +22,16 @@ function hashPayload(payload: unknown): string | null {
 }
 
 export async function recordAuditEvent(app: FastifyInstance, input: AuditEventInput): Promise<void> {
-  if (!app.prisma) {
-    return;
-  }
-
   try {
-    await app.prisma.auditEvent.create({
-      data: {
-        organizationId: input.organizationId,
-        actorType: input.actorType,
-        actorId: input.actorId,
-        action: input.action,
-        targetType: input.targetType,
-        targetId: input.targetId,
-        payloadHash: hashPayload(input.payload),
-        metadata: input.metadata,
-      },
+    await app.cloudStore.createAuditEvent({
+      organizationId: input.organizationId,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      action: input.action,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      payloadHash: hashPayload(input.payload),
+      metadata: input.metadata ?? null,
     });
   } catch (error) {
     app.log.warn(

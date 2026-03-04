@@ -1,6 +1,7 @@
 import { ERROR_CODES } from "@cronlet/cloud-shared";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../lib/errors.js";
+import { handleError } from "../lib/http.js";
 
 interface CachedResponse {
   bodyHash: string;
@@ -30,7 +31,12 @@ export async function registerIdempotencyPlugin(app: FastifyInstance): Promise<v
     }
 
     if (hit.bodyHash !== bodyHash) {
-      throw new AppError(409, ERROR_CODES.IDEMPOTENCY_CONFLICT, "Idempotency key reused with different payload");
+      const response = handleError(
+        reply,
+        new AppError(409, ERROR_CODES.IDEMPOTENCY_CONFLICT, "Idempotency key reused with different payload")
+      );
+      reply.send(response);
+      return reply;
     }
 
     reply.status(hit.statusCode).send(hit.responsePayload);
@@ -38,6 +44,10 @@ export async function registerIdempotencyPlugin(app: FastifyInstance): Promise<v
 
   app.addHook("onSend", async (request, reply, payload) => {
     if (!["POST", "PATCH"].includes(request.method) || request.url.startsWith("/internal/")) {
+      return payload;
+    }
+
+    if (reply.statusCode < 200 || reply.statusCode >= 300) {
       return payload;
     }
 
@@ -49,9 +59,18 @@ export async function registerIdempotencyPlugin(app: FastifyInstance): Promise<v
     const bodyHash = JSON.stringify(request.body ?? {});
     const cacheKey = `${request.auth.orgId}:${request.method}:${request.url}:${key}`;
 
+    let responsePayload: unknown = payload;
+    if (typeof payload === "string") {
+      try {
+        responsePayload = JSON.parse(payload);
+      } catch {
+        return payload;
+      }
+    }
+
     cache.set(cacheKey, {
       bodyHash,
-      responsePayload: typeof payload === "string" ? JSON.parse(payload) : payload,
+      responsePayload,
       statusCode: reply.statusCode,
     });
 

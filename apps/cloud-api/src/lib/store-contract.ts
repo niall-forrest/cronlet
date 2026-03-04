@@ -1,4 +1,6 @@
 import type {
+  AuditEventListInput,
+  AuditEventRecord,
   ApiKeyCreateInput,
   ApiKeyRecord,
   ApiKeyRotateInput,
@@ -74,6 +76,20 @@ export interface CloudStore {
   createApiKey(orgId: string, input: ApiKeyCreateInput): Promise<ApiKeyWithToken> | ApiKeyWithToken;
   rotateApiKey(orgId: string, keyId: string, input: ApiKeyRotateInput): Promise<ApiKeyWithToken> | ApiKeyWithToken;
   revokeApiKey(orgId: string, keyId: string): Promise<void> | void;
+  listAuditEvents(orgId: string, input: AuditEventListInput): Promise<AuditEventRecord[]> | AuditEventRecord[];
+  createAuditEvent(
+    input: {
+      organizationId: string;
+      actorType: string;
+      actorId: string;
+      action: string;
+      targetType: string;
+      targetId: string;
+      payloadHash?: string | null;
+      metadata?: Record<string, unknown> | null;
+      createdAt?: string;
+    }
+  ): Promise<void> | void;
 
   getUsage(orgId: string): Promise<UsageSnapshot> | UsageSnapshot;
   claimDueDispatches(limit?: number): Promise<DispatchInstruction[]> | DispatchInstruction[];

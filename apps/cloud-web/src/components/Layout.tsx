@@ -17,6 +17,8 @@ const navItems = [
   { to: "/jobs", label: "Jobs" },
   { to: "/schedules", label: "Schedules" },
   { to: "/runs", label: "Runs" },
+  { to: "/alerts", label: "Alerts" },
+  { to: "/audit-events", label: "Audit" },
   { to: "/api-keys", label: "API Keys" },
   { to: "/usage", label: "Usage" },
   { to: "/billing", label: "Billing" },

@@ -81,6 +81,14 @@ export const apiKeyRotateSchema = z.object({
   scopes: z.array(z.string().min(1).max(120)).min(1).optional(),
 });
 
+export const auditEventListSchema = z.object({
+  actorType: z.enum(["user", "api_key", "internal", "webhook"]).optional(),
+  action: z.string().min(1).max(120).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
 export const internalRunStatusSchema = z.object({
   status: z.enum(["queued", "running", "success", "failure", "timeout"]),
   attempt: z.number().int().min(1),
@@ -98,4 +106,5 @@ export type SchedulePatchInput = z.infer<typeof schedulePatchSchema>;
 export type AlertCreateInput = z.infer<typeof alertCreateSchema>;
 export type ApiKeyCreateInput = z.infer<typeof apiKeyCreateSchema>;
 export type ApiKeyRotateInput = z.infer<typeof apiKeyRotateSchema>;
+export type AuditEventListInput = z.infer<typeof auditEventListSchema>;
 export type InternalRunStatusInput = z.infer<typeof internalRunStatusSchema>;

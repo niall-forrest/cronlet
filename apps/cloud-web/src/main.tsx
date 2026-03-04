@@ -11,6 +11,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClerkAuthBridge } from "./components/ClerkAuthBridge";
 import { Layout } from "./components/Layout";
 import { ApiKeysPage } from "./routes/ApiKeysPage";
+import { AlertsPage } from "./routes/AlertsPage";
+import { AuditEventsPage } from "./routes/AuditEventsPage";
 import { EndpointsPage } from "./routes/EndpointsPage";
 import { ProjectsPage } from "./routes/ProjectsPage";
 import { JobsPage } from "./routes/JobsPage";
@@ -60,6 +62,18 @@ const apiKeysRoute = createRoute({
   component: ApiKeysPage,
 });
 
+const alertsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/alerts",
+  component: AlertsPage,
+});
+
+const auditEventsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/audit-events",
+  component: AuditEventsPage,
+});
+
 const usageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/usage",
@@ -78,6 +92,8 @@ const routeTree = rootRoute.addChildren([
   jobsRoute,
   schedulesRoute,
   runsRoute,
+  alertsRoute,
+  auditEventsRoute,
   apiKeysRoute,
   usageRoute,
   billingRoute,

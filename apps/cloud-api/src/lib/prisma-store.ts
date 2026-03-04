@@ -1,5 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import {
+  type AuditEventListInput,
+  type AuditEventRecord,
   PLAN_LIMITS,
   type ApiKeyCreateInput,
   type ApiKeyRecord,
@@ -238,6 +240,39 @@ function toApiKeyRecord(value: {
     lastUsedAt: isoNullable(value.lastUsedAt),
     createdAt: iso(value.createdAt),
     updatedAt: iso(value.updatedAt),
+  };
+}
+
+function toAuditMetadata(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function toAuditEventRecord(value: {
+  id: string;
+  organizationId: string;
+  actorType: string;
+  actorId: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  payloadHash: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}): AuditEventRecord {
+  return {
+    id: value.id,
+    orgId: value.organizationId,
+    actorType: (value.actorType ?? "internal") as AuditEventRecord["actorType"],
+    actorId: value.actorId,
+    action: value.action,
+    targetType: value.targetType,
+    targetId: value.targetId,
+    payloadHash: value.payloadHash,
+    metadata: toAuditMetadata(value.metadata),
+    createdAt: iso(value.createdAt),
   };
 }
 
@@ -881,6 +916,69 @@ export class PrismaCloudStore implements CloudStore {
 
     await this.prisma.apiKey.delete({
       where: { id: keyId },
+    });
+  }
+
+  async listAuditEvents(orgId: string, input: AuditEventListInput): Promise<AuditEventRecord[]> {
+    const where = {
+      organizationId: orgId,
+      ...(input.actorType ? { actorType: input.actorType } : {}),
+      ...(input.action ? { action: input.action } : {}),
+      ...(input.from || input.to
+        ? {
+          createdAt: {
+            ...(input.from ? { gte: new Date(input.from) } : {}),
+            ...(input.to ? { lte: new Date(input.to) } : {}),
+          },
+        }
+        : {}),
+    };
+
+    const events = await this.prisma.auditEvent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: input.limit ?? 100,
+    });
+
+    return events.map((event) =>
+      toAuditEventRecord({
+        id: event.id,
+        organizationId: event.organizationId,
+        actorType: event.actorType,
+        actorId: event.actorId,
+        action: event.action,
+        targetType: event.targetType,
+        targetId: event.targetId,
+        payloadHash: event.payloadHash,
+        metadata: event.metadata,
+        createdAt: event.createdAt,
+      })
+    );
+  }
+
+  async createAuditEvent(input: {
+    organizationId: string;
+    actorType: string;
+    actorId: string;
+    action: string;
+    targetType: string;
+    targetId: string;
+    payloadHash?: string | null;
+    metadata?: Record<string, unknown> | null;
+    createdAt?: string;
+  }): Promise<void> {
+    await this.prisma.auditEvent.create({
+      data: {
+        organizationId: input.organizationId,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        action: input.action,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        payloadHash: input.payloadHash ?? null,
+        metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : undefined,
+        createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+      },
     });
   }
 

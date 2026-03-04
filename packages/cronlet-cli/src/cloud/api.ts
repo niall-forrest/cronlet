@@ -13,6 +13,10 @@ interface RequestContext {
   link: CloudLinkConfig;
 }
 
+interface MutateOptions {
+  idempotencyKey?: string;
+}
+
 async function request<T>(context: RequestContext, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${context.auth.apiUrl.replace(/\/$/, "")}${path}`, {
     ...init,
@@ -63,10 +67,31 @@ export function createEndpoint(
     url: string;
     authMode: "none";
     timeoutMs: number;
-  }
+  },
+  options?: MutateOptions
 ): Promise<EndpointRecord> {
   return request<EndpointRecord>(context, "/v1/endpoints", {
     method: "POST",
+    headers: options?.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : undefined,
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchEndpoint(
+  context: RequestContext,
+  endpointId: string,
+  body: {
+    name?: string;
+    url?: string;
+    authMode?: "none" | "bearer" | "basic" | "header";
+    authSecretRef?: string | null;
+    timeoutMs?: number;
+  },
+  options?: MutateOptions
+): Promise<EndpointRecord> {
+  return request<EndpointRecord>(context, `/v1/endpoints/${endpointId}`, {
+    method: "PATCH",
+    headers: options?.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : undefined,
     body: JSON.stringify(body),
   });
 }
@@ -89,10 +114,34 @@ export function createJob(
     retryBackoff: "linear" | "exponential";
     retryInitialDelay: string;
     timeout: string;
-  }
+  },
+  options?: MutateOptions
 ): Promise<JobRecord> {
   return request<JobRecord>(context, "/v1/jobs", {
     method: "POST",
+    headers: options?.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : undefined,
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchJob(
+  context: RequestContext,
+  jobId: string,
+  body: {
+    name?: string;
+    concurrency?: "allow" | "skip" | "queue";
+    catchup?: boolean;
+    retryAttempts?: number;
+    retryBackoff?: "linear" | "exponential";
+    retryInitialDelay?: string;
+    timeout?: string;
+    active?: boolean;
+  },
+  options?: MutateOptions
+): Promise<JobRecord> {
+  return request<JobRecord>(context, `/v1/jobs/${jobId}`, {
+    method: "PATCH",
+    headers: options?.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : undefined,
     body: JSON.stringify(body),
   });
 }
@@ -108,10 +157,29 @@ export function createSchedule(
     cron: string;
     timezone: string;
     active: boolean;
-  }
+  },
+  options?: MutateOptions
 ): Promise<ScheduleRecord> {
   return request<ScheduleRecord>(context, "/v1/schedules", {
     method: "POST",
+    headers: options?.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : undefined,
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchSchedule(
+  context: RequestContext,
+  scheduleId: string,
+  body: {
+    cron?: string;
+    timezone?: string;
+    active?: boolean;
+  },
+  options?: MutateOptions
+): Promise<ScheduleRecord> {
+  return request<ScheduleRecord>(context, `/v1/schedules/${scheduleId}`, {
+    method: "PATCH",
+    headers: options?.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : undefined,
     body: JSON.stringify(body),
   });
 }

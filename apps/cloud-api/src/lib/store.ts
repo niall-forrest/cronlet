@@ -1,4 +1,6 @@
 import {
+  type AuditEventListInput,
+  type AuditEventRecord,
   PLAN_LIMITS,
   type ApiKeyCreateInput,
   type ApiKeyRecord,
@@ -45,6 +47,7 @@ export class InMemoryCloudStore implements CloudStore {
   private readonly runs = new Map<string, RunRecord>();
   private readonly alerts = new Map<string, AlertRecord>();
   private readonly apiKeys = new Map<string, ApiKeyRecord & { keyHash: string }>();
+  private readonly auditEvents = new Map<string, AuditEventRecord>();
   private readonly usage = new Map<string, number>();
   private readonly entitlements = new Map<string, OrgEntitlement>();
   private readonly dispatchQueue: DispatchInstruction[] = [];
@@ -471,6 +474,67 @@ export class InMemoryCloudStore implements CloudStore {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, "API key not found");
     }
     this.apiKeys.delete(keyId);
+  }
+
+  listAuditEvents(orgId: string, input: AuditEventListInput): AuditEventRecord[] {
+    const fromTime = input.from ? new Date(input.from).getTime() : null;
+    const toTime = input.to ? new Date(input.to).getTime() : null;
+    const limit = input.limit ?? 100;
+
+    return Array.from(this.auditEvents.values())
+      .filter((event) => {
+        if (event.orgId !== orgId) {
+          return false;
+        }
+
+        if (input.actorType && event.actorType !== input.actorType) {
+          return false;
+        }
+
+        if (input.action && event.action !== input.action) {
+          return false;
+        }
+
+        const createdAtTime = new Date(event.createdAt).getTime();
+        if (fromTime !== null && createdAtTime < fromTime) {
+          return false;
+        }
+        if (toTime !== null && createdAtTime > toTime) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  createAuditEvent(input: {
+    organizationId: string;
+    actorType: string;
+    actorId: string;
+    action: string;
+    targetType: string;
+    targetId: string;
+    payloadHash?: string | null;
+    metadata?: Record<string, unknown> | null;
+    createdAt?: string;
+  }): void {
+    const id = nanoid();
+    const createdAt = input.createdAt ?? nowIso();
+
+    this.auditEvents.set(id, {
+      id,
+      orgId: input.organizationId,
+      actorType: (input.actorType ?? "internal") as AuditEventRecord["actorType"],
+      actorId: input.actorId,
+      action: input.action,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      payloadHash: input.payloadHash ?? null,
+      metadata: input.metadata ?? null,
+      createdAt,
+    });
   }
 
   getUsage(orgId: string): UsageSnapshot {

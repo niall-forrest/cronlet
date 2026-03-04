@@ -15,6 +15,7 @@ import { registerUsageRoutes } from "./routes/usage.js";
 import { registerInternalRoutes } from "./routes/internal.js";
 import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerApiKeyRoutes } from "./routes/api-keys.js";
+import { registerAuditEventRoutes } from "./routes/audit-events.js";
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
@@ -56,6 +57,7 @@ export async function buildServer() {
   await registerAlertRoutes(app);
   await registerUsageRoutes(app);
   await registerApiKeyRoutes(app);
+  await registerAuditEventRoutes(app);
   await registerInternalRoutes(app);
 
   return app;

@@ -5,6 +5,7 @@ export type EndpointAuthMode = "none" | "bearer" | "basic" | "header";
 export type JobConcurrency = "allow" | "skip" | "queue";
 
 export type RunStatus = "queued" | "running" | "success" | "failure" | "timeout";
+export type AuditActorType = "user" | "api_key" | "internal" | "webhook";
 
 export interface ProjectRecord {
   id: string;
@@ -106,6 +107,19 @@ export interface AlertRecord {
   updatedAt: string;
 }
 
+export interface AuditEventRecord {
+  id: string;
+  orgId: string;
+  actorType: AuditActorType;
+  actorId: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  payloadHash: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface UsageSnapshot {
   tier: PlanTier;
   month: string;
@@ -146,7 +160,7 @@ export interface CloudAuthContext {
   userId: string;
   orgId: string;
   role: "owner" | "admin" | "member" | "viewer";
-  actorType?: "user" | "api_key" | "internal" | "webhook";
+  actorType?: AuditActorType;
   scopes?: string[];
   apiKeyId?: string | null;
 }

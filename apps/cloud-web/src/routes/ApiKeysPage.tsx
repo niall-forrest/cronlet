@@ -16,6 +16,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { createApiKey, listApiKeys, revokeApiKey, rotateApiKey } from "../lib/api";
 
+const scopeTemplates = {
+  readonly: ["projects:read", "endpoints:read", "jobs:read", "schedules:read", "runs:read", "usage:read", "audit:read"],
+  operator: ["projects:read", "endpoints:read", "jobs:read", "jobs:write", "schedules:read", "schedules:write", "runs:read", "runs:write"],
+  full: ["*"],
+} as const;
+
 export function ApiKeysPage() {
   const queryClient = useQueryClient();
   const [label, setLabel] = useState("");
@@ -158,6 +164,32 @@ export function ApiKeysPage() {
             </div>
             <div className="space-y-2">
               <Label>Scopes</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setScopesInput(scopeTemplates.readonly.join(","))}
+                >
+                  Read-Only
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setScopesInput(scopeTemplates.operator.join(","))}
+                >
+                  Operator
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setScopesInput(scopeTemplates.full.join(","))}
+                >
+                  Full Access
+                </Button>
+              </div>
               <Textarea
                 className="min-h-24"
                 value={scopesInput}

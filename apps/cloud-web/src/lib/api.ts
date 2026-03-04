@@ -1,4 +1,6 @@
 import type {
+  AlertRecord,
+  AuditEventRecord,
   ApiKeyRecord,
   ApiKeyWithToken,
   ApiResponse,
@@ -208,6 +210,51 @@ export function listRuns(): Promise<RunRecord[]> {
 
 export function getUsage(): Promise<UsageSnapshot> {
   return request<UsageSnapshot>("/v1/usage");
+}
+
+export function listAlerts(): Promise<AlertRecord[]> {
+  return request<AlertRecord[]>("/v1/alerts");
+}
+
+export function createAlert(input: {
+  projectId: string;
+  channel: "email" | "webhook";
+  destination: string;
+  onFailure: boolean;
+  onTimeout: boolean;
+}): Promise<AlertRecord> {
+  return request<AlertRecord>("/v1/alerts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listAuditEvents(input: {
+  actorType?: "user" | "api_key" | "internal" | "webhook";
+  action?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+} = {}): Promise<AuditEventRecord[]> {
+  const query = new URLSearchParams();
+  if (input.actorType) {
+    query.set("actorType", input.actorType);
+  }
+  if (input.action) {
+    query.set("action", input.action);
+  }
+  if (input.from) {
+    query.set("from", input.from);
+  }
+  if (input.to) {
+    query.set("to", input.to);
+  }
+  if (typeof input.limit === "number") {
+    query.set("limit", String(input.limit));
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<AuditEventRecord[]>(`/v1/audit-events${suffix}`);
 }
 
 export function listApiKeys(): Promise<ApiKeyRecord[]> {
