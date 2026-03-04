@@ -211,6 +211,11 @@ export class InMemoryCloudStore implements CloudStore {
       timeout: input.timeout ?? "30s",
       active: input.active !== false,
       createdBy: createdBy ?? null,
+      callbackUrl: input.callbackUrl ?? null,
+      metadata: input.metadata ?? null,
+      maxRuns: input.maxRuns ?? null,
+      expiresAt: input.expiresAt ?? null,
+      runCount: 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -316,6 +321,10 @@ export class InMemoryCloudStore implements CloudStore {
       retryAttempts: task.retryAttempts,
       retryBackoff: task.retryBackoff,
       retryDelay: task.retryDelay,
+      callbackUrl: task.callbackUrl,
+      metadata: task.metadata,
+      maxRuns: task.maxRuns,
+      runCount: task.runCount,
     });
 
     return run;
@@ -709,6 +718,10 @@ export class InMemoryCloudStore implements CloudStore {
         retryAttempts: task.retryAttempts,
         retryBackoff: task.retryBackoff,
         retryDelay: task.retryDelay,
+        callbackUrl: task.callbackUrl,
+        metadata: task.metadata,
+        maxRuns: task.maxRuns,
+        runCount: task.runCount,
       });
 
       // Update next run time

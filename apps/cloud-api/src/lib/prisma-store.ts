@@ -90,6 +90,11 @@ function toTaskRecord(value: {
   timeout: string;
   active: boolean;
   createdBy: unknown;
+  callbackUrl: string | null;
+  metadata: unknown;
+  maxRuns: number | null;
+  expiresAt: Date | null;
+  runCount: number;
   createdAt: Date;
   updatedAt: Date;
 }): TaskRecord {
@@ -111,6 +116,11 @@ function toTaskRecord(value: {
     timeout: value.timeout,
     active: value.active,
     createdBy: value.createdBy as CreatedBy | null,
+    callbackUrl: value.callbackUrl,
+    metadata: value.metadata as Record<string, unknown> | null,
+    maxRuns: value.maxRuns,
+    expiresAt: isoNullable(value.expiresAt),
+    runCount: value.runCount,
     createdAt: iso(value.createdAt),
     updatedAt: iso(value.updatedAt),
   };
@@ -593,6 +603,10 @@ export class PrismaCloudStore implements CloudStore {
       retryAttempts: task.retryAttempts,
       retryBackoff: task.retryBackoff as "linear" | "exponential",
       retryDelay: task.retryDelay,
+      callbackUrl: task.callbackUrl,
+      metadata: task.metadata as Record<string, unknown> | null,
+      maxRuns: task.maxRuns,
+      runCount: task.runCount,
     });
 
     return toRunRecord(run);
@@ -1100,6 +1114,10 @@ export class PrismaCloudStore implements CloudStore {
           retryAttempts: task.retryAttempts,
           retryBackoff: task.retryBackoff as "linear" | "exponential",
           retryDelay: task.retryDelay,
+          callbackUrl: task.callbackUrl,
+          metadata: task.metadata as Record<string, unknown> | null,
+          maxRuns: task.maxRuns,
+          runCount: task.runCount,
         });
       }
 

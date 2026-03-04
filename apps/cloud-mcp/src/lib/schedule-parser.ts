@@ -71,7 +71,7 @@ export function parseSchedule(description: string): ParseResult {
 function parseEveryInterval(input: string): ParseResult {
   // "every 5 minutes", "every 1 hour", "every 30 seconds"
   const match = input.match(/^every\s+(\d+)\s*(seconds?|minutes?|hours?|days?)$/i);
-  if (!match) return { success: false };
+  if (!match || !match[1] || !match[2]) return { success: false };
 
   const amount = parseInt(match[1], 10);
   const unit = match[2].toLowerCase();
@@ -105,7 +105,7 @@ function parseEveryInterval(input: string): ParseResult {
 function parseDailyAt(input: string): ParseResult {
   // "daily at 9am", "every day at 14:30"
   const match = input.match(/^(?:daily|every\s+day)\s+at\s+(.+)$/i);
-  if (!match) return { success: false };
+  if (!match || !match[1]) return { success: false };
 
   const time = parseTime(match[1]);
   if (!time) {
@@ -122,7 +122,7 @@ function parseDailyAt(input: string): ParseResult {
 function parseWeekdaysWeekends(input: string): ParseResult {
   // "weekdays at 9am", "weekends at 10:00"
   const weekdaysMatch = input.match(/^weekdays?\s+at\s+(.+)$/i);
-  if (weekdaysMatch) {
+  if (weekdaysMatch && weekdaysMatch[1]) {
     const time = parseTime(weekdaysMatch[1]);
     if (!time) return { success: false };
 
@@ -134,7 +134,7 @@ function parseWeekdaysWeekends(input: string): ParseResult {
   }
 
   const weekendsMatch = input.match(/^weekends?\s+at\s+(.+)$/i);
-  if (weekendsMatch) {
+  if (weekendsMatch && weekendsMatch[1]) {
     const time = parseTime(weekendsMatch[1]);
     if (!time) return { success: false };
 
@@ -151,7 +151,7 @@ function parseWeekdaysWeekends(input: string): ParseResult {
 function parseWeeklyOn(input: string): ParseResult {
   // "weekly on monday at 9am", "every monday at 9am"
   const match = input.match(/^(?:weekly\s+on|every)\s+(\w+)\s+at\s+(.+)$/i);
-  if (!match) return { success: false };
+  if (!match || !match[1] || !match[2]) return { success: false };
 
   const dayName = match[1].toLowerCase();
   const day = DAY_MAP[dayName];
@@ -170,7 +170,7 @@ function parseWeeklyOn(input: string): ParseResult {
 function parseSpecificDays(input: string): ParseResult {
   // "mon, wed, fri at 9:00", "monday and friday at 9am"
   const match = input.match(/^(.+?)\s+at\s+(.+)$/i);
-  if (!match) return { success: false };
+  if (!match || !match[1] || !match[2]) return { success: false };
 
   const daysPart = match[1];
   const time = parseTime(match[2]);
@@ -204,7 +204,7 @@ function parseSpecificDays(input: string): ParseResult {
 function parseMonthlyOn(input: string): ParseResult {
   // "monthly on the 1st at 9am", "monthly on the last friday at 9am"
   const match = input.match(/^monthly\s+on\s+(?:the\s+)?(.+?)\s+at\s+(.+)$/i);
-  if (!match) return { success: false };
+  if (!match || !match[1] || !match[2]) return { success: false };
 
   const dayPart = match[1].toLowerCase();
   const time = parseTime(match[2]);
@@ -220,11 +220,11 @@ function parseMonthlyOn(input: string): ParseResult {
   }
 
   const lastDayMatch = dayPart.match(/^last\s+(\w+)$/);
-  if (lastDayMatch) {
+  if (lastDayMatch && lastDayMatch[1]) {
     const dayName = lastDayMatch[1];
     const day = DAY_MAP[dayName];
     if (day) {
-      const lastDay = `last-${day}` as const;
+      const lastDay = `last-${day}` as "last-mon" | "last-tue" | "last-wed" | "last-thu" | "last-fri" | "last-sat" | "last-sun";
       return {
         success: true,
         config: { type: "monthly", day: lastDay, time },
@@ -235,7 +235,7 @@ function parseMonthlyOn(input: string): ParseResult {
 
   // Check for numeric day (1st, 2nd, 15th, etc.)
   const numMatch = dayPart.match(/^(\d+)(?:st|nd|rd|th)?$/);
-  if (numMatch) {
+  if (numMatch && numMatch[1]) {
     const dayNum = parseInt(numMatch[1], 10);
     if (dayNum >= 1 && dayNum <= 31) {
       return {
@@ -254,7 +254,7 @@ function parseTime(input: string): string | null {
 
   // 24-hour format: "14:30", "09:00"
   const time24Match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
-  if (time24Match) {
+  if (time24Match && time24Match[1] && time24Match[2]) {
     const hours = parseInt(time24Match[1], 10);
     const minutes = parseInt(time24Match[2], 10);
     if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
@@ -264,7 +264,7 @@ function parseTime(input: string): string | null {
 
   // 12-hour format: "9am", "9:30pm", "9 am", "9:30 pm"
   const time12Match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
-  if (time12Match) {
+  if (time12Match && time12Match[1] && time12Match[3]) {
     let hours = parseInt(time12Match[1], 10);
     const minutes = time12Match[2] ? parseInt(time12Match[2], 10) : 0;
     const period = time12Match[3];

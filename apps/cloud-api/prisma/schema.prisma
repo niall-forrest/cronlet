@@ -151,6 +151,14 @@ model Task {
 
   // Tracking
   createdBy      Json?        // { type: "user" | "agent", id, name }
+
+  // Agent callback - closes the autonomous loop
+  callbackUrl    String?
+  metadata       Json?        // Agent context stored with task
+  maxRuns        Int?         // Auto-pause after N runs
+  expiresAt      DateTime?    // Auto-pause after this time
+  runCount       Int          @default(0)
+
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

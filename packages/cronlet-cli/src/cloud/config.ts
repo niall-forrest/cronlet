@@ -6,17 +6,8 @@ export interface CloudAuthConfig {
   apiKey: string;
 }
 
-export interface CloudLinkConfig {
-  orgId: string;
-  projectId: string;
-  environment: string;
-  endpointUrl: string;
-  linkedAt: string;
-}
-
 const CLOUD_DIR = ".cronlet";
 const AUTH_FILE = "cloud-auth.json";
-const LINK_FILE = "cloud-link.json";
 
 function ensureCloudDir(): string {
   const dir = join(process.cwd(), CLOUD_DIR);
@@ -45,18 +36,6 @@ export function loadCloudAuth(): CloudAuthConfig | null {
 export function saveCloudAuth(config: CloudAuthConfig): string {
   const dir = ensureCloudDir();
   const path = join(dir, AUTH_FILE);
-  writeJsonFile(path, config);
-  return path;
-}
-
-export function loadCloudLink(): CloudLinkConfig | null {
-  const path = join(process.cwd(), CLOUD_DIR, LINK_FILE);
-  return readJsonFile<CloudLinkConfig>(path);
-}
-
-export function saveCloudLink(config: CloudLinkConfig): string {
-  const dir = ensureCloudDir();
-  const path = join(dir, LINK_FILE);
   writeJsonFile(path, config);
   return path;
 }
