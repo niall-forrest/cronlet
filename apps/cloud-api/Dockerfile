@@ -43,7 +43,7 @@ COPY --from=builder /app/apps/cloud-api/prisma ./apps/cloud-api/prisma
 
 # Install production dependencies and generate Prisma client
 RUN pnpm install --frozen-lockfile --prod
-RUN npx prisma generate --schema=./apps/cloud-api/prisma/schema.prisma
+RUN npx prisma@5.22.0 generate --schema=./apps/cloud-api/prisma/schema.prisma
 
 WORKDIR /app/apps/cloud-api
 
