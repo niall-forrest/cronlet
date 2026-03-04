@@ -119,9 +119,11 @@ function loadServicePrincipals(): ServicePrincipal[] {
     ];
   }
 
+  console.log("DEBUG: Raw CLOUD_MCP_SERVICE_TOKENS_JSON value:", JSON.stringify(raw));
   const parsed = safeJsonParse<unknown>(raw);
+  console.log("DEBUG: Parsed result:", parsed);
   if (!Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error("CLOUD_MCP_SERVICE_TOKENS_JSON must be a non-empty JSON array");
+    throw new Error(`CLOUD_MCP_SERVICE_TOKENS_JSON must be a non-empty JSON array. Got: ${typeof parsed} - ${JSON.stringify(parsed)}`);
   }
 
   const principals: ServicePrincipal[] = [];
