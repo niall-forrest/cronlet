@@ -24,8 +24,11 @@ RUN pnpm --filter @cronlet/cloud-shared build
 RUN pnpm --filter @cronlet/cloud-api prisma:generate
 RUN pnpm --filter @cronlet/cloud-api build
 
-# Production stage - use slim (Debian) for OpenSSL 1.1 compatibility with Prisma
-FROM node:20-slim AS runner
+# Production stage - use Bullseye (Debian 11) which has OpenSSL 1.1.x for Prisma compatibility
+FROM node:20-bullseye-slim AS runner
+
+# Install OpenSSL 1.1 for Prisma
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
