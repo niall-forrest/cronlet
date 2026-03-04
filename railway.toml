@@ -1,0 +1,61 @@
+# Railway configuration for Cronlet monorepo
+# Deploy each service separately by pointing to its directory
+
+# This file documents the multi-service setup.
+# In Railway, create 4 services from this repo, each with:
+#   - Root Directory set to the service path
+#   - Dockerfile path relative to that directory
+
+# ===========================================
+# SERVICE: cloud-api
+# ===========================================
+# Root Directory: apps/cloud-api
+# Dockerfile: Dockerfile
+# Port: 4050
+# Health Check: /health
+#
+# Required Env Vars:
+#   DATABASE_URL=${{Postgres.DATABASE_URL}}
+#   CLOUD_STORE_MODE=prisma
+#   CLOUD_INTERNAL_TOKEN=<generate-secret>
+#   CLOUD_WEB_ORIGINS=https://<cloud-web-domain>
+#   CLERK_JWKS_URL=https://...
+#   CLERK_ISSUER=https://...
+
+# ===========================================
+# SERVICE: cloud-web
+# ===========================================
+# Root Directory: apps/cloud-web
+# Dockerfile: Dockerfile
+# Port: 80
+# Health Check: /health
+#
+# Build Args (set as env vars):
+#   VITE_CLOUD_API_BASE_URL=https://<cloud-api-domain>
+#   VITE_CLERK_PUBLISHABLE_KEY=pk_...
+#   VITE_CLOUD_MCP_BASE_URL=https://<cloud-mcp-domain>
+
+# ===========================================
+# SERVICE: cloud-worker
+# ===========================================
+# Root Directory: apps/cloud-worker
+# Dockerfile: Dockerfile
+# No port (background worker)
+#
+# Required Env Vars:
+#   CLOUD_API_BASE_URL=https://<cloud-api-domain>
+#   CLOUD_INTERNAL_TOKEN=<same-as-api>
+#   REDIS_URL=${{Redis.REDIS_URL}}
+
+# ===========================================
+# SERVICE: cloud-mcp
+# ===========================================
+# Root Directory: apps/cloud-mcp
+# Dockerfile: Dockerfile
+# Port: 4060
+# Health Check: /health
+#
+# Required Env Vars:
+#   CLOUD_API_BASE_URL=https://<cloud-api-domain>
+#   CLOUD_API_KEY=<api-key-for-mcp>
+#   CLOUD_MCP_SERVICE_TOKENS_JSON={"token1":{"orgId":"...","userId":"..."}}

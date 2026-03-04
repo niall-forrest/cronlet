@@ -5,6 +5,22 @@ import { handlerConfigSchema } from "@cronlet/cloud-shared";
 import { MCP_TOOLS, type McpToolName } from "./lib/tools.js";
 import { resolveSchedule, parseSchedule } from "./lib/schedule-parser.js";
 
+// Validate required environment variables in production
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction) {
+  const required = [
+    "CLOUD_API_BASE_URL",
+    "CLOUD_API_KEY",
+    "CLOUD_MCP_SERVICE_TOKENS_JSON",
+  ];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.error(`Missing required environment variables: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+}
+
 interface ServicePrincipal {
   id: string;
   name?: string;
