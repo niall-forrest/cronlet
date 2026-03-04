@@ -128,7 +128,44 @@ declare module "@tanstack/react-router" {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+    <ClerkProvider
+      publishableKey={PUBLISHABLE_KEY}
+      afterSignOutUrl="/"
+      appearance={{
+        variables: {
+          colorText: "white",
+          colorTextOnPrimaryBackground: "white",
+          colorTextSecondary: "#a1a1aa",
+          colorBackground: "#1c1c24",
+          colorInputBackground: "#1c1c24",
+          colorInputText: "white",
+          colorNeutral: "white",
+        },
+        elements: {
+          // Organization switcher trigger
+          organizationSwitcherTrigger: { color: "white" },
+          organizationPreviewMainIdentifier: { color: "white" },
+          organizationSwitcherTriggerIcon: { color: "white" },
+          // Dropdown and popover
+          organizationSwitcherPopoverActionButton: { color: "white" },
+          organizationSwitcherPopoverActionButtonText: { color: "white" },
+          organizationSwitcherPopoverActionButtonIcon: { color: "#a1a1aa" },
+          // Modal and profile
+          modalContent: { color: "white" },
+          navbarButton: { color: "white" },
+          navbarButtonIcon: { color: "white" },
+          profileSectionTitle: { color: "white" },
+          profileSectionTitleText: { color: "white" },
+          profileSectionContent: { color: "white" },
+          formFieldLabel: { color: "white" },
+          formFieldInput: { color: "white" },
+          // General text
+          text: { color: "white" },
+          headerTitle: { color: "white" },
+          headerSubtitle: { color: "#a1a1aa" },
+        },
+      }}
+    >
       <QueryClientProvider client={queryClient}>
         <ClerkAuthBridge />
         <RouterProvider router={router} />

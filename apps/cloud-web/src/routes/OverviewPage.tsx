@@ -192,8 +192,8 @@ export function OverviewPage() {
         <div className="text-center pt-8 pb-4">
           <h1 className="display-title text-3xl mb-3">Welcome to Cronlet</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Scheduled tasks, hosted. Create a task and we'll run it on schedule.
-            No cron syntax. No infrastructure.
+            Scheduled tasks for developers and AI agents. Create a task and we'll run it on schedule.
+            No cron syntax. No infrastructure. Works with Claude via MCP.
           </p>
         </div>
 
@@ -236,24 +236,24 @@ export function OverviewPage() {
 
             <div className="pt-4 border-t border-border/50">
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
-                What can you automate?
+                What can you build?
               </p>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="flex items-center gap-2">
                   <Wrench size={14} className="text-primary" />
-                  <span>Chain HTTP calls</span>
+                  <span>Chain API calls</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Wrench size={14} className="text-primary" />
-                  <span>Post to Slack</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Wrench size={14} className="text-primary" />
-                  <span>Send emails</span>
+                  <span>Agent feedback loops</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Globe size={14} className="text-primary" />
-                  <span>Call your webhooks</span>
+                  <span>Webhook integrations</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Wrench size={14} className="text-primary" />
+                  <span>Scheduled monitoring</span>
                 </div>
               </div>
             </div>
@@ -263,26 +263,29 @@ export function OverviewPage() {
         {/* Quick start code */}
         <Card className="border-border/50 bg-card/60 max-w-2xl mx-auto">
           <CardHeader className="pb-2">
-            <CardTitle>Quick Start</CardTitle>
+            <CardTitle>For Developers & Agents</CardTitle>
             <CardDescription>
-              Use our SDK or MCP server to manage tasks programmatically.
+              Use our MCP server with Claude, or integrate via SDK. Tasks support callbacks for autonomous agent loops.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Install the SDK:</p>
-              <div className="flex items-center bg-background/50 rounded-md px-4 py-3 font-mono text-sm">
-                <code className="flex-1">npm install @cronlet/sdk</code>
-                <CopyButton text="npm install @cronlet/sdk" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Or use with Claude via MCP:</p>
+              <p className="text-sm text-muted-foreground">Connect Claude via MCP:</p>
               <div className="flex items-center bg-background/50 rounded-md px-4 py-3 font-mono text-sm">
                 <code className="flex-1">npx @cronlet/mcp</code>
                 <CopyButton text="npx @cronlet/mcp" />
               </div>
             </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Or install the SDK:</p>
+              <div className="flex items-center bg-background/50 rounded-md px-4 py-3 font-mono text-sm">
+                <code className="flex-1">npm install @cronlet/sdk</code>
+                <CopyButton text="npm install @cronlet/sdk" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground pt-2 border-t border-border/50">
+              Agents can create tasks, receive callbacks on completion, and store metadata across runs.
+            </p>
           </CardContent>
         </Card>
       </div>
