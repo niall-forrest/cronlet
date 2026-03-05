@@ -21,7 +21,6 @@ const navItems: NavItem[] = [
   { to: "/", label: "Overview", exact: true },
   { to: "/tasks", label: "Tasks" },
   { to: "/runs", label: "Runs" },
-  { to: "/projects", label: "Projects" },
   { to: "/settings", label: "Settings" },
 ];
 

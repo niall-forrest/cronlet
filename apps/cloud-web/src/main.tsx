@@ -15,7 +15,6 @@ import { TasksPage } from "./routes/TasksPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { RunsPage } from "./routes/RunsPage";
-import { ProjectsPage } from "./routes/ProjectsPage";
 import { SettingsPage } from "./routes/SettingsPage";
 import { AlertsPage } from "./routes/AlertsPage";
 import { AuditEventsPage } from "./routes/AuditEventsPage";
@@ -65,13 +64,6 @@ const runsRoute = createRoute({
   component: RunsPage,
 });
 
-// Projects - organization container
-const projectsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/projects",
-  component: ProjectsPage,
-});
-
 // Settings - secrets, API keys
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -113,7 +105,6 @@ const routeTree = rootRoute.addChildren([
   taskDetailRoute,
   createTaskRoute,
   runsRoute,
-  projectsRoute,
   settingsRoute,
   alertsRoute,
   auditEventsRoute,

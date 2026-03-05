@@ -26,26 +26,12 @@ describe("run lifecycle API boundary", () => {
   it("preserves monotonic attempts and terminal state across internal status updates", async () => {
     const app = await buildServer();
     try {
-      // Create project
-      const projectRes = await app.inject({
-        method: "POST",
-        url: "/v1/projects",
-        headers: userHeaders("owner"),
-        payload: {
-          name: "Lifecycle Project",
-          slug: "lifecycle-project",
-        },
-      });
-      expect(projectRes.statusCode).toBe(201);
-      const projectId = projectRes.json().data.id as string;
-
-      // Create task (replaces endpoint + job)
+      // Create task
       const taskRes = await app.inject({
         method: "POST",
         url: "/v1/tasks",
         headers: userHeaders("admin"),
         payload: {
-          projectId,
           name: "Digest Task",
           handler: {
             type: "webhook",

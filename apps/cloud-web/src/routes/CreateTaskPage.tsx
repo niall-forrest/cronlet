@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ScheduleConfig,
   TaskCreateInput,
@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { ScheduleBuilder } from "@/components/task/ScheduleBuilder";
 import { ToolStepBuilder } from "@/components/task/ToolStepBuilder";
 import { WebhookBuilder } from "@/components/task/WebhookBuilder";
-import { listProjects, createTask } from "@/lib/api";
+import { createTask } from "@/lib/api";
 
 type HandlerType = "tools" | "webhook" | "code";
 type Step = "handler" | "schedule" | "details";
@@ -52,11 +52,6 @@ const TIMEOUTS = [
 export function CreateTaskPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => listProjects(),
-  });
 
   const createMutation = useMutation({
     mutationFn: createTask,
@@ -88,17 +83,11 @@ export function CreateTaskPage() {
   const [timezone, setTimezone] = useState("UTC");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   const [retryAttempts, setRetryAttempts] = useState(1);
   const [retryBackoff, setRetryBackoff] = useState<"linear" | "exponential">("linear");
   const [retryDelay, setRetryDelay] = useState("1s");
   const [taskTimeout, setTaskTimeout] = useState("30s");
   const [callbackUrl, setCallbackUrl] = useState("");
-
-  // Set default project when projects load
-  if (projects.length > 0 && !projectId) {
-    setProjectId(projects[0].id);
-  }
 
   // Generate natural language schedule description
   const scheduleDescription = useMemo(() => {
@@ -133,7 +122,6 @@ export function CreateTaskPage() {
 
     // Full payload for REST/SDK (includes all options)
     const fullPayload: Record<string, unknown> = {
-      projectId: projectId || "<PROJECT_ID>",
       name: name || "My Task",
       description: description || undefined,
       handler,
@@ -168,7 +156,6 @@ console.log("Created task:", task.id);`;
 
     // Simplified MCP payload - essentials only
     const mcpArgs: Record<string, unknown> = {
-      projectId: projectId || "<PROJECT_ID>",
       name: name || "My Task",
       handler,
       schedule: scheduleDescription,
@@ -201,7 +188,7 @@ console.log("Created task:", task.id);`;
 //   "monthly on the 1st at 9am"`;
 
     return { curl, sdk, mcp };
-  }, [handlerType, toolsConfig, webhookConfig, projectId, name, description, schedule, scheduleDescription, timezone, retryAttempts, retryBackoff, retryDelay, taskTimeout, callbackUrl]);
+  }, [handlerType, toolsConfig, webhookConfig, name, description, schedule, scheduleDescription, timezone, retryAttempts, retryBackoff, retryDelay, taskTimeout, callbackUrl]);
 
   const handleCopy = useCallback(async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -239,9 +226,9 @@ console.log("Created task:", task.id);`;
       case "schedule":
         return true;
       case "details":
-        return !!name && !!projectId;
+        return !!name;
     }
-  }, [step, getHandler, name, projectId]);
+  }, [step, getHandler, name]);
 
   const handleNext = () => {
     if (!canProceed()) return;
@@ -262,7 +249,6 @@ console.log("Created task:", task.id);`;
     if (!canProceed()) return;
 
     const input: TaskCreateInput = {
-      projectId,
       name,
       description: description || undefined,
       handler: getHandler(),
@@ -462,22 +448,6 @@ console.log("Created task:", task.id);`;
                       placeholder="What does this task do?"
                       className="min-h-[60px]"
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Project</Label>
-                    <Select value={projectId} onValueChange={setProjectId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {projects.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
 
                   {/* Advanced Settings */}

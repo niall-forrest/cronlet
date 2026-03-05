@@ -14,23 +14,6 @@ describe("Cloud API authorization", () => {
   it("blocks viewer role from task CRUD while allowing owner/admin", async () => {
     const app = await buildServer();
     try {
-      // Owner creates project
-      const createProject = await app.inject({
-        method: "POST",
-        url: "/v1/projects",
-        headers: {
-          "x-org-id": "org_authz",
-          "x-user-id": "owner_1",
-          "x-role": "owner",
-        },
-        payload: {
-          name: "Authz Project",
-          slug: "authz-project",
-        },
-      });
-      expect(createProject.statusCode).toBe(201);
-      const projectId = createProject.json().data.id as string;
-
       // Viewer cannot create tasks
       const viewerTaskCreate = await app.inject({
         method: "POST",
@@ -41,7 +24,6 @@ describe("Cloud API authorization", () => {
           "x-role": "viewer",
         },
         payload: {
-          projectId,
           name: "Viewer Task",
           handler: {
             type: "webhook",
@@ -67,7 +49,6 @@ describe("Cloud API authorization", () => {
           "x-role": "admin",
         },
         payload: {
-          projectId,
           name: "Admin Task",
           handler: {
             type: "webhook",

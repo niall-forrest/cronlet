@@ -4,13 +4,7 @@ import { InMemoryCloudStore } from "../src/lib/store.js";
 function setupStore(orgId: string) {
   const store = new InMemoryCloudStore();
 
-  const project = store.createProject(orgId, {
-    name: "Test Project",
-    slug: `test-project-${orgId}`,
-  });
-
   const task = store.createTask(orgId, {
-    projectId: project.id,
     name: "Test Task",
     handler: {
       type: "webhook",
@@ -23,7 +17,7 @@ function setupStore(orgId: string) {
     timezone: "UTC",
   });
 
-  return { store, project, task };
+  return { store, task };
 }
 
 describe("InMemoryCloudStore dispatch semantics", () => {

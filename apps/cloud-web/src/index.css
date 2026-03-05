@@ -7,26 +7,61 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --background: 224 41% 7%;
-    --foreground: 210 33% 98%;
-    --card: 223 32% 11%;
-    --card-foreground: 210 33% 98%;
-    --popover: 223 32% 11%;
-    --popover-foreground: 210 33% 98%;
-    --primary: 189 92% 55%;
-    --primary-foreground: 223 41% 7%;
-    --secondary: 222 22% 18%;
-    --secondary-foreground: 210 33% 95%;
-    --muted: 222 20% 16%;
-    --muted-foreground: 217 11% 65%;
-    --accent: 190 100% 14%;
-    --accent-foreground: 188 100% 85%;
-    --destructive: 0 74% 49%;
-    --destructive-foreground: 210 33% 98%;
-    --border: 217 16% 23%;
-    --input: 217 16% 23%;
-    --ring: 189 92% 55%;
+
+    /* Backgrounds - aligned with landing page */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    /* Cards - elevated surfaces */
+    --card: 222 41% 10%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 41% 10%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary - Cyan/Teal accent */
+    --primary: 160 84% 43%;
+    --primary-foreground: 222 47% 4%;
+
+    /* Secondary */
+    --secondary: 222 30% 14%;
+    --secondary-foreground: 210 40% 96%;
+
+    /* Muted */
+    --muted: 222 25% 12%;
+    --muted-foreground: 215 16% 60%;
+
+    /* Accent - Violet for AI/MCP features */
+    --accent: 263 70% 66%;
+    --accent-foreground: 210 40% 98%;
+
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Success */
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+
+    /* Warning */
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 4%;
+
+    /* Borders - subtle by default */
+    --border: 215 20% 20%;
+    --border-accent: 160 84% 43% / 0.3;
+    --input: 215 20% 20%;
+    --ring: 160 84% 43%;
+
+    /* Border radius - larger for polished look */
     --radius: 0.5rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.25rem;
+
+    /* Glow colors for accents */
+    --cyan-glow: 172 100% 50%;
+    --cyan-primary: 160 84% 43%;
+    --violet-accent: 263 70% 66%;
   }
 
   html,
@@ -50,13 +85,74 @@
     font-family: "Syne", ui-sans-serif, system-ui, sans-serif;
   }
 
+  .font-sans {
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
   .display-title {
     font-family: "Syne", ui-sans-serif, system-ui, sans-serif;
-    @apply text-2xl font-bold tracking-tight text-cyan-200;
+    @apply text-2xl font-bold tracking-tight text-foreground;
+  }
+
+  /* Section header with line prefix (landing page style) */
+  .section-label {
+    @apply inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-primary;
+  }
+
+  .section-label::before {
+    content: "";
+    @apply block h-px w-6 bg-primary;
   }
 
   .panel {
-    @apply rounded-xl border bg-card p-4 shadow-[0_16px_44px_-24px_rgba(0,0,0,0.85)];
+    @apply rounded-2xl border border-border/50 bg-card p-4 shadow-[0_16px_44px_-24px_rgba(0,0,0,0.85)];
+  }
+
+  /* Card hover effect for interactive cards */
+  .card-interactive {
+    @apply transition-all duration-200 ease-out;
+  }
+
+  .card-interactive:hover {
+    @apply border-primary/30;
+    transform: translateY(-2px);
+  }
+
+  /* Card with glow effect */
+  .card-glow {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 20px 50px -20px rgba(0, 0, 0, 0.5),
+      0 0 80px -40px hsl(var(--primary) / 0.2);
+  }
+
+  /* Status dot indicators */
+  .status-dot {
+    @apply h-2 w-2 shrink-0 rounded-full;
+  }
+
+  .status-dot-success {
+    @apply bg-emerald-500;
+    box-shadow: 0 0 8px hsl(var(--success) / 0.5);
+  }
+
+  .status-dot-error {
+    @apply bg-red-500;
+    box-shadow: 0 0 8px hsl(var(--destructive) / 0.5);
+  }
+
+  .status-dot-warning {
+    @apply bg-amber-500;
+    box-shadow: 0 0 8px hsl(var(--warning) / 0.5);
+  }
+
+  .status-dot-running {
+    @apply bg-primary animate-pulse;
+    box-shadow: 0 0 8px hsl(var(--primary) / 0.5);
+  }
+
+  .status-dot-muted {
+    @apply bg-muted-foreground/50;
   }
 
   .table-shell {
@@ -73,7 +169,7 @@
   }
 
   .field {
-    @apply w-full rounded-md border bg-background/70 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20;
+    @apply w-full rounded-lg border border-border/50 bg-background/70 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20;
   }
 
   .select-field {
@@ -81,7 +177,7 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center rounded-md border px-3 py-2 text-xs uppercase tracking-wide transition;
+    @apply inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-medium tracking-wide transition;
   }
 
   .btn-primary {
@@ -89,10 +185,31 @@
   }
 
   .btn-quiet {
-    @apply btn border-input bg-secondary text-secondary-foreground hover:border-primary/40 hover:text-primary;
+    @apply btn border-border/50 bg-secondary text-secondary-foreground hover:border-primary/40 hover:text-primary;
   }
 
   .btn-danger {
     @apply btn border-rose-500/40 bg-rose-500/15 text-rose-200 hover:border-rose-400/70 hover:bg-rose-400/20;
+  }
+
+  /* Meta label styling (like LAST RUN, DURATION) */
+  .meta-label {
+    @apply font-mono text-[0.6875rem] uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* Subtle fade-in animation */
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
 }

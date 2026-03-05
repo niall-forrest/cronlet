@@ -27,24 +27,11 @@ export interface ToolDefinition {
  */
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
-    name: "cronlet_list_projects",
-    description: "List all projects in the Cronlet workspace.",
+    name: "cronlet_list_tasks",
+    description: "List all scheduled tasks.",
     parameters: {
       type: "object",
       properties: {},
-    },
-  },
-  {
-    name: "cronlet_list_tasks",
-    description: "List scheduled tasks. Optionally filter by project.",
-    parameters: {
-      type: "object",
-      properties: {
-        projectId: {
-          type: "string",
-          description: "Filter tasks by project ID",
-        },
-      },
     },
   },
   {
@@ -54,10 +41,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     parameters: {
       type: "object",
       properties: {
-        projectId: {
-          type: "string",
-          description: "Project ID to create the task in",
-        },
         name: {
           type: "string",
           description: "Human-readable name for the task",
@@ -89,7 +72,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           description: "Custom metadata to store with the task and return in callbacks",
         },
       },
-      required: ["projectId", "name", "handler", "schedule"],
+      required: ["name", "handler", "schedule"],
     },
   },
   {
@@ -295,7 +278,6 @@ export type ToolCallInput = Record<string, unknown>;
  *
  * // Execute a tool call from OpenAI/Anthropic response
  * const result = await handler.execute("cronlet_create_task", {
- *   projectId: "proj_123",
  *   name: "Daily Report",
  *   handler: { type: "webhook", url: "https://api.example.com/report" },
  *   schedule: "daily at 9am"
@@ -304,17 +286,12 @@ export type ToolCallInput = Record<string, unknown>;
  */
 export function createToolHandler(client: CloudClient) {
   const handlers: Record<string, (args: ToolCallInput) => Promise<unknown>> = {
-    cronlet_list_projects: async () => {
-      return client.projects.list();
-    },
-
-    cronlet_list_tasks: async (args) => {
-      return client.tasks.list(args.projectId as string | undefined);
+    cronlet_list_tasks: async () => {
+      return client.tasks.list();
     },
 
     cronlet_create_task: async (args) => {
       return client.tasks.create({
-        projectId: args.projectId as string,
         name: args.name as string,
         description: args.description as string | undefined,
         handler: args.handler as HandlerConfigInput,

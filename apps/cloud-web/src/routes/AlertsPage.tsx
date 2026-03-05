@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,19 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loading } from "@/components/Loading";
-import { createAlert, listAlerts, listProjects } from "../lib/api";
+import { createAlert, listAlerts } from "../lib/api";
 
 export function AlertsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
-    projectId: "",
     channel: "email" as "email" | "webhook",
     destination: "",
     onFailure: true,
     onTimeout: true,
   });
 
-  const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const alertsQuery = useQuery({ queryKey: ["alerts"], queryFn: listAlerts });
 
   const createMutation = useMutation({
@@ -37,20 +35,12 @@ export function AlertsPage() {
     },
   });
 
-  const projectNames = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const project of projectsQuery.data ?? []) {
-      map.set(project.id, project.name);
-    }
-    return map;
-  }, [projectsQuery.data]);
-
-  if (projectsQuery.isLoading || alertsQuery.isLoading) {
+  if (alertsQuery.isLoading) {
     return <Loading />;
   }
 
-  if (projectsQuery.error || alertsQuery.error) {
-    const error = (projectsQuery.error ?? alertsQuery.error) as Error;
+  if (alertsQuery.error) {
+    const error = alertsQuery.error as Error;
     return <p className="text-sm text-destructive">Failed to load alerts: {error.message}</p>;
   }
 
@@ -59,14 +49,13 @@ export function AlertsPage() {
       <Card className="border-border/70 bg-card/80">
         <CardHeader>
           <CardTitle className="display-title">Alerts</CardTitle>
-          <CardDescription>Failure and timeout notifications across projects.</CardDescription>
+          <CardDescription>Failure and timeout notifications for your tasks.</CardDescription>
         </CardHeader>
         <CardContent>
           {alertsQuery.data && alertsQuery.data.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Project</TableHead>
                   <TableHead>Channel</TableHead>
                   <TableHead>Destination</TableHead>
                   <TableHead>Triggers</TableHead>
@@ -76,9 +65,6 @@ export function AlertsPage() {
               <TableBody>
                 {alertsQuery.data.map((alert) => (
                   <TableRow key={alert.id}>
-                    <TableCell className="text-muted-foreground">
-                      {projectNames.get(alert.projectId) ?? alert.projectId}
-                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{alert.channel}</Badge>
                     </TableCell>
@@ -112,12 +98,11 @@ export function AlertsPage() {
             className="space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!form.projectId || !form.destination.trim()) {
+              if (!form.destination.trim()) {
                 return;
               }
 
               createMutation.mutate({
-                projectId: form.projectId,
                 channel: form.channel,
                 destination: form.destination.trim(),
                 onFailure: form.onFailure,
@@ -125,25 +110,6 @@ export function AlertsPage() {
               });
             }}
           >
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <Select
-                value={form.projectId || undefined}
-                onValueChange={(value) => setForm((current) => ({ ...current, projectId: value }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(projectsQuery.data ?? []).map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label>Channel</Label>
               <Select

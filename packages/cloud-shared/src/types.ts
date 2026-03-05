@@ -107,19 +107,9 @@ export interface CreatedBy {
 // RECORDS
 // ============================================
 
-export interface ProjectRecord {
-  id: string;
-  orgId: string;
-  name: string;
-  slug: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface TaskRecord {
   id: string;
   orgId: string;
-  projectId: string;
   name: string;
   description: string | null;
   handlerType: HandlerType;
@@ -148,7 +138,6 @@ export interface TaskRecord {
 export interface RunRecord {
   id: string;
   orgId: string;
-  projectId: string;
   taskId: string;
   status: RunStatus;
   trigger: "schedule" | "manual" | "api";
@@ -175,7 +164,6 @@ export interface SecretRecord {
 export interface AlertRecord {
   id: string;
   orgId: string;
-  projectId: string;
   channel: "email" | "webhook";
   destination: string;
   onFailure: boolean;
@@ -230,7 +218,6 @@ export interface UsageSnapshot {
 export interface DispatchInstruction {
   runId: string;
   orgId: string;
-  projectId: string;
   taskId: string;
   handlerType: HandlerType;
   handlerConfig: HandlerConfig;

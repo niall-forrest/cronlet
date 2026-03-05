@@ -14,8 +14,6 @@ import {
   type HandlerType,
   type InternalRunStatusInput,
   type PlanTier,
-  type ProjectCreateInput,
-  type ProjectRecord,
   type RunRecord,
   type ScheduleType,
   type SecretCreateInput,
@@ -49,7 +47,6 @@ interface InternalSecretRecord extends SecretRecord {
 }
 
 export class InMemoryCloudStore implements CloudStore {
-  private readonly projects = new Map<string, ProjectRecord>();
   private readonly tasks = new Map<string, InternalTaskRecord>();
   private readonly runs = new Map<string, RunRecord>();
   private readonly secrets = new Map<string, InternalSecretRecord>();
@@ -92,14 +89,6 @@ export class InMemoryCloudStore implements CloudStore {
     return new Date(entitlement.graceEndsAt).getTime() > nowMs;
   }
 
-  private assertProjectAccess(orgId: string, projectId: string): ProjectRecord {
-    const project = this.projects.get(projectId);
-    if (!project || project.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Project not found");
-    }
-    return project;
-  }
-
   private assertWritable(orgId: string): void {
     const entitlement = this.getEntitlement(orgId);
     if (this.isGracePeriodActive(entitlement)) {
@@ -132,44 +121,12 @@ export class InMemoryCloudStore implements CloudStore {
   }
 
   // ============================================
-  // PROJECTS
-  // ============================================
-
-  listProjects(orgId: string): ProjectRecord[] {
-    return Array.from(this.projects.values()).filter((item) => item.orgId === orgId);
-  }
-
-  createProject(orgId: string, input: ProjectCreateInput): ProjectRecord {
-    this.assertWritable(orgId);
-    const now = nowIso();
-
-    const duplicateSlug = Array.from(this.projects.values()).some(
-      (project) => project.orgId === orgId && project.slug === input.slug
-    );
-    if (duplicateSlug) {
-      throw new AppError(409, ERROR_CODES.VALIDATION_ERROR, "Project slug already exists");
-    }
-
-    const created: ProjectRecord = {
-      id: nanoid(),
-      orgId,
-      name: input.name,
-      slug: input.slug,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.projects.set(created.id, created);
-    return created;
-  }
-
-  // ============================================
   // TASKS
   // ============================================
 
-  listTasks(orgId: string, projectId?: string): TaskRecord[] {
+  listTasks(orgId: string): TaskRecord[] {
     return Array.from(this.tasks.values())
-      .filter((task) => task.orgId === orgId && (!projectId || task.projectId === projectId))
+      .filter((task) => task.orgId === orgId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
@@ -183,7 +140,6 @@ export class InMemoryCloudStore implements CloudStore {
 
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): TaskRecord {
     this.assertWritable(orgId);
-    this.assertProjectAccess(orgId, input.projectId);
 
     const now = nowIso();
     const scheduleConfig = input.schedule;
@@ -196,7 +152,6 @@ export class InMemoryCloudStore implements CloudStore {
     const task: InternalTaskRecord = {
       id: nanoid(),
       orgId,
-      projectId: input.projectId,
       name: input.name,
       description: input.description ?? null,
       handlerType: handlerConfig.type as HandlerType,
@@ -290,7 +245,6 @@ export class InMemoryCloudStore implements CloudStore {
     const run: RunRecord = {
       id: nanoid(),
       orgId,
-      projectId: task.projectId,
       taskId: task.id,
       status: "queued",
       trigger,
@@ -313,7 +267,6 @@ export class InMemoryCloudStore implements CloudStore {
     this.dispatchQueue.push({
       runId: run.id,
       orgId,
-      projectId: task.projectId,
       taskId: task.id,
       handlerType: task.handlerType,
       handlerConfig: task.handlerConfig,
@@ -474,13 +427,11 @@ export class InMemoryCloudStore implements CloudStore {
 
   createAlert(orgId: string, input: AlertCreateInput): AlertRecord {
     this.assertWritable(orgId);
-    this.assertProjectAccess(orgId, input.projectId);
 
     const now = nowIso();
     const created: AlertRecord = {
       id: nanoid(),
       orgId,
-      projectId: input.projectId,
       channel: input.channel,
       destination: input.destination,
       onFailure: input.onFailure,
@@ -688,7 +639,6 @@ export class InMemoryCloudStore implements CloudStore {
       const run: RunRecord = {
         id: nanoid(),
         orgId: task.orgId,
-        projectId: task.projectId,
         taskId: task.id,
         status: "queued",
         trigger: "schedule",
@@ -710,7 +660,6 @@ export class InMemoryCloudStore implements CloudStore {
       this.dispatchQueue.push({
         runId: run.id,
         orgId: task.orgId,
-        projectId: task.projectId,
         taskId: task.id,
         handlerType: task.handlerType,
         handlerConfig: task.handlerConfig,

@@ -1,5 +1,4 @@
 export type McpToolName =
-  | "list_projects"
   | "list_tasks"
   | "create_task"
   | "trigger_task"
@@ -21,25 +20,11 @@ export interface McpToolDefinition {
 
 export const MCP_TOOLS: McpToolDefinition[] = [
   {
-    name: "list_projects",
-    description: "List projects visible to the current scope.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-    },
-    mutating: false,
-    critical: false,
-  },
-  {
     name: "list_tasks",
-    description: "List scheduled tasks. Optionally filter by project or creator.",
+    description: "List scheduled tasks. Optionally filter to show only tasks created by this agent.",
     inputSchema: {
       type: "object",
       properties: {
-        projectId: {
-          type: "string",
-          description: "Filter by project ID",
-        },
         mine: {
           type: "boolean",
           description: "Only show tasks created by this agent",
@@ -55,10 +40,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
-        projectId: {
-          type: "string",
-          description: "Project to create the task in",
-        },
         name: {
           type: "string",
           description: "Task name",
@@ -96,7 +77,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description: "ISO datetime. Auto-pause task after this time.",
         },
       },
-      required: ["projectId", "name", "handler", "schedule"],
+      required: ["name", "handler", "schedule"],
     },
     mutating: true,
     critical: true,

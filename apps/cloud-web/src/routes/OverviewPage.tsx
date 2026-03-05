@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton, SkeletonCard, SkeletonRow } from "@/components/Skeleton";
-import { listTasks, listRuns, listProjects, getUsage } from "@/lib/api";
+import { listTasks, listRuns, getUsage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function CopyButton({ text }: { text: string }) {
@@ -103,7 +103,6 @@ function formatCountdown(targetDate: string): string {
 }
 
 export function OverviewPage() {
-  const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const tasksQuery = useQuery({ queryKey: ["tasks"], queryFn: () => listTasks() });
   const runsQuery = useQuery({
     queryKey: ["runs"],
@@ -115,14 +114,12 @@ export function OverviewPage() {
     queryFn: getUsage,
   });
 
-  const isLoading = projectsQuery.isLoading || tasksQuery.isLoading;
-  const projects = projectsQuery.data ?? [];
+  const isLoading = tasksQuery.isLoading;
   const tasks = tasksQuery.data ?? [];
   const runs = runsQuery.data ?? [];
   const usage = usageQuery.data;
 
   const hasTasks = tasks.length > 0;
-  const hasProjects = projects.length > 0;
 
   // Calculate comprehensive stats
   const activeTasks = tasks.filter((t) => t.active).length;
@@ -219,33 +216,17 @@ export function OverviewPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!hasProjects && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                <p className="text-sm mb-3">
-                  First, create a project to organize your tasks.
-                </p>
-                <Button asChild size="sm">
-                  <Link to="/projects">
-                    <Plus size={14} className="mr-2" />
-                    Create Project
-                  </Link>
-                </Button>
-              </div>
-            )}
-
-            {hasProjects && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                <p className="text-sm mb-3">
-                  Create a task to start scheduling automated actions.
-                </p>
-                <Button asChild size="sm">
-                  <Link to="/tasks/create">
-                    <Plus size={14} className="mr-2" />
-                    Create Task
-                  </Link>
-                </Button>
-              </div>
-            )}
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm mb-3">
+                Create a task to start scheduling automated actions.
+              </p>
+              <Button asChild size="sm">
+                <Link to="/tasks/create">
+                  <Plus size={14} className="mr-2" />
+                  Create Task
+                </Link>
+              </Button>
+            </div>
 
             <div className="pt-4 border-t border-border/50">
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">

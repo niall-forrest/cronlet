@@ -4,11 +4,11 @@ import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";
 
 export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
-  // List tasks (optionally filtered by project)
-  app.get<{ Querystring: { projectId?: string } }>("/v1/tasks", async (request, reply) => {
+  // List tasks
+  app.get("/v1/tasks", async (request, reply) => {
     try {
       authorize(request.auth, { minimumRole: "viewer", requiredScope: "tasks:read" });
-      const tasks = await app.cloudStore.listTasks(request.auth.orgId, request.query.projectId);
+      const tasks = await app.cloudStore.listTasks(request.auth.orgId);
       return ok(reply, tasks);
     } catch (error) {
       return handleError(reply, error);

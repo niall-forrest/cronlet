@@ -12,8 +12,6 @@ import type {
   DispatchInstruction,
   InternalRunStatusInput,
   PlanTier,
-  ProjectCreateInput,
-  ProjectRecord,
   RunRecord,
   SecretCreateInput,
   SecretPatchInput,
@@ -37,12 +35,8 @@ export interface OrganizationUpsertInput {
 }
 
 export interface CloudStore {
-  // Projects
-  listProjects(orgId: string): Promise<ProjectRecord[]> | ProjectRecord[];
-  createProject(orgId: string, input: ProjectCreateInput): Promise<ProjectRecord> | ProjectRecord;
-
   // Tasks
-  listTasks(orgId: string, projectId?: string): Promise<TaskRecord[]> | TaskRecord[];
+  listTasks(orgId: string): Promise<TaskRecord[]> | TaskRecord[];
   getTask(orgId: string, taskId: string): Promise<TaskRecord> | TaskRecord;
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> | TaskRecord;
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> | TaskRecord;

@@ -6,7 +6,6 @@ import { InMemoryCloudStore } from "./lib/store.js";
 import { PrismaCloudStore } from "./lib/prisma-store.js";
 import { registerAuthPlugin } from "./plugins/auth.js";
 import { registerIdempotencyPlugin } from "./plugins/idempotency.js";
-import { registerProjectRoutes } from "./routes/projects.js";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerRunRoutes } from "./routes/runs.js";
 import { registerSecretRoutes } from "./routes/secrets.js";
@@ -85,7 +84,6 @@ export async function buildServer() {
   app.get("/health", async () => ({ ok: true, service: "cloud-api" }));
 
   await registerWebhookRoutes(app);
-  await registerProjectRoutes(app);
   await registerTaskRoutes(app);
   await registerRunRoutes(app);
   await registerSecretRoutes(app);

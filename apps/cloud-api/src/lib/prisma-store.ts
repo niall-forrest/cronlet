@@ -16,8 +16,6 @@ import {
   type HandlerConfig,
   type HandlerType,
   type InternalRunStatusInput,
-  type ProjectCreateInput,
-  type ProjectRecord,
   type RunRecord,
   type ScheduleConfig,
   type ScheduleType,
@@ -54,28 +52,9 @@ function orgSlug(orgId: string, preferredSlug?: string): string {
   return `${base}-${suffix}`;
 }
 
-function toProjectRecord(value: {
-  id: string;
-  organizationId: string;
-  name: string;
-  slug: string;
-  createdAt: Date;
-  updatedAt: Date;
-}): ProjectRecord {
-  return {
-    id: value.id,
-    orgId: value.organizationId,
-    name: value.name,
-    slug: value.slug,
-    createdAt: iso(value.createdAt),
-    updatedAt: iso(value.updatedAt),
-  };
-}
-
 function toTaskRecord(value: {
   id: string;
   organizationId: string;
-  projectId: string;
   name: string;
   description: string | null;
   handlerType: string;
@@ -101,7 +80,6 @@ function toTaskRecord(value: {
   return {
     id: value.id,
     orgId: value.organizationId,
-    projectId: value.projectId,
     name: value.name,
     description: value.description,
     handlerType: value.handlerType as HandlerType,
@@ -129,7 +107,6 @@ function toTaskRecord(value: {
 function toRunRecord(value: {
   id: string;
   organizationId: string;
-  projectId: string;
   taskId: string;
   status: string;
   trigger: string;
@@ -146,7 +123,6 @@ function toRunRecord(value: {
   return {
     id: value.id,
     orgId: value.organizationId,
-    projectId: value.projectId,
     taskId: value.taskId,
     status: value.status as RunRecord["status"],
     trigger: value.trigger as RunRecord["trigger"],
@@ -181,7 +157,6 @@ function toSecretRecord(value: {
 function toAlertRecord(value: {
   id: string;
   organizationId: string;
-  projectId: string;
   channel: AlertRecord["channel"];
   destination: string;
   onFailure: boolean;
@@ -192,7 +167,6 @@ function toAlertRecord(value: {
   return {
     id: value.id,
     orgId: value.organizationId,
-    projectId: value.projectId,
     channel: value.channel,
     destination: value.destination,
     onFailure: value.onFailure,
@@ -304,20 +278,6 @@ export class PrismaCloudStore implements CloudStore {
     });
   }
 
-  private async assertProjectAccess(orgId: string, projectId: string): Promise<void> {
-    const project = await this.prisma.project.findFirst({
-      where: {
-        id: projectId,
-        organizationId: orgId,
-      },
-      select: { id: true },
-    });
-
-    if (!project) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Project not found");
-    }
-  }
-
   private async getBillingState(orgId: string): Promise<BillingState> {
     const entitlement = await this.prisma.billingEntitlement.findUnique({
       where: { organizationId: orgId },
@@ -403,44 +363,13 @@ export class PrismaCloudStore implements CloudStore {
   }
 
   // ============================================
-  // PROJECTS
-  // ============================================
-
-  async listProjects(orgId: string): Promise<ProjectRecord[]> {
-    const projects = await this.prisma.project.findMany({
-      where: { organizationId: orgId },
-      orderBy: { createdAt: "desc" },
-    });
-    return projects.map(toProjectRecord);
-  }
-
-  async createProject(orgId: string, input: ProjectCreateInput): Promise<ProjectRecord> {
-    await this.assertWritable(orgId);
-    await this.ensureOrganization(orgId);
-
-    try {
-      const created = await this.prisma.project.create({
-        data: {
-          organizationId: orgId,
-          name: input.name,
-          slug: input.slug,
-        },
-      });
-      return toProjectRecord(created);
-    } catch {
-      throw new AppError(409, ERROR_CODES.VALIDATION_ERROR, "Project slug already exists");
-    }
-  }
-
-  // ============================================
   // TASKS
   // ============================================
 
-  async listTasks(orgId: string, projectId?: string): Promise<TaskRecord[]> {
+  async listTasks(orgId: string): Promise<TaskRecord[]> {
     const tasks = await this.prisma.task.findMany({
       where: {
         organizationId: orgId,
-        ...(projectId ? { projectId } : {}),
       },
       orderBy: { createdAt: "desc" },
     });
@@ -462,7 +391,7 @@ export class PrismaCloudStore implements CloudStore {
 
   async createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> {
     await this.assertWritable(orgId);
-    await this.assertProjectAccess(orgId, input.projectId);
+    await this.ensureOrganization(orgId);
 
     const scheduleConfig = input.schedule;
     const handlerConfig = input.handler;
@@ -475,7 +404,6 @@ export class PrismaCloudStore implements CloudStore {
     const created = await this.prisma.task.create({
       data: {
         organizationId: orgId,
-        projectId: input.projectId,
         name: input.name,
         description: input.description ?? null,
         handlerType: handlerConfig.type,
@@ -582,7 +510,6 @@ export class PrismaCloudStore implements CloudStore {
     const run = await this.prisma.run.create({
       data: {
         organizationId: orgId,
-        projectId: task.projectId,
         taskId: task.id,
         status: "queued",
         trigger,
@@ -595,7 +522,6 @@ export class PrismaCloudStore implements CloudStore {
     this.dispatchQueue.push({
       runId: run.id,
       orgId,
-      projectId: task.projectId,
       taskId: task.id,
       handlerType: task.handlerType as HandlerType,
       handlerConfig: task.handlerConfig as unknown as HandlerConfig,
@@ -797,12 +723,11 @@ export class PrismaCloudStore implements CloudStore {
 
   async createAlert(orgId: string, input: AlertCreateInput): Promise<AlertRecord> {
     await this.assertWritable(orgId);
-    await this.assertProjectAccess(orgId, input.projectId);
+    await this.ensureOrganization(orgId);
 
     const created = await this.prisma.alert.create({
       data: {
         organizationId: orgId,
-        projectId: input.projectId,
         channel: input.channel,
         destination: input.destination,
         onFailure: input.onFailure,
@@ -1087,7 +1012,6 @@ export class PrismaCloudStore implements CloudStore {
           return tx.run.create({
             data: {
               organizationId: task.organizationId,
-              projectId: task.projectId,
               taskId: task.id,
               status: "queued",
               trigger: "schedule",
@@ -1106,7 +1030,6 @@ export class PrismaCloudStore implements CloudStore {
         this.dispatchQueue.push({
           runId: run.id,
           orgId: task.organizationId,
-          projectId: task.projectId,
           taskId: task.id,
           handlerType: task.handlerType as HandlerType,
           handlerConfig: task.handlerConfig as unknown as HandlerConfig,

@@ -1,11 +1,14 @@
 export interface McpToolDefinition {
   name:
-    | "list_projects"
-    | "list_jobs"
+    | "list_tasks"
     | "list_runs"
-    | "trigger_job"
-    | "pause_schedule"
-    | "update_schedule"
+    | "create_task"
+    | "trigger_task"
+    | "pause_task"
+    | "resume_task"
+    | "delete_task"
+    | "get_run"
+    | "parse_schedule"
     | "get_failure_summary";
   description: string;
   mutating: boolean;
@@ -16,7 +19,6 @@ export interface McpToolDefinition {
 export interface McpApprovalRequest {
   id: string;
   tool: McpToolDefinition["name"];
-  projectId: string;
   payload: Record<string, unknown>;
   payloadHash: string;
   requestedBy: string;
@@ -34,7 +36,6 @@ export interface McpAuditEvent {
   action: string;
   status: "success" | "denied" | "approval_required" | "error";
   tool: McpToolDefinition["name"] | null;
-  projectId: string | null;
   targetId: string | null;
   approvalId: string | null;
   payloadHash: string | null;
@@ -49,7 +50,6 @@ export interface McpHealth {
     id: string;
     allowWrites: boolean;
     canApprove: boolean;
-    projectIds: string[];
     scopes: string[];
   }>;
 }

@@ -107,20 +107,10 @@ export const scheduleConfigSchema = z.discriminatedUnion("type", [
 ]);
 
 // ============================================
-// PROJECT
-// ============================================
-
-export const projectCreateSchema = z.object({
-  name: z.string().min(2).max(80),
-  slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
-});
-
-// ============================================
 // TASK
 // ============================================
 
 export const taskCreateSchema = z.object({
-  projectId: z.string().min(1),
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional(),
   handler: handlerConfigSchema,
@@ -180,7 +170,6 @@ export const secretPatchSchema = z.object({
 // ============================================
 
 export const alertCreateSchema = z.object({
-  projectId: z.string().min(1),
   channel: z.enum(["email", "webhook"]),
   destination: z.string().min(3).max(300),
   onFailure: z.boolean().default(true),
@@ -241,7 +230,6 @@ export const internalRunStatusSchema = z.object({
 // INFERRED TYPES
 // ============================================
 
-export type ProjectCreateInput = z.infer<typeof projectCreateSchema>;
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 export type TaskPatchInput = z.infer<typeof taskPatchSchema>;
 export type SecretCreateInput = z.infer<typeof secretCreateSchema>;

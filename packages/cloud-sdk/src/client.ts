@@ -3,12 +3,10 @@ import type {
   AuditEventRecord,
   AlertCreateInput,
   ApiResponse,
-  ProjectCreateInput,
   TaskCreateInput,
   TaskPatchInput,
   SecretCreateInput,
   AlertRecord,
-  ProjectRecord,
   TaskRecord,
   RunRecord,
   SecretRecord,
@@ -60,25 +58,13 @@ export class CloudClient {
     return payload.data;
   }
 
-  readonly projects = {
-    create: (input: ProjectCreateInput): Promise<ProjectRecord> =>
-      this.request<ProjectRecord>("/v1/projects", {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
-    list: (): Promise<ProjectRecord[]> => this.request<ProjectRecord[]>("/v1/projects"),
-  };
-
   readonly tasks = {
     create: (input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> =>
       this.request<TaskRecord>("/v1/tasks", {
         method: "POST",
         body: JSON.stringify({ ...input, createdBy }),
       }),
-    list: (projectId?: string): Promise<TaskRecord[]> => {
-      const query = projectId ? `?projectId=${projectId}` : "";
-      return this.request<TaskRecord[]>(`/v1/tasks${query}`);
-    },
+    list: (): Promise<TaskRecord[]> => this.request<TaskRecord[]>("/v1/tasks"),
     get: (taskId: string): Promise<TaskRecord> =>
       this.request<TaskRecord>(`/v1/tasks/${taskId}`),
     patch: (taskId: string, input: TaskPatchInput): Promise<TaskRecord> =>

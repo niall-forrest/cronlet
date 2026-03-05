@@ -73,7 +73,6 @@ model Organization {
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   memberships   OrganizationMember[]
-  projects      Project[]
   tasks         Task[]
   runs          Run[]
   secrets       Secret[]
@@ -98,33 +97,12 @@ model OrganizationMember {
 }
 
 // ============================================
-// PROJECT
-// ============================================
-
-model Project {
-  id             String   @id @default(cuid())
-  organizationId String
-  name           String
-  slug           String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tasks        Task[]
-  runs         Run[]
-  alerts       Alert[]
-
-  @@unique([organizationId, slug])
-}
-
-// ============================================
 // TASK (replaces Endpoint + Job + Schedule)
 // ============================================
 
 model Task {
   id             String       @id @default(cuid())
   organizationId String
-  projectId      String
 
   // Identity
   name           String
@@ -164,7 +142,6 @@ model Task {
 
   // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   runs         Run[]
 
   @@index([organizationId, active])
@@ -178,7 +155,6 @@ model Task {
 model Run {
   id             String    @id @default(cuid())
   organizationId String
-  projectId      String
   taskId         String
 
   // Execution
@@ -202,7 +178,6 @@ model Run {
 
   // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
@@ -233,7 +208,6 @@ model Secret {
 model Alert {
   id             String       @id @default(cuid())
   organizationId String
-  projectId      String
   channel        AlertChannel
   destination    String
   onFailure      Boolean      @default(true)
@@ -242,7 +216,6 @@ model Alert {
   updatedAt      DateTime     @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 // ============================================

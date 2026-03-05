@@ -4,7 +4,6 @@ import type {
   ApiKeyRecord,
   ApiKeyWithToken,
   ApiResponse,
-  ProjectRecord,
   RunRecord,
   TaskRecord,
   SecretRecord,
@@ -88,27 +87,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // ============================================
-// PROJECTS
-// ============================================
-
-export function listProjects(): Promise<ProjectRecord[]> {
-  return request<ProjectRecord[]>("/v1/projects");
-}
-
-export function createProject(input: { name: string; slug: string }): Promise<ProjectRecord> {
-  return request<ProjectRecord>("/v1/projects", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-// ============================================
 // TASKS
 // ============================================
 
-export function listTasks(projectId?: string): Promise<TaskRecord[]> {
-  const query = projectId ? `?projectId=${projectId}` : "";
-  return request<TaskRecord[]>(`/v1/tasks${query}`);
+export function listTasks(): Promise<TaskRecord[]> {
+  return request<TaskRecord[]>("/v1/tasks");
 }
 
 export function getTask(taskId: string): Promise<TaskRecord> {
@@ -194,7 +177,6 @@ export function listAlerts(): Promise<AlertRecord[]> {
 }
 
 export function createAlert(input: {
-  projectId: string;
   channel: "email" | "webhook";
   destination: string;
   onFailure: boolean;

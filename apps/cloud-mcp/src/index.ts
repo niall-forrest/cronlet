@@ -26,7 +26,6 @@ interface ServicePrincipal {
   name?: string;
   token: string;
   scopes: string[];
-  projectIds: string[];
   allowWrites: boolean;
   canApprove: boolean;
 }
@@ -34,7 +33,6 @@ interface ServicePrincipal {
 interface ApprovalRequest {
   id: string;
   tool: McpToolName;
-  projectId: string;
   payload: Record<string, unknown>;
   payloadHash: string;
   requestedBy: string;
@@ -52,7 +50,6 @@ interface McpAuditEvent {
   action: string;
   status: "success" | "denied" | "approval_required" | "error";
   tool: McpToolName | null;
-  projectId: string | null;
   targetId: string | null;
   approvalId: string | null;
   payloadHash: string | null;
@@ -112,7 +109,6 @@ function loadServicePrincipals(): ServicePrincipal[] {
         name: "Local Dev Agent",
         token: fallbackToken,
         scopes: ["*"],
-        projectIds: ["*"],
         allowWrites: true,
         canApprove: true,
       },
@@ -137,7 +133,6 @@ function loadServicePrincipals(): ServicePrincipal[] {
     const name = typeof entry.name === "string" ? entry.name.trim() : undefined;
     const token = typeof entry.token === "string" ? entry.token.trim() : "";
     const scopes = toStringArray(entry.scopes);
-    const projectIds = toStringArray(entry.projectIds);
 
     if (!id || !token || scopes.length === 0) {
       continue;
@@ -148,7 +143,6 @@ function loadServicePrincipals(): ServicePrincipal[] {
       name,
       token,
       scopes,
-      projectIds: projectIds.length > 0 ? projectIds : ["*"],
       allowWrites: entry.allowWrites === true,
       canApprove: entry.canApprove === true,
     });
@@ -182,10 +176,6 @@ function extractServiceToken(request: FastifyRequest): string | null {
 
 function hasScope(principal: ServicePrincipal, scope: string): boolean {
   return principal.scopes.includes("*") || principal.scopes.includes(scope);
-}
-
-function canAccessProject(principal: ServicePrincipal, projectId: string): boolean {
-  return principal.projectIds.includes("*") || principal.projectIds.includes(projectId);
 }
 
 function hashPayload(payload: Record<string, unknown>): string {
@@ -259,7 +249,6 @@ async function appendAuditEvent(event: Omit<McpAuditEvent, "id" | "createdAt">):
       metadata: {
         status: entry.status,
         tool: entry.tool,
-        projectId: entry.projectId,
         approvalId: entry.approvalId,
         message: entry.message,
       },
@@ -287,30 +276,22 @@ function parseApprovalId(payload: Record<string, unknown>): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-async function resolveProjectForTool(
+function resolveTargetId(
   tool: McpToolName,
   payload: Record<string, unknown>
-): Promise<{ projectId: string; targetId: string }> {
-  // For task-related tools
+): string {
+  // For task-related tools, extract taskId
   if (tool === "trigger_task" || tool === "pause_task" || tool === "resume_task" || tool === "delete_task") {
     const taskId = String(payload.taskId ?? "").trim();
-    if (!taskId) {
-      throw new Error("taskId is required");
-    }
-    const task = await cloudClient.tasks.get(taskId);
-    return { projectId: task.projectId, targetId: taskId };
+    return taskId || "unknown";
   }
 
-  // For create_task, projectId is provided directly
+  // For create_task, it's a new task
   if (tool === "create_task") {
-    const projectId = String(payload.projectId ?? "").trim();
-    if (!projectId) {
-      throw new Error("projectId is required");
-    }
-    return { projectId, targetId: "new-task" };
+    return "new-task";
   }
 
-  throw new Error("Cannot resolve project for tool");
+  return "unknown";
 }
 
 async function executeTool(
@@ -319,13 +300,9 @@ async function executeTool(
   principal: ServicePrincipal
 ): Promise<unknown> {
   switch (tool) {
-    case "list_projects":
-      return cloudClient.projects.list();
-
     case "list_tasks": {
-      const projectId = payload.projectId as string | undefined;
       const mine = payload.mine === true;
-      let tasks = await cloudClient.tasks.list(projectId);
+      let tasks = await cloudClient.tasks.list();
 
       // Filter by creator if "mine" is set
       if (mine) {
@@ -338,7 +315,6 @@ async function executeTool(
     }
 
     case "create_task": {
-      const projectId = String(payload.projectId ?? "").trim();
       const name = String(payload.name ?? "").trim();
       const description = payload.description as string | undefined;
       const handlerInput = payload.handler;
@@ -350,8 +326,8 @@ async function executeTool(
       const maxRuns = typeof payload.maxRuns === "number" ? payload.maxRuns : undefined;
       const expiresAt = typeof payload.expiresAt === "string" ? payload.expiresAt : undefined;
 
-      if (!projectId || !name || !handlerInput) {
-        throw new Error("projectId, name, and handler are required");
+      if (!name || !handlerInput) {
+        throw new Error("name and handler are required");
       }
 
       // Parse handler through Zod to apply defaults and validate
@@ -367,7 +343,6 @@ async function executeTool(
       }
 
       const input = {
-        projectId,
         name,
         description,
         handler: handlerResult.data,
@@ -475,16 +450,6 @@ async function executeTool(
   }
 }
 
-function filterProjects<T extends { projectId: string }>(
-  principal: ServicePrincipal,
-  items: T[]
-): T[] {
-  if (principal.projectIds.includes("*")) {
-    return items;
-  }
-  return items.filter((item) => canAccessProject(principal, item.projectId));
-}
-
 app.addHook("preHandler", async (request, reply) => {
   if (request.url === "/health") {
     return;
@@ -517,7 +482,6 @@ app.get("/health", async () => ({
       name: principal.name,
       allowWrites: principal.allowWrites,
       canApprove: principal.canApprove,
-      projectIds: principal.projectIds,
       scopes: principal.scopes,
     })),
   },
@@ -596,7 +560,6 @@ app.post<{ Params: { id: string }; Body: { note?: string } }>("/approvals/:id/ap
     action: "mcp.approval.approved",
     status: "success",
     tool: next.tool,
-    projectId: next.projectId,
     targetId: next.id,
     approvalId: next.id,
     payloadHash: next.payloadHash,
@@ -639,7 +602,6 @@ app.post<{ Params: { id: string }; Body: { note?: string } }>("/approvals/:id/re
     action: "mcp.approval.rejected",
     status: "success",
     tool: next.tool,
-    projectId: next.projectId,
     targetId: next.id,
     approvalId: next.id,
     payloadHash: next.payloadHash,
@@ -704,7 +666,6 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
       action: "mcp.tool.denied",
       status: "denied",
       tool: tool.name,
-      projectId: null,
       targetId: null,
       approvalId: null,
       payloadHash: null,
@@ -721,18 +682,7 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
   try {
     // Handle read-only tools directly
     if (!tool.mutating) {
-      let data = await executeTool(tool.name, payload, principal);
-
-      // Filter results by project access
-      if (tool.name === "list_projects") {
-        const projects = data as Array<{ id: string }>;
-        data = principal.projectIds.includes("*")
-          ? projects
-          : projects.filter((p) => canAccessProject(principal, p.id));
-      } else if (tool.name === "list_tasks" || tool.name === "list_runs") {
-        data = filterProjects(principal, data as Array<{ projectId: string }>);
-      }
-
+      const data = await executeTool(tool.name, payload, principal);
       return { ok: true, data };
     }
 
@@ -743,7 +693,6 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
         action: "mcp.tool.denied",
         status: "denied",
         tool: tool.name,
-        projectId: null,
         targetId: null,
         approvalId: null,
         payloadHash,
@@ -753,23 +702,7 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
       return;
     }
 
-    // Resolve project for write operations
-    const target = await resolveProjectForTool(tool.name, payload);
-    if (!canAccessProject(principal, target.projectId)) {
-      await appendAuditEvent({
-        actorId: principal.id,
-        action: "mcp.tool.denied",
-        status: "denied",
-        tool: tool.name,
-        projectId: target.projectId,
-        targetId: target.targetId,
-        approvalId: null,
-        payloadHash,
-        message: "Project write opt-in missing",
-      });
-      deny(reply, 403, "Project write opt-in missing for this service token");
-      return;
-    }
+    const targetId = resolveTargetId(tool.name, payload);
 
     // Handle critical tools that require approval
     if (tool.critical) {
@@ -780,7 +713,6 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
         const created: ApprovalRequest = {
           id: randomUUID(),
           tool: tool.name,
-          projectId: target.projectId,
           payload,
           payloadHash,
           requestedBy: principal.id,
@@ -797,8 +729,7 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
           action: "mcp.tool.approval_requested",
           status: "approval_required",
           tool: tool.name,
-          projectId: target.projectId,
-          targetId: target.targetId,
+          targetId,
           approvalId: created.id,
           payloadHash,
           message: "Critical write requires approval",
@@ -823,7 +754,6 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
       if (
         existingApproval.status !== "approved" ||
         existingApproval.tool !== tool.name ||
-        existingApproval.projectId !== target.projectId ||
         existingApproval.payloadHash !== payloadHash
       ) {
         await appendAuditEvent({
@@ -831,8 +761,7 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
           action: "mcp.tool.denied",
           status: "denied",
           tool: tool.name,
-          projectId: target.projectId,
-          targetId: target.targetId,
+          targetId,
           approvalId: existingApproval.id,
           payloadHash,
           message: "Approval invalid or stale",
@@ -864,8 +793,7 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
       action: "mcp.tool.executed",
       status: "success",
       tool: tool.name,
-      projectId: target.projectId,
-      targetId: target.targetId,
+      targetId,
       approvalId: approvalId ?? null,
       payloadHash,
       message: null,
@@ -878,7 +806,6 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
       action: "mcp.tool.failed",
       status: "error",
       tool: tool.name,
-      projectId: null,
       targetId: null,
       approvalId: approvalId ?? null,
       payloadHash,
