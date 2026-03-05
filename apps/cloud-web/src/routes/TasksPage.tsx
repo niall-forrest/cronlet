@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { TaskRecord, ScheduleConfig, RunRecord } from "@cronlet/cloud-shared";
@@ -31,9 +31,11 @@ import {
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/Skeleton";
 import { SectionHeader } from "@/components/ui/section-header";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export function TasksPage() {
   const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<TaskRecord | null>(null);
 
   const { data: tasks = [], isLoading: loadingTasks } = useQuery({
     queryKey: ["tasks"],
@@ -69,6 +71,7 @@ export function TasksPage() {
     mutationFn: deleteTask,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      setDeleteTarget(null);
     },
   });
 
@@ -83,9 +86,13 @@ export function TasksPage() {
     patchMutation.mutate({ id: task.id, input: { active: !task.active } });
   };
 
-  const handleDelete = (taskId: string) => {
-    if (confirm("Are you sure you want to delete this task?")) {
-      deleteMutation.mutate(taskId);
+  const handleDelete = (task: TaskRecord) => {
+    setDeleteTarget(task);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      deleteMutation.mutate(deleteTarget.id);
     }
   };
 
@@ -178,7 +185,7 @@ export function TasksPage() {
                     lastRun={lastRunByTask.get(task.id)}
                     onToggleActive={() => handleToggleActive(task)}
                     onTrigger={() => handleTrigger(task.id)}
-                    onDelete={() => handleDelete(task.id)}
+                    onDelete={() => handleDelete(task)}
                     isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
                   />
                 ))}
@@ -198,7 +205,7 @@ export function TasksPage() {
                     lastRun={lastRunByTask.get(task.id)}
                     onToggleActive={() => handleToggleActive(task)}
                     onTrigger={() => handleTrigger(task.id)}
-                    onDelete={() => handleDelete(task.id)}
+                    onDelete={() => handleDelete(task)}
                     isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
                   />
                 ))}
@@ -207,6 +214,18 @@ export function TasksPage() {
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete Task"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone. All run history for this task will also be deleted.`}
+        confirmLabel="Delete Task"
+        variant="danger"
+        onConfirm={confirmDelete}
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

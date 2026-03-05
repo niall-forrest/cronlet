@@ -32,7 +32,7 @@ export function BillingPage() {
 
       <SignedIn>
         <Card className="border-border/70 bg-card/80">
-          <CardContent className="pt-4">
+          <CardContent>
             <div className="overflow-x-auto">
               <PricingTable />
             </div>

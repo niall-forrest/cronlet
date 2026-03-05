@@ -156,19 +156,19 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
           {/* Stats cards */}
           <div className="grid grid-cols-4 gap-4">
             <Card className="border-border/50 bg-card/60">
-              <CardContent className="pt-4">
+              <CardContent>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Runs</p>
                 <p className="text-2xl font-semibold mt-1">{task.runCount}</p>
               </CardContent>
             </Card>
             <Card className="border-border/50 bg-card/60">
-              <CardContent className="pt-4">
+              <CardContent>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Success Rate</p>
                 <p className="text-2xl font-semibold mt-1">{successRate}%</p>
               </CardContent>
             </Card>
             <Card className="border-border/50 bg-card/60">
-              <CardContent className="pt-4">
+              <CardContent>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Next Run</p>
                 <p className="text-lg font-medium mt-1">
                   {task.active && task.nextRunAt
@@ -180,7 +180,7 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
               </CardContent>
             </Card>
             <Card className="border-border/50 bg-card/60">
-              <CardContent className="pt-4">
+              <CardContent>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
                 <div className="mt-2">
                   <Button
@@ -423,7 +423,7 @@ function TaskDetailSkeleton() {
       <div className="grid grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <Card key={i} className="border-border/50">
-            <CardContent className="pt-4">
+            <CardContent>
               <Skeleton className="h-4 w-20 mb-2" />
               <Skeleton className="h-8 w-16" />
             </CardContent>
@@ -673,7 +673,7 @@ function RunDetailDialog({ run, onClose }: RunDetailDialogProps) {
 
   return (
     <Dialog open={!!run} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="!max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             Run Details
@@ -708,7 +708,7 @@ function RunDetailDialog({ run, onClose }: RunDetailDialogProps) {
           {run.errorMessage && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
               <p className="text-sm font-medium text-destructive mb-1">Error</p>
-              <p className="text-sm text-destructive/80">{run.errorMessage}</p>
+              <p className="text-sm text-destructive/80 break-words whitespace-pre-wrap">{run.errorMessage}</p>
             </div>
           )}
 

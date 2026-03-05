@@ -341,7 +341,7 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
 
   return (
     <Dialog open={!!run} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="!max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <span className="font-semibold">{taskName ?? run.taskId}</span>
@@ -376,7 +376,7 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
           {run.errorMessage && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
               <p className="text-sm font-medium text-destructive mb-1">Error</p>
-              <p className="text-sm text-destructive/80 font-mono">{run.errorMessage}</p>
+              <p className="text-sm text-destructive/80 font-mono break-words whitespace-pre-wrap">{run.errorMessage}</p>
             </div>
           )}
 
