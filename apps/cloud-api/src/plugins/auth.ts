@@ -120,9 +120,12 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
       if (!internalToken || provided !== internalToken) {
         throw new AppError(401, ERROR_CODES.UNAUTHORIZED, "Invalid internal token");
       }
+      // Use x-org-id header if provided (worker sends this for per-org operations like secrets)
+      const orgIdHeader = request.headers["x-org-id"];
+      const orgId = typeof orgIdHeader === "string" ? orgIdHeader : DEFAULT_ORG_ID;
       request.auth = {
         userId: "internal_worker",
-        orgId: DEFAULT_ORG_ID,
+        orgId,
         role: "owner",
         actorType: "internal",
         scopes: ["*"],

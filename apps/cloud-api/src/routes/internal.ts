@@ -15,4 +15,6 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
       return handleError(reply, error);
     }
   });
+
+  // Note: /internal/secrets/:name is registered in secrets.ts
 }

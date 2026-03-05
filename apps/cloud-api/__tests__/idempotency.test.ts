@@ -19,17 +19,28 @@ describe("idempotency plugin", () => {
         "x-org-id": "org_idem_1",
         "x-user-id": "user_owner",
         "x-role": "owner",
-        "idempotency-key": "idem-project-create-1",
+        "idempotency-key": "idem-task-create-1",
+      };
+
+      const taskPayload = {
+        name: "Idempotency Task",
+        handler: {
+          type: "webhook",
+          url: "https://example.com/webhook",
+          method: "POST",
+        },
+        schedule: {
+          type: "daily",
+          times: ["09:00"],
+        },
+        timezone: "UTC",
       };
 
       const first = await app.inject({
         method: "POST",
-        url: "/v1/projects",
+        url: "/v1/tasks",
         headers,
-        payload: {
-          name: "Idempotency Project",
-          slug: "idempotency-project",
-        },
+        payload: taskPayload,
       });
 
       expect(first.statusCode).toBe(201);
@@ -38,12 +49,9 @@ describe("idempotency plugin", () => {
 
       const replay = await app.inject({
         method: "POST",
-        url: "/v1/projects",
+        url: "/v1/tasks",
         headers,
-        payload: {
-          name: "Idempotency Project",
-          slug: "idempotency-project",
-        },
+        payload: taskPayload,
       });
 
       expect(replay.statusCode).toBe(201);
@@ -53,11 +61,11 @@ describe("idempotency plugin", () => {
 
       const conflict = await app.inject({
         method: "POST",
-        url: "/v1/projects",
+        url: "/v1/tasks",
         headers,
         payload: {
-          name: "Changed Payload",
-          slug: "changed-payload",
+          ...taskPayload,
+          name: "Changed Task Name",
         },
       });
 
