@@ -353,7 +353,7 @@ export class InMemoryCloudStore implements CloudStore {
       (s) => s.orgId === orgId && s.name === name
     );
     if (!secret) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found. Create it in Settings > Secrets.`);
     }
     // In real implementation, this would decrypt the value
     return secret.encryptedValue;
@@ -392,7 +392,7 @@ export class InMemoryCloudStore implements CloudStore {
       (s) => s.orgId === orgId && s.name === name
     );
     if (!secret) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
     }
 
     const updated: InternalSecretRecord = {
@@ -412,7 +412,7 @@ export class InMemoryCloudStore implements CloudStore {
       (s) => s.orgId === orgId && s.name === name
     );
     if (!secret) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
     }
     this.secrets.delete(secret.id);
   }

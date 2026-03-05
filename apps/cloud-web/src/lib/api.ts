@@ -44,7 +44,11 @@ export function resetCloudAuthProvider(): void {
 async function resolveHeaders(init?: RequestInit): Promise<Headers> {
   const snapshot = await authProvider();
   const headers = new Headers();
-  headers.set("content-type", "application/json");
+
+  // Only set content-type if there's a body
+  if (init?.body) {
+    headers.set("content-type", "application/json");
+  }
 
   if (snapshot.token) {
     headers.set("authorization", `Bearer ${snapshot.token}`);

@@ -630,7 +630,7 @@ export class PrismaCloudStore implements CloudStore {
       select: { encryptedValue: true },
     });
     if (!secret) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found. Create it in Settings > Secrets.`);
     }
     // In real implementation, this would decrypt the value
     return secret.encryptedValue;
@@ -672,7 +672,7 @@ export class PrismaCloudStore implements CloudStore {
       select: { id: true },
     });
     if (!existing) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
     }
 
     const updated = await this.prisma.secret.update({
@@ -701,7 +701,7 @@ export class PrismaCloudStore implements CloudStore {
       select: { id: true },
     });
     if (!existing) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Secret not found");
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
     }
 
     await this.prisma.secret.delete({
