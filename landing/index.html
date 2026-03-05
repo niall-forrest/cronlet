@@ -3,20 +3,70 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cronlet — Scheduled Tasks for AI Agents and Developers</title>
-  <meta name="description" content="The scheduling platform for AI agents and the developers who build them. Create tasks visually or via API. Run webhooks, multi-step workflows, or JavaScript. No infrastructure to manage.">
-  <meta name="keywords" content="cron jobs, scheduled tasks, AI agents, MCP, scheduling API, task automation, background jobs, serverless cron">
+  <title>Cronlet — Your Agent's Calendar | Scheduled Tasks for AI</title>
+  <meta name="description" content="Give AI agents the power to schedule tasks. Create webhooks, workflows, and automations via dashboard, API, or MCP. 1,000 free runs/month. No infrastructure required.">
+  <meta name="keywords" content="cron jobs, scheduled tasks, AI agents, MCP, scheduling API, task automation, background jobs, serverless cron, Claude, OpenAI, LangChain">
+
+  <!-- SEO -->
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Cronlet">
+  <link rel="canonical" href="https://cronlet.dev">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+  <!-- Theme -->
+  <meta name="theme-color" content="#06d6a0">
+  <meta name="msapplication-TileColor" content="#050810">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Cronlet — Scheduled Tasks for AI Agents and Developers">
-  <meta property="og:description" content="The scheduling platform that gives AI agents temporal superpowers. Create, manage, and monitor recurring tasks through dashboard, API, or MCP.">
+  <meta property="og:title" content="Cronlet — Your Agent's Calendar">
+  <meta property="og:description" content="Give AI agents the power to schedule tasks. Create webhooks, workflows, and automations via dashboard, API, or MCP. No infrastructure required.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://cronlet.dev">
+  <meta property="og:image" content="https://cronlet.dev/cronlet.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Cronlet">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Cronlet — Scheduled Tasks for AI Agents and Developers">
-  <meta name="twitter:description" content="The scheduling platform that gives AI agents temporal superpowers. No cron syntax. No infrastructure.">
+  <meta name="twitter:title" content="Cronlet — Your Agent's Calendar">
+  <meta name="twitter:description" content="Give AI agents the power to schedule tasks. No cron syntax. No infrastructure. 1,000 free runs/month.">
+  <meta name="twitter:image" content="https://cronlet.dev/cronlet.png">
+  <meta name="twitter:site" content="@cronletdev">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Cronlet",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Web",
+    "description": "The scheduling platform for AI agents. Create tasks via dashboard, API, or MCP. Run webhooks and workflows on schedule.",
+    "url": "https://cronlet.dev",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "description": "Free tier with 1,000 runs/month"
+    },
+    "featureList": [
+      "Webhook scheduling",
+      "Multi-step workflows",
+      "MCP integration for AI agents",
+      "SDK for OpenAI, Anthropic, LangChain",
+      "Natural language schedules",
+      "Automatic retries",
+      "Email alerts"
+    ]
+  }
+  </script>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -231,6 +281,18 @@
     .btn-large {
       padding: 14px 28px;
       font-size: 0.9375rem;
+    }
+
+    .btn-glow {
+      padding: 16px 32px;
+      font-size: 1rem;
+      box-shadow: 0 0 40px rgba(6, 214, 160, 0.4);
+      animation: glow-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes glow-pulse {
+      0%, 100% { box-shadow: 0 0 40px rgba(6, 214, 160, 0.4); }
+      50% { box-shadow: 0 0 60px rgba(6, 214, 160, 0.6); }
     }
 
     /* Hero Section */
@@ -563,15 +625,15 @@
       font-weight: 600;
     }
 
-    /* Live Demo Section */
-    .live-demo {
+    /* Use Cases Section */
+    .use-cases {
       padding: 120px 0;
       background: var(--bg-primary);
       position: relative;
       overflow: hidden;
     }
 
-    .live-demo::before {
+    .use-cases::before {
       content: '';
       position: absolute;
       top: 0;
@@ -581,13 +643,13 @@
       background: linear-gradient(90deg, transparent, var(--cyan-primary), transparent);
     }
 
-    .live-demo-header {
+    .use-cases-header {
       text-align: center;
       max-width: 700px;
       margin: 0 auto 64px;
     }
 
-    .live-demo h2 {
+    .use-cases h2 {
       font-size: clamp(1.75rem, 4vw, 2.5rem);
       font-weight: 700;
       line-height: 1.2;
@@ -595,210 +657,98 @@
       margin-bottom: 20px;
     }
 
-    .live-demo-header p {
+    .use-cases-header p {
       font-size: 1.125rem;
       color: var(--text-secondary);
     }
 
-    .demo-grid {
+    .use-cases-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 24px;
-      margin-bottom: 32px;
     }
 
-    .demo-card {
+    .use-case-card {
+      padding: 28px;
       background: var(--bg-elevated);
       border: 1px solid var(--border-subtle);
       border-radius: 16px;
-      overflow: hidden;
       transition: all 0.3s var(--ease-out-expo);
     }
 
-    .demo-card:hover {
+    .use-case-card:hover {
       border-color: var(--border-accent);
       transform: translateY(-4px);
     }
 
-    .demo-card-header {
+    .use-case-card-ai {
+      border-color: rgba(139, 92, 246, 0.3);
+      background: linear-gradient(180deg, var(--bg-elevated) 0%, rgba(139, 92, 246, 0.05) 100%);
+    }
+
+    .use-case-card-ai:hover {
+      border-color: var(--violet-accent);
+    }
+
+    .use-case-icon {
+      width: 48px;
+      height: 48px;
       display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 20px;
-      border-bottom: 1px solid var(--border-subtle);
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(6, 214, 160, 0.15), rgba(139, 92, 246, 0.15));
+      border-radius: 12px;
+      margin-bottom: 20px;
+      color: var(--cyan-primary);
     }
 
-    .demo-status {
-      position: relative;
-      width: 12px;
-      height: 12px;
-      margin-top: 4px;
-      flex-shrink: 0;
+    .use-case-card-ai .use-case-icon {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.1));
+      color: var(--violet-accent);
     }
 
-    .demo-status-dot {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      background: var(--text-muted);
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .demo-status[data-status="success"] .demo-status-dot {
-      background: #22c55e;
-      box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
-    }
-
-    .demo-status[data-status="failure"] .demo-status-dot {
-      background: #ef4444;
-      box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
-    }
-
-    .demo-status[data-status="running"] .demo-status-dot {
-      background: var(--cyan-primary);
-      box-shadow: 0 0 12px rgba(6, 214, 160, 0.5);
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    .demo-status[data-status="loading"] .demo-status-dot {
-      background: var(--text-muted);
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    .demo-task-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .demo-task-info h3 {
-      font-size: 1rem;
+    .use-case-card h3 {
+      font-size: 1.125rem;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 12px;
     }
 
-    .demo-schedule {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-muted);
+    .use-case-card p {
+      color: var(--text-secondary);
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      margin-bottom: 16px;
     }
 
-    .demo-badge {
-      padding: 4px 8px;
-      background: rgba(6, 214, 160, 0.1);
-      border-radius: 4px;
+    .use-case-schedule {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .use-case-schedule .schedule-label {
       font-family: var(--font-mono);
       font-size: 0.6875rem;
-      color: var(--cyan-primary);
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.03em;
     }
 
-    .demo-card-body {
-      padding: 20px;
-    }
-
-    .demo-output {
-      margin-bottom: 16px;
-    }
-
-    .demo-output-label {
-      font-family: var(--font-mono);
-      font-size: 0.6875rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 8px;
-    }
-
-    .demo-output-content {
-      background: var(--bg-card);
-      border-radius: 8px;
-      padding: 14px;
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      min-height: 60px;
-      line-height: 1.6;
-    }
-
-    .demo-loading {
-      color: var(--text-muted);
-      font-style: italic;
-    }
-
-    .demo-output-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .use-case-schedule code {
       font-family: var(--font-mono);
       font-size: 0.8125rem;
+      color: var(--cyan-primary);
     }
 
-    .demo-output-status.up {
-      color: #22c55e;
-    }
-
-    .demo-output-status.down {
-      color: #ef4444;
-    }
-
-    .demo-meta {
-      display: flex;
-      gap: 24px;
-    }
-
-    .demo-meta-item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .demo-meta-label {
-      font-family: var(--font-mono);
-      font-size: 0.6875rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .demo-meta-value {
-      font-family: var(--font-mono);
-      font-size: 0.8125rem;
-      color: var(--text-secondary);
-    }
-
-    .demo-card-footer {
-      padding: 16px 20px;
-      border-top: 1px solid var(--border-subtle);
-      background: var(--bg-card);
+    .use-case-card-ai .use-case-schedule code {
+      color: var(--violet-accent);
     }
 
     .btn-small {
       padding: 8px 14px;
       font-size: 0.75rem;
-    }
-
-    .demo-card-footer .btn {
-      width: 100%;
-      justify-content: center;
-    }
-
-    .live-demo-note {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    .live-demo-note svg {
-      animation: spin 10s linear infinite;
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
     }
 
     /* Section Label */
@@ -1564,34 +1514,28 @@
       width: 100%;
     }
 
-    /* Enterprise Section */
-    .enterprise {
-      padding: 80px 0;
-      background: var(--bg-primary);
+    /* Enterprise Note */
+    .enterprise-note {
+      padding: 40px 0;
+      text-align: center;
     }
 
-    .enterprise-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 48px;
-      padding: 48px;
-      background: linear-gradient(135deg, var(--bg-elevated), var(--bg-card));
-      border: 1px solid var(--border-subtle);
-      border-radius: 20px;
+    .enterprise-note p {
+      color: var(--text-muted);
+      font-size: 0.9375rem;
     }
 
-    .enterprise-content h3 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 12px;
+    .enterprise-note a {
+      color: var(--cyan-primary);
+      text-decoration: none;
+      font-weight: 500;
     }
 
-    .enterprise-content p {
-      color: var(--text-secondary);
-      max-width: 500px;
+    .enterprise-note a:hover {
+      text-decoration: underline;
     }
 
+    /* Legacy enterprise styles - kept for compatibility */
     .enterprise-features {
       display: flex;
       gap: 32px;
@@ -1729,22 +1673,11 @@
       }
 
       .features-grid,
-      .handlers-grid,
-      .handlers-grid-3,
       .steps-grid,
       .pricing-grid,
       .sdk-grid,
-      .demo-grid {
+      .use-cases-grid {
         grid-template-columns: repeat(2, 1fr);
-      }
-
-      .handlers-grid-2 {
-        grid-template-columns: repeat(2, 1fr);
-        max-width: 100%;
-      }
-
-      .handler-card-ai {
-        grid-column: span 2;
       }
 
       .mcp-tools {
@@ -1768,19 +1701,12 @@
       }
 
       .features-grid,
-      .handlers-grid,
-      .handlers-grid-2,
-      .handlers-grid-3,
       .steps-grid,
       .pricing-grid,
       .pricing-grid-2,
       .sdk-grid,
-      .demo-grid {
+      .use-cases-grid {
         grid-template-columns: 1fr;
-      }
-
-      .handler-card-ai {
-        grid-column: span 1;
       }
 
       .hero-actions,
@@ -1816,8 +1742,7 @@
       </a>
 
       <ul class="nav-links">
-        <li><a href="#live-demo">Live Demo</a></li>
-        <li><a href="#features">Features</a></li>
+        <li><a href="#use-cases">Use Cases</a></li>
         <li><a href="#pricing">Pricing</a></li>
         <li><a href="https://docs.cronlet.dev">Docs</a></li>
       </ul>
@@ -1844,20 +1769,17 @@
             <span>Agent-native scheduling</span>
           </div>
 
-          <h1>The scheduling platform for <span>AI agents</span> and developers</h1>
+          <h1>Your agent's <span>calendar</span></h1>
 
           <p class="hero-description">
-            Create tasks visually or via API. Run webhooks or multi-step workflows on schedule.
-            No cron syntax. No infrastructure. Just tasks that run.
+            Give AI agents the power to schedule tasks, set reminders, and automate workflows.
+            No cron syntax. No infrastructure. Just tasks that run on time.
           </p>
 
           <div class="hero-actions">
-            <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary btn-large">
-              Start Free
+            <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary btn-large btn-glow">
+              Start Free — 1,000 runs/month
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </a>
-            <a href="https://docs.cronlet.dev" class="btn btn-outline btn-large">
-              View Docs
             </a>
           </div>
 
@@ -1926,277 +1848,6 @@
                     <div class="task-duration">0.8s</div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Social Proof -->
-  <section class="social-proof">
-    <div class="container">
-      <p class="social-proof-label">Built for modern development workflows</p>
-      <div class="social-proof-grid">
-        <div class="proof-item">
-          <div class="proof-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
-          </div>
-          <span class="proof-text"><strong>Retries</strong> with backoff</span>
-        </div>
-        <div class="proof-item">
-          <div class="proof-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          </div>
-          <span class="proof-text"><strong>Timeouts</strong> per task</span>
-        </div>
-        <div class="proof-item">
-          <div class="proof-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
-          </div>
-          <span class="proof-text"><strong>Email alerts</strong> on failure</span>
-        </div>
-        <div class="proof-item">
-          <div class="proof-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          </div>
-          <span class="proof-text"><strong>Secrets</strong> encrypted</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Live Demo Section -->
-  <section class="live-demo" id="live-demo">
-    <div class="container">
-      <div class="live-demo-header">
-        <span class="section-label">Live Demo</span>
-        <h2>Watch it work.</h2>
-        <p>These aren't mockups. These are real tasks running on Cronlet Cloud, updating live on this page.</p>
-      </div>
-
-      <div class="demo-grid">
-        <!-- Uptime Monitor -->
-        <div class="demo-card" data-task-id="uptime-monitor">
-          <div class="demo-card-header">
-            <div class="demo-status" data-status="loading">
-              <span class="demo-status-dot"></span>
-            </div>
-            <div class="demo-task-info">
-              <h3>Uptime Monitor</h3>
-              <span class="demo-schedule">Every 5 minutes</span>
-            </div>
-            <span class="demo-badge">webhook</span>
-          </div>
-          <div class="demo-card-body">
-            <div class="demo-output">
-              <div class="demo-output-label">Latest check</div>
-              <div class="demo-output-content" data-output>
-                <span class="demo-loading">Fetching...</span>
-              </div>
-            </div>
-            <div class="demo-meta">
-              <div class="demo-meta-item">
-                <span class="demo-meta-label">Last run</span>
-                <span class="demo-meta-value" data-last-run>—</span>
-              </div>
-              <div class="demo-meta-item">
-                <span class="demo-meta-label">Duration</span>
-                <span class="demo-meta-value" data-duration>—</span>
-              </div>
-            </div>
-          </div>
-          <div class="demo-card-footer">
-            <a href="https://dashboard.cronlet.dev/sign-up?template=uptime-monitor" class="btn btn-outline btn-small">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-              Fork this task
-            </a>
-          </div>
-        </div>
-
-        <!-- Analytics Digest -->
-        <div class="demo-card" data-task-id="analytics-digest">
-          <div class="demo-card-header">
-            <div class="demo-status" data-status="loading">
-              <span class="demo-status-dot"></span>
-            </div>
-            <div class="demo-task-info">
-              <h3>Weekly Analytics</h3>
-              <span class="demo-schedule">Mondays at 9:00 AM</span>
-            </div>
-            <span class="demo-badge">tools</span>
-          </div>
-          <div class="demo-card-body">
-            <div class="demo-output">
-              <div class="demo-output-label">Latest digest</div>
-              <div class="demo-output-content" data-output>
-                <span class="demo-loading">Fetching...</span>
-              </div>
-            </div>
-            <div class="demo-meta">
-              <div class="demo-meta-item">
-                <span class="demo-meta-label">Last run</span>
-                <span class="demo-meta-value" data-last-run>—</span>
-              </div>
-              <div class="demo-meta-item">
-                <span class="demo-meta-label">Duration</span>
-                <span class="demo-meta-value" data-duration>—</span>
-              </div>
-            </div>
-          </div>
-          <div class="demo-card-footer">
-            <a href="https://dashboard.cronlet.dev/sign-up?template=analytics-digest" class="btn btn-outline btn-small">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-              Fork this task
-            </a>
-          </div>
-        </div>
-
-        <!-- AI Content Generator -->
-        <div class="demo-card" data-task-id="ai-content">
-          <div class="demo-card-header">
-            <div class="demo-status" data-status="loading">
-              <span class="demo-status-dot"></span>
-            </div>
-            <div class="demo-task-info">
-              <h3>AI Content Generator</h3>
-              <span class="demo-schedule">Daily at 8:00 AM</span>
-            </div>
-            <span class="demo-badge">tools</span>
-          </div>
-          <div class="demo-card-body">
-            <div class="demo-output">
-              <div class="demo-output-label">Latest generated post</div>
-              <div class="demo-output-content" data-output>
-                <span class="demo-loading">Fetching...</span>
-              </div>
-            </div>
-            <div class="demo-meta">
-              <div class="demo-meta-item">
-                <span class="demo-meta-label">Last run</span>
-                <span class="demo-meta-value" data-last-run>—</span>
-              </div>
-              <div class="demo-meta-item">
-                <span class="demo-meta-label">Duration</span>
-                <span class="demo-meta-value" data-duration>—</span>
-              </div>
-            </div>
-          </div>
-          <div class="demo-card-footer">
-            <a href="https://dashboard.cronlet.dev/sign-up?template=ai-content" class="btn btn-outline btn-small">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-              Fork this task
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <p class="live-demo-note">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        Auto-refreshes every 30 seconds
-      </p>
-    </div>
-  </section>
-
-  <!-- Handlers Section -->
-  <section class="handlers" id="handlers">
-    <div class="container">
-      <div class="handlers-header">
-        <span class="section-label">Create Tasks</span>
-        <h2>From webhooks to workflows to AI</h2>
-        <p>Three ways to create scheduled tasks. Pick what fits your use case.</p>
-      </div>
-
-      <div class="handlers-grid handlers-grid-3">
-        <!-- Webhook -->
-        <div class="handler-card">
-          <div class="handler-card-top">
-            <div class="handler-complexity">
-              <span class="complexity-dot active"></span>
-              <span class="complexity-dot"></span>
-              <span class="complexity-dot"></span>
-              <span class="complexity-label">Simple</span>
-            </div>
-            <span class="handler-badge">webhook</span>
-          </div>
-          <div class="handler-header">
-            <h3>Webhook</h3>
-            <p>Call your endpoint on schedule</p>
-          </div>
-          <div class="handler-schedule">
-            <span class="schedule-label">Schedule</span>
-            <span class="schedule-value">"every 5 minutes"</span>
-          </div>
-          <div class="handler-code">
-            <pre><code>{
-  <span class="code-string">"url"</span>: <span class="code-string">"https://api.example.com/sync"</span>,
-  <span class="code-string">"auth"</span>: { <span class="code-string">"secretName"</span>: <span class="code-string">"API_TOKEN"</span> }
-}</code></pre>
-          </div>
-        </div>
-
-        <!-- Tools -->
-        <div class="handler-card">
-          <div class="handler-card-top">
-            <div class="handler-complexity">
-              <span class="complexity-dot active"></span>
-              <span class="complexity-dot active"></span>
-              <span class="complexity-dot"></span>
-              <span class="complexity-label">Powerful</span>
-            </div>
-            <span class="handler-badge">tools</span>
-          </div>
-          <div class="handler-header">
-            <h3>Multi-step Workflow</h3>
-            <p>Chain tools with data passing</p>
-          </div>
-          <div class="handler-schedule">
-            <span class="schedule-label">Schedule</span>
-            <span class="schedule-value">"weekdays at 9am EST"</span>
-          </div>
-          <div class="handler-code">
-            <pre><code>{
-  <span class="code-string">"steps"</span>: [
-    { <span class="code-string">"tool"</span>: <span class="code-string">"http.get"</span>, <span class="code-string">"outputKey"</span>: <span class="code-string">"data"</span> },
-    { <span class="code-string">"tool"</span>: <span class="code-string">"slack.post"</span>, <span class="code-string">"channel"</span>: <span class="code-string">"#alerts"</span> }
-  ]
-}</code></pre>
-          </div>
-        </div>
-
-        <!-- AI/MCP -->
-        <div class="handler-card handler-card-ai">
-          <div class="handler-card-top">
-            <div class="handler-complexity">
-              <span class="complexity-dot active"></span>
-              <span class="complexity-dot active"></span>
-              <span class="complexity-dot active"></span>
-              <span class="complexity-label">Agentic</span>
-            </div>
-            <span class="handler-badge handler-badge-ai">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-              MCP
-            </span>
-          </div>
-          <div class="handler-header">
-            <h3>AI Agent</h3>
-            <p>Natural language → scheduled task</p>
-          </div>
-          <div class="handler-ai-input">
-            <div class="ai-prompt">
-              <span class="ai-prompt-icon">✨</span>
-              <span class="ai-prompt-text">"Send me a Slack reminder every weekday at 9am to check the dashboard"</span>
-            </div>
-            <div class="ai-arrow">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
-            </div>
-            <div class="ai-result">
-              <span class="ai-result-label">Task created</span>
-              <div class="ai-result-task">
-                <span class="ai-result-dot"></span>
-                <span>slack-reminder</span>
-                <span class="ai-result-schedule">Mon-Fri 9:00</span>
               </div>
             </div>
           </div>
@@ -2297,13 +1948,78 @@
     </div>
   </section>
 
+  <!-- Use Cases Section -->
+  <section class="use-cases" id="use-cases">
+    <div class="container">
+      <div class="use-cases-header">
+        <span class="section-label">Use Cases</span>
+        <h2>What will you automate?</h2>
+        <p>From simple webhooks to complex workflows—schedule anything that needs to run on time.</p>
+      </div>
+
+      <div class="use-cases-grid">
+        <!-- Monitor APIs -->
+        <div class="use-case-card">
+          <div class="use-case-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <h3>Monitor your APIs</h3>
+          <p>Check endpoint health every 5 minutes. Get alerted the moment something breaks.</p>
+          <div class="use-case-schedule">
+            <span class="schedule-label">Schedule</span>
+            <code>every 5 minutes</code>
+          </div>
+        </div>
+
+        <!-- Send Reports -->
+        <div class="use-case-card">
+          <div class="use-case-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <h3>Send weekly reports</h3>
+          <p>Compile metrics and deliver digests to Slack, email, or any webhook endpoint.</p>
+          <div class="use-case-schedule">
+            <span class="schedule-label">Schedule</span>
+            <code>mondays at 9am</code>
+          </div>
+        </div>
+
+        <!-- Sync Data -->
+        <div class="use-case-card">
+          <div class="use-case-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </div>
+          <h3>Sync external data</h3>
+          <p>Pull from Stripe, Notion, or any API. Keep your systems in sync automatically.</p>
+          <div class="use-case-schedule">
+            <span class="schedule-label">Schedule</span>
+            <code>daily at midnight</code>
+          </div>
+        </div>
+
+        <!-- AI Workflows -->
+        <div class="use-case-card use-case-card-ai">
+          <div class="use-case-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <h3>AI-powered workflows</h3>
+          <p>Let agents schedule their own tasks. Generate content, process data, trigger actions.</p>
+          <div class="use-case-schedule">
+            <span class="schedule-label">Schedule</span>
+            <code>agent decides</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- SDK Section -->
   <section class="sdk" id="sdk">
     <div class="container">
       <div class="sdk-header">
-        <span class="section-label">SDK Integrations</span>
-        <h2>Works with your AI stack</h2>
-        <p>Use Cronlet tools directly in your AI agents. Native support for OpenAI, Anthropic, and LangChain.</p>
+        <span class="section-label">SDK</span>
+        <h2>Add scheduling to any AI agent</h2>
+        <p>Import our tool definitions and let your agent schedule tasks with a single function call. Works with any framework.</p>
       </div>
 
       <div class="sdk-grid">
@@ -2328,7 +2044,7 @@
         <div class="sdk-card">
           <div class="sdk-card-header">
             <div class="sdk-logo anthropic">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm2.327 10.694l-2.065-5.358-2.063 5.358h4.128z"/></svg>
+              <svg width="24" height="24" viewBox="0 6.603 1192.672 1193.397" fill="currentColor"><path d="m233.96 800.215 234.684-131.678 3.947-11.436-3.947-6.363h-11.436l-39.221-2.416-134.094-3.624-116.296-4.832-112.67-6.04-28.35-6.04-26.577-35.035 2.738-17.477 23.84-16.027 34.147 2.98 75.463 5.155 113.235 7.812 82.147 4.832 121.692 12.644h19.329l2.738-7.812-6.604-4.832-5.154-4.832-117.182-79.41-126.845-83.92-66.443-48.321-35.92-24.484-18.12-22.953-7.813-50.093 32.618-35.92 43.812 2.98 11.195 2.98 44.375 34.147 94.792 73.37 123.786 91.167 18.12 15.06 7.249-5.154.886-3.624-8.135-13.61-67.329-121.692-71.838-123.785-31.974-51.302-8.456-30.765c-2.98-12.645-5.154-23.275-5.154-36.242l37.127-50.416 20.537-6.604 49.53 6.604 20.86 18.121 30.765 70.39 49.852 110.818 77.315 150.684 22.631 44.698 12.08 41.396 4.51 12.645h7.813v-7.248l6.362-84.886 11.759-104.215 11.436-134.094 3.946-37.772 18.685-45.262 37.127-24.482 28.994 13.852 23.839 34.148-3.303 22.067-14.174 92.134-27.785 144.323-18.121 96.644h10.55l12.08-12.08 48.887-64.913 82.147-102.685 36.242-40.752 42.282-45.02 27.14-21.423h51.303l37.772 56.135-16.913 57.986-52.832 67.007-43.812 56.779-62.82 84.563-39.22 67.651 3.623 5.396 9.343-.886 141.906-30.201 76.671-13.852 91.49-15.705 41.396 19.329 4.51 19.65-16.269 40.189-97.852 24.16-114.764 22.954-170.9 40.43-2.093 1.53 2.416 2.98 76.993 7.248 32.94 1.771h80.617l150.12 11.195 39.222 25.933 23.517 31.732-3.946 24.16-60.403 30.766-81.503-19.33-190.228-45.26-65.235-16.27h-9.02v5.397l54.362 53.154 99.624 89.96 124.752 115.973 6.362 28.671-16.027 22.63-16.912-2.415-109.611-82.47-42.282-37.127-95.758-80.618h-6.363v8.456l22.067 32.296 116.537 175.167 6.04 53.719-8.456 17.476-30.201 10.55-33.181-6.04-68.215-95.758-70.39-107.84-56.778-96.644-6.926 3.947-33.503 360.886-15.705 18.443-36.243 13.852-30.201-22.953-16.027-37.127 16.027-73.37 19.329-95.758 15.704-76.107 14.175-94.55 8.456-31.41-.563-2.094-6.927.886-71.275 97.852-108.402 146.497-85.772 91.812-20.537 8.134-35.597-18.443 3.301-32.94 19.893-29.315 118.712-151.007 71.597-93.583 46.228-54.04-.322-7.813h-2.738l-315.302 204.725-56.135 7.248-24.16-22.63 2.98-37.128 11.435-12.08 94.792-65.236-.322.323z"/></svg>
             </div>
             <span class="sdk-name">Anthropic</span>
           </div>
@@ -2346,7 +2062,7 @@
         <div class="sdk-card">
           <div class="sdk-card-header">
             <div class="sdk-logo langchain">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+              <svg width="24" height="24" viewBox="0 0 64 64" fill="currentColor"><path d="M16.263466666666666 15.780000000000001C7.295733333333333 15.780000000000001 0 23.056533333333334 0 32s7.296 16.22 16.263466666666666 16.22h31.473066666666668C56.70426666666666 48.22 64 40.943466666666666 64 32s-7.296 -16.22 -16.263466666666666 -16.22ZM15.939733333333333 20.936c1.3146666666666667 0.03306666666666666 2.7199999999999998 0.6656 3.3946666666666663 1.6608 0.9794666666666667 1.2245333333333333 1.2741333333333333 2.8447999999999998 2.3850666666666664 3.981866666666667 1.4944 1.6314666666666666 3.1973333333333334 3.068 4.576266666666666 4.8053333333333335 1.3045333333333333 1.5877333333333334 2.2362666666666664 3.449866666666667 3.0496 5.326666666666666 0.3317333333333333 0.6226666666666667 0.3352 1.3872 0.8266666666666667 1.9192 0.24213333333333334 0.3210666666666666 1.4255999999999998 1.1954666666666665 1.1688 1.5053333333333332 0.148 0.3210666666666666 1.2538666666666667 0.7626666666666666 0.8701333333333332 1.0738666666666665 -0.5184 0.10666666666666666 -1.1010666666666666 0.12693333333333334 -1.4975999999999998 -0.2864 -0.14639999999999997 0.33599999999999997 -0.488 0.15893333333333332 -0.7517333333333333 0.1152a10.666666666666666 10.666666666666666 0 0 0 -0.06666666666666667 0.19626666666666664c-0.8767999999999999 0.058399999999999994 -1.5344 -0.8335999999999999 -1.952 -1.5066666666666664 -0.8295999999999999 -0.448 -1.7711999999999999 -0.7205333333333332 -2.6186666666666665 -1.1893333333333334 -0.04853333333333333 0.7719999999999999 0.12053333333333333 1.7293333333333332 -0.616 2.2274666666666665 -0.03733333333333333 1.484 2.2496 0.17493333333333333 2.4592 1.2810666666666666 -0.16266666666666665 0.017866666666666666 -0.3429333333333333 -0.025333333333333333 -0.47306666666666664 0.09946666666666666 -0.5970666666666666 0.5791999999999999 -1.2813333333333332 -0.43866666666666665 -1.9693333333333334 -0.018666666666666665 -0.9237333333333333 0.46399999999999997 -1.0154666666666667 0.8429333333333333 -2.158933333333333 0.9386666666666665 -0.06319999999999999 -0.09573333333333334 -0.03813333333333333 -0.15786666666666666 0.015733333333333332 -0.21626666666666666 0.32186666666666663 -0.37306666666666666 0.3453333333333333 -0.8122666666666666 0.8949333333333334 -0.9714666666666667 -0.5658666666666666 -0.08906666666666666 -1.0397333333333334 0.22213333333333332 -1.5162666666666667 0.4685333333333333 -0.6194666666666666 0.2533333333333333 -0.6144 -0.5709333333333333 -1.5674666666666666 0.04373333333333333 -0.1056 -0.08586666666666666 -0.055466666666666664 -0.16399999999999998 0.0048 -0.2304 0.24213333333333334 -0.2952 0.5605333333333333 -0.33866666666666667 0.9199999999999999 -0.3221333333333333 -1.768 -0.9829333333333332 -2.6002666666666663 1.2018666666666666 -3.4168000000000003 0.1152 -0.24533333333333332 0.0648 -0.3373333333333333 0.2848 -0.492 0.44053333333333333 -0.13333333333333333 -0.14613333333333334 -0.032799999999999996 -0.3232 -0.0264 -0.4952 -0.15946666666666665 -0.07466666666666666 -0.3616 -0.10933333333333334 -0.3144 -0.3642666666666666 -0.31226666666666664 -0.10533333333333333 -0.5301333333333333 0.07866666666666666 -0.7626666666666666 0.2538666666666667 -0.20986666666666667 -0.16213333333333332 0.14186666666666664 -0.39786666666666665 0.20693333333333333 -0.5666666666666667 0.18719999999999998 -0.32426666666666665 0.6133333333333333 -0.06666666666666667 0.8295999999999999 -0.3002666666666667 0.6149333333333333 -0.3488 1.472 0.21706666666666666 2.1746666666666665 0.12133333333333332 0.5413333333333333 0.06799999999999999 1.2117333333333333 -0.48666666666666664 0.9402666666666667 -1.04 -0.5789333333333333 -0.7378666666666667 -0.4773333333333333 -1.7029333333333332 -0.4904 -2.5853333333333333 -0.07146666666666666 -0.5144 -1.3093333333333332 -1.1685333333333332 -1.6671999999999998 -1.7231999999999998 -0.44239999999999996 -0.4994666666666666 -0.7866666666666666 -1.0792 -1.1314666666666666 -1.6485333333333332 -1.2442666666666666 -2.4021333333333335 -0.8527999999999999 -5.489066666666666 -2.420533333333333 -7.719199999999999 -0.7093333333333334 0.39093333333333335 -1.6333333333333333 0.20639999999999997 -2.2447999999999997 -0.3173333333333333 -0.3301333333333333 0.3 -0.34453333333333336 0.6927999999999999 -0.3706666666666667 1.1096 -0.7919999999999999 -0.7898666666666667 -0.6914666666666666 -2.2824 -0.05866666666666666 -3.1613333333333333 0.25839999999999996 -0.3472 0.5671999999999999 -0.6328 0.912 -0.8842666666666666 0.07786666666666667 -0.056799999999999996 0.10426666666666667 -0.11173333333333332 0.10266666666666666 -0.1992 0.31306666666666666 -1.4045333333333332 1.5370666666666666 -1.9709333333333332 2.851733333333333 -1.9378666666666666m33.0856 1.2266666666666666c1.4866666666666666 0 2.8815999999999997 0.5757333333333333 3.9306666666666663 1.6218666666666666s1.6266666666666665 2.4386666666666663 1.6266666666666665 3.9210666666666665c0 1.4826666666666668 -0.5778666666666666 2.8746666666666667 -1.6266666666666665 3.9194666666666667v0.0015999999999999999l-2.405333333333333 2.3986666666666663a5.546666666666667 5.546666666666667 0 0 1 -2.292533333333333 1.3775999999999997l-0.04373333333333333 0.012533333333333334 -0.015466666666666665 0.04373333333333333a5.466666666666666 5.466666666666666 0 0 1 -1.2639999999999998 1.9487999999999999l-2.4048 2.3986666666666663c-1.0490666666666666 1.0464 -2.445333333333333 1.6221333333333332 -3.9319999999999995 1.6221333333333332s-2.8815999999999997 -0.576 -3.9306666666666663 -1.6221333333333332c-2.1679999999999997 -2.1618666666666666 -2.1679999999999997 -5.6784 0 -7.840533333333333l2.4050666666666665 -2.3986666666666663a5.482666666666667 5.482666666666667 0 0 1 2.288 -1.3714666666666666l0.04533333333333334 -0.014133333333333333 0.015466666666666665 -0.042133333333333335a5.52 5.52 0 0 1 1.2671999999999999 -1.9565333333333332l2.4048 -2.3986666666666663c1.0490666666666666 -1.0464 2.4455999999999998 -1.6221333333333332 3.9319999999999995 -1.6221333333333332zm0 2.3906666666666663a3.1466666666666665 3.1466666666666665 0 0 0 -2.2367999999999997 0.9232l-2.4048 2.3986666666666663a3.1493333333333333 3.1493333333333333 0 0 0 -0.9138666666666666 2.4672l0.014133333333333333 0.15253333333333333c0.08613333333333334 0.7071999999999999 0.3973333333333333 1.3450666666666664 0.8997333333333333 1.8445333333333331 0.3466666666666667 0.34559999999999996 0.7287999999999999 0.5637333333333333 1.1922666666666666 0.7162666666666666a2.4 2.4 0 0 1 0.03733333333333333 0.42186666666666667 2.357333333333333 2.357333333333333 0 0 1 -0.6957333333333333 1.6810666666666665l-0.14773333333333333 0.14773333333333333c-0.8034666666666667 -0.27413333333333334 -1.4733333333333332 -0.6746666666666666 -2.0784 -1.2778666666666667a5.493333333333333 5.493333333333333 0 0 1 -1.5362666666666664 -2.9248l-0.0264 -0.15413333333333332 -0.12293333333333334 0.09813333333333332a2.9333333333333336 2.9333333333333336 0 0 0 -0.23359999999999997 0.21173333333333333l-2.4063999999999997 2.3986666666666663c-1.2328 1.2293333333333334 -1.2328 3.2319999999999998 0 4.461333333333333 0.6162666666666666 0.6146666666666667 1.4266666666666667 0.9226666666666665 2.2384 0.9229333333333334 0.8114666666666667 0 1.6205333333333334 -0.30826666666666663 2.2367999999999997 -0.9232l2.4050666666666665 -2.3986666666666663c1.2328 -1.2293333333333334 1.2328 -3.2301333333333333 0 -4.461333333333333a3.1199999999999997 3.1199999999999997 0 0 0 -1.1645333333333332 -0.7330666666666665 2.6666666666666665 2.6666666666666665 0 0 1 -0.03733333333333333 -0.4296c0 -0.6909333333333333 0.2728 -1.3466666666666667 0.7736000000000001 -1.8461333333333334 0.8050666666666666 0.27413333333333334 1.5199999999999998 0.7183999999999999 2.1231999999999998 1.3199999999999998 0.8018666666666667 0.7997333333333333 1.3317333333333332 1.8106666666666666 1.5349333333333333 2.9248l0.028 0.15413333333333332 0.12133333333333332 -0.09946666666666666a2.9333333333333336 2.9333333333333336 0 0 0 0.23653333333333332 -0.21173333333333333l2.405333333333333 -2.398933333333333c1.2325333333333333 -1.2293333333333334 1.2341333333333333 -3.2330666666666663 0 -4.462666666666666a3.1466666666666665 3.1466666666666665 0 0 0 -2.2386666666666666 -0.9232Zm-26.59466666666667 13.751199999999999 -0.0015999999999999999 0.0015999999999999999c-0.21146666666666664 0.8208 -0.27946666666666664 2.2181333333333333 -1.3493333333333333 2.2586666666666666 -0.088 0.4736 0.3274666666666667 0.6519999999999999 0.708 0.49973333333333336 0.37599999999999995 -0.172 0.5549333333333333 0.13546666666666665 0.6818666666666666 0.44186666666666663 0.5805333333333333 0.08453333333333332 1.4384 -0.1933333333333333 1.4709333333333332 -0.8794666666666666 -0.8666666666666667 -0.4978666666666667 -1.1341333333333332 -1.4447999999999999 -1.5098666666666667 -2.3224"/></svg>
             </div>
             <span class="sdk-name">LangChain</span>
           </div>
@@ -2368,67 +2084,6 @@
         <button onclick="navigator.clipboard.writeText('npm install @cronlet/sdk')" title="Copy to clipboard">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
-      </div>
-    </div>
-  </section>
-
-  <!-- Features Section -->
-  <section class="features" id="features">
-    <div class="container">
-      <div class="features-header">
-        <span class="section-label">Platform Features</span>
-        <h2>Everything you need for reliable scheduling</h2>
-        <p>Enterprise-grade infrastructure without the enterprise complexity.</p>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
-          </div>
-          <h3>Configurable Retries</h3>
-          <p>Linear or exponential backoff. Set max attempts, initial delays, and let us handle transient failures.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          </div>
-          <h3>Execution Timeouts</h3>
-          <p>Per-task timeout limits prevent runaway jobs. Tasks are terminated cleanly when limits are exceeded.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
-          </div>
-          <h3>Failure Alerts</h3>
-          <p>Email or webhook notifications when tasks fail. Never miss a broken job again.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          </div>
-          <h3>Encrypted Secrets</h3>
-          <p>Store API tokens and credentials securely. Reference them in your tasks without exposing values.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          </div>
-          <h3>Audit Logging</h3>
-          <p>Complete audit trail of every action. Filter by actor, action type, or date range for compliance.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <h3>Team Access Control</h3>
-          <p>Role-based permissions: owner, admin, member, viewer. Manage who can create, edit, or view tasks.</p>
-        </div>
       </div>
     </div>
   </section>
@@ -2510,30 +2165,71 @@
     </div>
   </section>
 
-  <!-- Enterprise Section -->
-  <section class="enterprise">
+  <!-- Features Section -->
+  <section class="features" id="features">
     <div class="container">
-      <div class="enterprise-inner">
-        <div class="enterprise-content">
-          <h3>Need more? Let's talk.</h3>
-          <p>Custom run limits, dedicated infrastructure, SLAs, and SSO for enterprise teams.</p>
-        </div>
-        <div class="enterprise-features">
-          <div class="enterprise-feature">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Custom limits
-          </div>
-          <div class="enterprise-feature">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            99.99% SLA
-          </div>
-          <div class="enterprise-feature">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            SSO/SAML
-          </div>
-        </div>
-        <a href="mailto:enterprise@cronlet.dev" class="btn btn-outline">Contact Sales</a>
+      <div class="features-header">
+        <span class="section-label">Platform Features</span>
+        <h2>Everything you need for reliable scheduling</h2>
+        <p>Enterprise-grade infrastructure without the enterprise complexity.</p>
       </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+          </div>
+          <h3>Configurable Retries</h3>
+          <p>Linear or exponential backoff. Set max attempts, initial delays, and let us handle transient failures.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h3>Execution Timeouts</h3>
+          <p>Per-task timeout limits prevent runaway jobs. Tasks are terminated cleanly when limits are exceeded.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+          </div>
+          <h3>Failure Alerts</h3>
+          <p>Email or webhook notifications when tasks fail. Never miss a broken job again.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Encrypted Secrets</h3>
+          <p>Store API tokens and credentials securely. Reference them in your tasks without exposing values.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <h3>Audit Logging</h3>
+          <p>Complete audit trail of every action. Filter by actor, action type, or date range for compliance.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>Team Access Control</h3>
+          <p>Role-based permissions: owner, admin, member, viewer. Manage who can create, edit, or view tasks.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Enterprise Note -->
+  <section class="enterprise-note">
+    <div class="container">
+      <p>Need higher limits or custom requirements? <a href="mailto:hi@cronlet.dev">Get in touch</a></p>
     </div>
   </section>
 
@@ -2573,7 +2269,7 @@
         <li><a href="mailto:support@cronlet.dev">Support</a></li>
       </ul>
 
-      <p class="footer-copy">© 2024 Cronlet. All rights reserved.</p>
+      <p class="footer-copy">© 2025 Cronlet. All rights reserved.</p>
     </div>
   </footer>
 
@@ -2599,127 +2295,12 @@
       });
     }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
 
-    document.querySelectorAll('.feature-card, .step-card, .handler-card, .pricing-card, .sdk-card').forEach(card => {
+    document.querySelectorAll('.feature-card, .use-case-card, .pricing-card, .sdk-card').forEach(card => {
       card.style.opacity = '0';
       card.style.transform = 'translateY(20px)';
       card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
       observer.observe(card);
     });
-
-    // Live Demo - Fetch real task data from Cronlet API
-    const DEMO_API_URL = 'https://api.cronlet.dev/v1/public/demo';
-    const DEMO_REFRESH_INTERVAL = 30000; // 30 seconds
-
-    // Relative time formatting
-    function timeAgo(date) {
-      const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-      if (seconds < 60) return 'just now';
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes}m ago`;
-      const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.floor(hours / 24);
-      return `${days}d ago`;
-    }
-
-    // Format duration
-    function formatDuration(ms) {
-      if (!ms) return '—';
-      if (ms < 1000) return `${ms}ms`;
-      return `${(ms / 1000).toFixed(1)}s`;
-    }
-
-    // Update a demo card with task data
-    function updateDemoCard(taskId, data) {
-      const card = document.querySelector(`[data-task-id="${taskId}"]`);
-      if (!card) return;
-
-      const statusEl = card.querySelector('.demo-status');
-      const outputEl = card.querySelector('[data-output]');
-      const lastRunEl = card.querySelector('[data-last-run]');
-      const durationEl = card.querySelector('[data-duration]');
-
-      // Update status
-      statusEl.setAttribute('data-status', data.status || 'success');
-
-      // Update output
-      if (data.output) {
-        outputEl.innerHTML = data.output;
-      } else if (data.error) {
-        outputEl.innerHTML = `<span style="color: #ef4444;">${data.error}</span>`;
-      }
-
-      // Update meta
-      if (data.lastRunAt) {
-        lastRunEl.textContent = timeAgo(data.lastRunAt);
-        lastRunEl.setAttribute('title', new Date(data.lastRunAt).toLocaleString());
-      }
-
-      if (data.durationMs) {
-        durationEl.textContent = formatDuration(data.durationMs);
-      }
-    }
-
-    // Fetch demo data from API
-    async function fetchDemoData() {
-      try {
-        const response = await fetch(DEMO_API_URL);
-        if (!response.ok) throw new Error('API error');
-
-        const data = await response.json();
-
-        // Update each card
-        if (data.uptimeMonitor) updateDemoCard('uptime-monitor', data.uptimeMonitor);
-        if (data.analyticsDigest) updateDemoCard('analytics-digest', data.analyticsDigest);
-        if (data.aiContent) updateDemoCard('ai-content', data.aiContent);
-
-      } catch (error) {
-        console.log('Demo API not available, showing sample data');
-        showSampleData();
-      }
-    }
-
-    // Show sample data when API is not available
-    function showSampleData() {
-      // Uptime Monitor - simulated
-      updateDemoCard('uptime-monitor', {
-        status: 'success',
-        output: '<span class="demo-output-status up"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg> cronlet.dev is UP</span><br><span style="color: var(--text-muted); font-size: 0.75rem;">Response: 143ms • Status: 200</span>',
-        lastRunAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(), // 2 min ago
-        durationMs: 245
-      });
-
-      // Analytics Digest
-      updateDemoCard('analytics-digest', {
-        status: 'success',
-        output: '📊 <strong>Weekly Stats</strong><br>• 127 new signups (+18%)<br>• 4,382 tasks executed<br>• 99.7% success rate',
-        lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
-        durationMs: 1820
-      });
-
-      // AI Content
-      updateDemoCard('ai-content', {
-        status: 'success',
-        output: '✨ <strong>Generated post:</strong><br>"Stop writing cron jobs. Start shipping features. Cronlet handles your scheduled tasks so you can focus on what matters."',
-        lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), // 8 hours ago
-        durationMs: 3240
-      });
-    }
-
-    // Update relative timestamps every minute
-    function updateTimestamps() {
-      document.querySelectorAll('[data-last-run]').forEach(el => {
-        const title = el.getAttribute('title');
-        if (title) {
-          el.textContent = timeAgo(title);
-        }
-      });
-    }
-
-    // Initialize demo
-    fetchDemoData();
-    setInterval(fetchDemoData, DEMO_REFRESH_INTERVAL);
-    setInterval(updateTimestamps, 60000);
   </script>
 </body>
 </html>

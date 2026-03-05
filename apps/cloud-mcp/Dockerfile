@@ -23,7 +23,7 @@ COPY apps/cloud-mcp ./apps/cloud-mcp
 
 # Build
 RUN pnpm --filter @cronlet/shared build
-RUN pnpm --filter @cronlet/cloud-sdk build
+RUN pnpm --filter @cronlet/sdk build
 RUN pnpm --filter @cronlet/cloud-mcp build
 
 # Production stage

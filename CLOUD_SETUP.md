@@ -7,7 +7,7 @@ This repository now includes a Cronlet Cloud v1 foundation stack:
 - `apps/cloud-web` (React + Vite + TanStack UI shell)
 - `apps/cloud-mcp` (MCP gateway service with read-only-by-default policy)
 - `packages/cloud-shared` (types, schemas, entitlements, error codes)
-- `packages/cloud-sdk` (`@cronlet/cloud-sdk`)
+- `packages/cloud-sdk` (`@cronlet/sdk`)
 
 ## Quick start
 

@@ -143,7 +143,7 @@ export function CreateTaskPage() {
   -H "Content-Type: application/json" \\
   -d '${payloadJson}'`;
 
-    const sdk = `import { CloudClient } from "@cronlet/cloud-sdk";
+    const sdk = `import { CloudClient } from "@cronlet/sdk";
 
 const client = new CloudClient({
   baseUrl: "https://api.cronlet.dev",
@@ -646,7 +646,7 @@ console.log("Created task:", task.id);`;
           )}
           {codeTab === "sdk" && (
             <p className="text-xs text-muted-foreground">
-              Install: <code className="bg-zinc-950 border border-border/50 px-2 py-1 rounded-md text-primary">npm install @cronlet/cloud-sdk</code>
+              Install: <code className="bg-zinc-950 border border-border/50 px-2 py-1 rounded-md text-primary">npm install @cronlet/sdk</code>
             </p>
           )}
         </div>
