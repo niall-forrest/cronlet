@@ -57,7 +57,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@cronlet/shared": "^0.1.0"
+    "@cronlet/shared": "workspace:*"
   },
   "devDependencies": {
     "@cronlet/eslint-config": "workspace:*",
