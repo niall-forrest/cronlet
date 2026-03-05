@@ -230,6 +230,7 @@ function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTrigge
         {/* Header: Status dot + Name + Type badge */}
         <div className="flex items-start justify-between mb-1">
           <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-2.5 min-w-0 group/link">
+            <StatusDot status={taskStatus} />
             <h2 className="font-display text-lg text-foreground font-semibold truncate group-hover/link:text-primary transition-colors">
               {task.name}
             </h2>
