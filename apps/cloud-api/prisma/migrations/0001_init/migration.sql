@@ -5,10 +5,10 @@ CREATE TYPE "PlanTier" AS ENUM ('free', 'pro', 'team');
 CREATE TYPE "MemberRole" AS ENUM ('owner', 'admin', 'member', 'viewer');
 
 -- CreateEnum
-CREATE TYPE "EndpointAuthMode" AS ENUM ('none', 'bearer', 'basic', 'header');
+CREATE TYPE "HandlerType" AS ENUM ('tools', 'code', 'webhook');
 
 -- CreateEnum
-CREATE TYPE "JobConcurrency" AS ENUM ('allow', 'skip', 'queue');
+CREATE TYPE "ScheduleType" AS ENUM ('every', 'daily', 'weekly', 'monthly', 'once', 'cron');
 
 -- CreateEnum
 CREATE TYPE "RunStatus" AS ENUM ('queued', 'running', 'success', 'failure', 'timeout');
@@ -63,69 +63,33 @@ CREATE TABLE "Project" (
 );
 
 -- CreateTable
-CREATE TABLE "Environment" (
-    "id" TEXT NOT NULL,
-    "projectId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Environment_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Endpoint" (
+CREATE TABLE "Task" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
-    "environmentId" TEXT,
     "name" TEXT NOT NULL,
-    "url" TEXT NOT NULL,
-    "authMode" "EndpointAuthMode" NOT NULL DEFAULT 'none',
-    "authSecretRef" TEXT,
-    "timeoutMs" INTEGER NOT NULL DEFAULT 30000,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Endpoint_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Job" (
-    "id" TEXT NOT NULL,
-    "organizationId" TEXT NOT NULL,
-    "projectId" TEXT NOT NULL,
-    "environmentId" TEXT,
-    "endpointId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "jobKey" TEXT NOT NULL,
-    "concurrency" "JobConcurrency" NOT NULL DEFAULT 'skip',
-    "catchup" BOOLEAN NOT NULL DEFAULT false,
+    "description" TEXT,
+    "handlerType" "HandlerType" NOT NULL,
+    "handlerConfig" JSONB NOT NULL,
+    "scheduleType" "ScheduleType" NOT NULL,
+    "scheduleConfig" JSONB NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'UTC',
+    "nextRunAt" TIMESTAMP(3),
     "retryAttempts" INTEGER NOT NULL DEFAULT 1,
     "retryBackoff" TEXT NOT NULL DEFAULT 'linear',
-    "retryInitialDelay" TEXT NOT NULL DEFAULT '1s',
+    "retryDelay" TEXT NOT NULL DEFAULT '1s',
     "timeout" TEXT NOT NULL DEFAULT '30s',
     "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdBy" JSONB,
+    "callbackUrl" TEXT,
+    "metadata" JSONB,
+    "maxRuns" INTEGER,
+    "expiresAt" TIMESTAMP(3),
+    "runCount" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Job_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Schedule" (
-    "id" TEXT NOT NULL,
-    "organizationId" TEXT NOT NULL,
-    "projectId" TEXT NOT NULL,
-    "jobId" TEXT NOT NULL,
-    "cron" TEXT NOT NULL,
-    "timezone" TEXT NOT NULL DEFAULT 'UTC',
-    "active" BOOLEAN NOT NULL DEFAULT true,
-    "nextRunAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Schedule_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Task_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -133,19 +97,33 @@ CREATE TABLE "Run" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
-    "jobId" TEXT NOT NULL,
-    "scheduleId" TEXT,
+    "taskId" TEXT NOT NULL,
     "status" "RunStatus" NOT NULL DEFAULT 'queued',
-    "attempt" INTEGER NOT NULL DEFAULT 0,
     "trigger" TEXT NOT NULL,
+    "attempt" INTEGER NOT NULL DEFAULT 1,
+    "scheduledAt" TIMESTAMP(3),
     "startedAt" TIMESTAMP(3),
     "completedAt" TIMESTAMP(3),
     "durationMs" INTEGER,
+    "output" JSONB,
+    "logs" TEXT,
     "errorMessage" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Run_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Secret" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "encryptedValue" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Secret_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -237,19 +215,19 @@ CREATE UNIQUE INDEX "OrganizationMember_organizationId_userId_key" ON "Organizat
 CREATE UNIQUE INDEX "Project_organizationId_slug_key" ON "Project"("organizationId", "slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Environment_projectId_name_key" ON "Environment"("projectId", "name");
+CREATE INDEX "Task_organizationId_active_idx" ON "Task"("organizationId", "active");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Job_organizationId_jobKey_key" ON "Job"("organizationId", "jobKey");
+CREATE INDEX "Task_active_nextRunAt_idx" ON "Task"("active", "nextRunAt");
 
 -- CreateIndex
-CREATE INDEX "Schedule_active_nextRunAt_idx" ON "Schedule"("active", "nextRunAt");
+CREATE INDEX "Run_taskId_createdAt_idx" ON "Run"("taskId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "Run_organizationId_createdAt_idx" ON "Run"("organizationId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Run_jobId_createdAt_idx" ON "Run"("jobId", "createdAt");
+CREATE UNIQUE INDEX "Secret_organizationId_name_key" ON "Secret"("organizationId", "name");
 
 -- CreateIndex
 CREATE INDEX "AuditEvent_organizationId_createdAt_idx" ON "AuditEvent"("organizationId", "createdAt");
@@ -270,37 +248,10 @@ ALTER TABLE "OrganizationMember" ADD CONSTRAINT "OrganizationMember_userId_fkey"
 ALTER TABLE "Project" ADD CONSTRAINT "Project_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Environment" ADD CONSTRAINT "Environment_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Task" ADD CONSTRAINT "Task_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Endpoint" ADD CONSTRAINT "Endpoint_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Endpoint" ADD CONSTRAINT "Endpoint_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Endpoint" ADD CONSTRAINT "Endpoint_environmentId_fkey" FOREIGN KEY ("environmentId") REFERENCES "Environment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Job" ADD CONSTRAINT "Job_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Job" ADD CONSTRAINT "Job_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Job" ADD CONSTRAINT "Job_environmentId_fkey" FOREIGN KEY ("environmentId") REFERENCES "Environment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Job" ADD CONSTRAINT "Job_endpointId_fkey" FOREIGN KEY ("endpointId") REFERENCES "Endpoint"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Schedule" ADD CONSTRAINT "Schedule_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Schedule" ADD CONSTRAINT "Schedule_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Schedule" ADD CONSTRAINT "Schedule_jobId_fkey" FOREIGN KEY ("jobId") REFERENCES "Job"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Task" ADD CONSTRAINT "Task_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Run" ADD CONSTRAINT "Run_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -309,10 +260,10 @@ ALTER TABLE "Run" ADD CONSTRAINT "Run_organizationId_fkey" FOREIGN KEY ("organiz
 ALTER TABLE "Run" ADD CONSTRAINT "Run_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Run" ADD CONSTRAINT "Run_jobId_fkey" FOREIGN KEY ("jobId") REFERENCES "Job"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Run" ADD CONSTRAINT "Run_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Run" ADD CONSTRAINT "Run_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "Schedule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Secret" ADD CONSTRAINT "Secret_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Alert" ADD CONSTRAINT "Alert_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
