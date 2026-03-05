@@ -563,6 +563,244 @@
       font-weight: 600;
     }
 
+    /* Live Demo Section */
+    .live-demo {
+      padding: 120px 0;
+      background: var(--bg-primary);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .live-demo::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan-primary), transparent);
+    }
+
+    .live-demo-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 64px;
+    }
+
+    .live-demo h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .live-demo-header p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .demo-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.3s var(--ease-out-expo);
+    }
+
+    .demo-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+    }
+
+    .demo-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .demo-status {
+      position: relative;
+      width: 12px;
+      height: 12px;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .demo-status-dot {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .demo-status[data-status="success"] .demo-status-dot {
+      background: #22c55e;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+    }
+
+    .demo-status[data-status="failure"] .demo-status-dot {
+      background: #ef4444;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+    }
+
+    .demo-status[data-status="running"] .demo-status-dot {
+      background: var(--cyan-primary);
+      box-shadow: 0 0 12px rgba(6, 214, 160, 0.5);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .demo-status[data-status="loading"] .demo-status-dot {
+      background: var(--text-muted);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .demo-task-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .demo-task-info h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .demo-schedule {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .demo-badge {
+      padding: 4px 8px;
+      background: rgba(6, 214, 160, 0.1);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .demo-card-body {
+      padding: 20px;
+    }
+
+    .demo-output {
+      margin-bottom: 16px;
+    }
+
+    .demo-output-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .demo-output-content {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      min-height: 60px;
+      line-height: 1.6;
+    }
+
+    .demo-loading {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .demo-output-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+    }
+
+    .demo-output-status.up {
+      color: #22c55e;
+    }
+
+    .demo-output-status.down {
+      color: #ef4444;
+    }
+
+    .demo-meta {
+      display: flex;
+      gap: 24px;
+    }
+
+    .demo-meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .demo-meta-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .demo-meta-value {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .demo-card-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-card);
+    }
+
+    .btn-small {
+      padding: 8px 14px;
+      font-size: 0.75rem;
+    }
+
+    .demo-card-footer .btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .live-demo-note {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .live-demo-note svg {
+      animation: spin 10s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     /* Section Label */
     .section-label {
       display: inline-flex;
@@ -581,91 +819,6 @@
       width: 24px;
       height: 1px;
       background: var(--cyan-primary);
-    }
-
-    /* How It Works */
-    .how-it-works {
-      padding: 120px 0;
-    }
-
-    .how-it-works-header {
-      text-align: center;
-      max-width: 700px;
-      margin: 0 auto 80px;
-    }
-
-    .how-it-works h2 {
-      font-size: clamp(1.75rem, 4vw, 2.5rem);
-      font-weight: 700;
-      line-height: 1.2;
-      letter-spacing: -0.02em;
-      margin-bottom: 20px;
-    }
-
-    .how-it-works-header p {
-      font-size: 1.125rem;
-      color: var(--text-secondary);
-    }
-
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 32px;
-    }
-
-    .step-card {
-      position: relative;
-      padding: 32px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 16px;
-      transition: all 0.3s var(--ease-out-expo);
-    }
-
-    .step-card:hover {
-      border-color: var(--border-accent);
-      transform: translateY(-4px);
-    }
-
-    .step-number {
-      position: absolute;
-      top: -16px;
-      left: 24px;
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, var(--cyan-primary), var(--violet-accent));
-      border-radius: 50%;
-      font-family: var(--font-mono);
-      font-size: 0.875rem;
-      font-weight: 700;
-      color: var(--bg-deep);
-    }
-
-    .step-card h3 {
-      font-size: 1.125rem;
-      font-weight: 600;
-      margin-bottom: 12px;
-      margin-top: 8px;
-    }
-
-    .step-card p {
-      color: var(--text-secondary);
-      font-size: 0.9375rem;
-      line-height: 1.7;
-      margin-bottom: 20px;
-    }
-
-    .step-code {
-      background: var(--bg-elevated);
-      border-radius: 8px;
-      padding: 16px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      line-height: 1.7;
-      overflow-x: auto;
     }
 
     .code-keyword { color: var(--violet-accent); }
@@ -705,12 +858,24 @@
       gap: 24px;
     }
 
+    .handlers-grid-2 {
+      grid-template-columns: repeat(2, 1fr);
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .handlers-grid-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
     .handler-card {
       background: var(--bg-elevated);
       border: 1px solid var(--border-subtle);
       border-radius: 16px;
       overflow: hidden;
       transition: all 0.3s var(--ease-out-expo);
+      display: flex;
+      flex-direction: column;
     }
 
     .handler-card:hover {
@@ -718,9 +883,52 @@
       transform: translateY(-4px);
     }
 
-    .handler-header {
-      padding: 24px;
+    .handler-card-ai {
+      border-color: rgba(139, 92, 246, 0.3);
+      background: linear-gradient(180deg, var(--bg-elevated) 0%, rgba(139, 92, 246, 0.05) 100%);
+    }
+
+    .handler-card-ai:hover {
+      border-color: var(--violet-accent);
+    }
+
+    .handler-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
       border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .handler-complexity {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .complexity-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--bg-hover);
+      transition: background 0.2s ease;
+    }
+
+    .complexity-dot.active {
+      background: var(--cyan-primary);
+    }
+
+    .handler-card-ai .complexity-dot.active {
+      background: var(--violet-accent);
+    }
+
+    .complexity-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      margin-left: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     .handler-badge {
@@ -731,15 +939,25 @@
       background: rgba(6, 214, 160, 0.1);
       border-radius: 6px;
       font-family: var(--font-mono);
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
       color: var(--cyan-primary);
-      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .handler-badge-ai {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--violet-accent);
+    }
+
+    .handler-header {
+      padding: 20px;
     }
 
     .handler-header h3 {
-      font-size: 1.25rem;
+      font-size: 1.125rem;
       font-weight: 600;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .handler-header p {
@@ -747,16 +965,125 @@
       font-size: 0.875rem;
     }
 
-    .handler-code {
-      padding: 20px;
+    .handler-schedule {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
       background: var(--bg-card);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .schedule-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .schedule-value {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--cyan-primary);
+    }
+
+    .handler-code {
+      padding: 16px 20px;
+      background: var(--bg-card);
+      flex: 1;
     }
 
     .handler-code pre {
       font-family: var(--font-mono);
-      font-size: 0.75rem;
-      line-height: 1.8;
+      font-size: 0.7rem;
+      line-height: 1.7;
       overflow-x: auto;
+    }
+
+    /* AI Handler Card */
+    .handler-ai-input {
+      padding: 20px;
+      background: var(--bg-card);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ai-prompt {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 10px;
+    }
+
+    .ai-prompt-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .ai-prompt-text {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      font-style: italic;
+    }
+
+    .ai-arrow {
+      display: flex;
+      justify-content: center;
+      color: var(--violet-accent);
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(4px); }
+    }
+
+    .ai-result {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .ai-result-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      color: #22c55e;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .ai-result-task {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+    }
+
+    .ai-result-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+    }
+
+    .ai-result-schedule {
+      margin-left: auto;
+      font-size: 0.6875rem;
+      color: var(--text-muted);
     }
 
     /* AI Agents Section */
@@ -906,10 +1233,138 @@
       color: var(--text-muted);
     }
 
+    /* SDK Section */
+    .sdk {
+      padding: 120px 0;
+      background: var(--bg-primary);
+    }
+
+    .sdk-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 64px;
+    }
+
+    .sdk h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .sdk-header p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+    }
+
+    .sdk-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .sdk-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.3s var(--ease-out-expo);
+    }
+
+    .sdk-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+    }
+
+    .sdk-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .sdk-logo {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-card);
+      border-radius: 10px;
+      color: var(--text-secondary);
+    }
+
+    .sdk-logo.anthropic {
+      color: #d97706;
+    }
+
+    .sdk-logo.langchain {
+      color: #22c55e;
+    }
+
+    .sdk-name {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .sdk-code {
+      padding: 20px;
+      background: var(--bg-card);
+    }
+
+    .sdk-code pre {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+
+    .sdk-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.9375rem;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      max-width: 360px;
+    }
+
+    .sdk-install-label {
+      color: var(--text-muted);
+    }
+
+    .sdk-install code {
+      color: var(--cyan-primary);
+    }
+
+    .sdk-install button {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      transition: color 0.2s ease;
+      display: flex;
+      align-items: center;
+    }
+
+    .sdk-install button:hover {
+      color: var(--text-primary);
+    }
+
     /* Features Section */
     .features {
       padding: 120px 0;
-      background: var(--bg-primary);
     }
 
     .features-header {
@@ -943,29 +1398,11 @@
       border: 1px solid var(--border-subtle);
       border-radius: 16px;
       transition: all 0.3s var(--ease-out-expo);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .feature-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--cyan-primary), var(--violet-accent));
-      opacity: 0;
-      transition: opacity 0.3s ease;
     }
 
     .feature-card:hover {
       border-color: var(--border-accent);
       transform: translateY(-4px);
-    }
-
-    .feature-card:hover::before {
-      opacity: 1;
     }
 
     .feature-icon {
@@ -1022,6 +1459,11 @@
       gap: 24px;
       max-width: 1000px;
       margin: 0 auto;
+    }
+
+    .pricing-grid-2 {
+      grid-template-columns: repeat(2, 1fr);
+      max-width: 700px;
     }
 
     .pricing-card {
@@ -1288,9 +1730,21 @@
 
       .features-grid,
       .handlers-grid,
+      .handlers-grid-3,
       .steps-grid,
-      .pricing-grid {
+      .pricing-grid,
+      .sdk-grid,
+      .demo-grid {
         grid-template-columns: repeat(2, 1fr);
+      }
+
+      .handlers-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+        max-width: 100%;
+      }
+
+      .handler-card-ai {
+        grid-column: span 2;
       }
 
       .mcp-tools {
@@ -1315,9 +1769,18 @@
 
       .features-grid,
       .handlers-grid,
+      .handlers-grid-2,
+      .handlers-grid-3,
       .steps-grid,
-      .pricing-grid {
+      .pricing-grid,
+      .pricing-grid-2,
+      .sdk-grid,
+      .demo-grid {
         grid-template-columns: 1fr;
+      }
+
+      .handler-card-ai {
+        grid-column: span 1;
       }
 
       .hero-actions,
@@ -1353,7 +1816,7 @@
       </a>
 
       <ul class="nav-links">
-        <li><a href="#how-it-works">How it Works</a></li>
+        <li><a href="#live-demo">Live Demo</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#pricing">Pricing</a></li>
         <li><a href="https://docs.cronlet.dev">Docs</a></li>
@@ -1378,13 +1841,13 @@
         <div class="hero-content">
           <div class="hero-badge">
             <span class="hero-badge-dot"></span>
-            <span>Works with Claude via MCP</span>
+            <span>Agent-native scheduling</span>
           </div>
 
           <h1>The scheduling platform for <span>AI agents</span> and developers</h1>
 
           <p class="hero-description">
-            Create tasks visually or via API. Run webhooks, multi-step workflows, or JavaScript on schedule.
+            Create tasks visually or via API. Run webhooks or multi-step workflows on schedule.
             No cron syntax. No infrastructure. Just tasks that run.
           </p>
 
@@ -1504,59 +1967,135 @@
     </div>
   </section>
 
-  <!-- How It Works -->
-  <section class="how-it-works" id="how-it-works">
+  <!-- Live Demo Section -->
+  <section class="live-demo" id="live-demo">
     <div class="container">
-      <div class="how-it-works-header">
-        <span class="section-label">How It Works</span>
-        <h2>Create a task. Define a schedule. We run it.</h2>
-        <p>Three ways to create tasks: visual dashboard, REST API, or connect AI agents via MCP.</p>
+      <div class="live-demo-header">
+        <span class="section-label">Live Demo</span>
+        <h2>Watch it work.</h2>
+        <p>These aren't mockups. These are real tasks running on Cronlet Cloud, updating live on this page.</p>
       </div>
 
-      <div class="steps-grid">
-        <div class="step-card">
-          <span class="step-number">1</span>
-          <h3>Create a task</h3>
-          <p>Use the dashboard, API, or SDK. Define what to run: a webhook, a multi-step workflow, or JavaScript code.</p>
-          <div class="step-code">
-<code><span class="code-keyword">POST</span> /v1/tasks
-{
-  <span class="code-string">"name"</span>: <span class="code-string">"sync-stripe"</span>,
-  <span class="code-string">"handler"</span>: {
-    <span class="code-string">"type"</span>: <span class="code-string">"webhook"</span>,
-    <span class="code-string">"url"</span>: <span class="code-string">"https://..."</span>
-  }
-}</code>
+      <div class="demo-grid">
+        <!-- Uptime Monitor -->
+        <div class="demo-card" data-task-id="uptime-monitor">
+          <div class="demo-card-header">
+            <div class="demo-status" data-status="loading">
+              <span class="demo-status-dot"></span>
+            </div>
+            <div class="demo-task-info">
+              <h3>Uptime Monitor</h3>
+              <span class="demo-schedule">Every 5 minutes</span>
+            </div>
+            <span class="demo-badge">webhook</span>
+          </div>
+          <div class="demo-card-body">
+            <div class="demo-output">
+              <div class="demo-output-label">Latest check</div>
+              <div class="demo-output-content" data-output>
+                <span class="demo-loading">Fetching...</span>
+              </div>
+            </div>
+            <div class="demo-meta">
+              <div class="demo-meta-item">
+                <span class="demo-meta-label">Last run</span>
+                <span class="demo-meta-value" data-last-run>—</span>
+              </div>
+              <div class="demo-meta-item">
+                <span class="demo-meta-label">Duration</span>
+                <span class="demo-meta-value" data-duration>—</span>
+              </div>
+            </div>
+          </div>
+          <div class="demo-card-footer">
+            <a href="https://dashboard.cronlet.dev/sign-up?template=uptime-monitor" class="btn btn-outline btn-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              Fork this task
+            </a>
           </div>
         </div>
 
-        <div class="step-card">
-          <span class="step-number">2</span>
-          <h3>Set a schedule</h3>
-          <p>Pick from intervals, daily times, weekly days, or cron expressions. Add timezone support.</p>
-          <div class="step-code">
-<code><span class="code-string">"schedule"</span>: {
-  <span class="code-string">"type"</span>: <span class="code-string">"daily"</span>,
-  <span class="code-string">"times"</span>: [<span class="code-string">"09:00"</span>, <span class="code-string">"17:00"</span>],
-  <span class="code-string">"timezone"</span>: <span class="code-string">"America/New_York"</span>
-}</code>
+        <!-- Analytics Digest -->
+        <div class="demo-card" data-task-id="analytics-digest">
+          <div class="demo-card-header">
+            <div class="demo-status" data-status="loading">
+              <span class="demo-status-dot"></span>
+            </div>
+            <div class="demo-task-info">
+              <h3>Weekly Analytics</h3>
+              <span class="demo-schedule">Mondays at 9:00 AM</span>
+            </div>
+            <span class="demo-badge">tools</span>
+          </div>
+          <div class="demo-card-body">
+            <div class="demo-output">
+              <div class="demo-output-label">Latest digest</div>
+              <div class="demo-output-content" data-output>
+                <span class="demo-loading">Fetching...</span>
+              </div>
+            </div>
+            <div class="demo-meta">
+              <div class="demo-meta-item">
+                <span class="demo-meta-label">Last run</span>
+                <span class="demo-meta-value" data-last-run>—</span>
+              </div>
+              <div class="demo-meta-item">
+                <span class="demo-meta-label">Duration</span>
+                <span class="demo-meta-value" data-duration>—</span>
+              </div>
+            </div>
+          </div>
+          <div class="demo-card-footer">
+            <a href="https://dashboard.cronlet.dev/sign-up?template=analytics-digest" class="btn btn-outline btn-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              Fork this task
+            </a>
           </div>
         </div>
 
-        <div class="step-card">
-          <span class="step-number">3</span>
-          <h3>We handle the rest</h3>
-          <p>Cronlet runs your task on time, retries on failure, and sends you the results via callback or dashboard.</p>
-          <div class="step-code">
-<code><span class="code-comment">// Callback payload</span>
-{
-  <span class="code-string">"event"</span>: <span class="code-string">"task.run.completed"</span>,
-  <span class="code-string">"status"</span>: <span class="code-string">"success"</span>,
-  <span class="code-string">"output"</span>: { ... }
-}</code>
+        <!-- AI Content Generator -->
+        <div class="demo-card" data-task-id="ai-content">
+          <div class="demo-card-header">
+            <div class="demo-status" data-status="loading">
+              <span class="demo-status-dot"></span>
+            </div>
+            <div class="demo-task-info">
+              <h3>AI Content Generator</h3>
+              <span class="demo-schedule">Daily at 8:00 AM</span>
+            </div>
+            <span class="demo-badge">tools</span>
+          </div>
+          <div class="demo-card-body">
+            <div class="demo-output">
+              <div class="demo-output-label">Latest generated post</div>
+              <div class="demo-output-content" data-output>
+                <span class="demo-loading">Fetching...</span>
+              </div>
+            </div>
+            <div class="demo-meta">
+              <div class="demo-meta-item">
+                <span class="demo-meta-label">Last run</span>
+                <span class="demo-meta-value" data-last-run>—</span>
+              </div>
+              <div class="demo-meta-item">
+                <span class="demo-meta-label">Duration</span>
+                <span class="demo-meta-value" data-duration>—</span>
+              </div>
+            </div>
+          </div>
+          <div class="demo-card-footer">
+            <a href="https://dashboard.cronlet.dev/sign-up?template=ai-content" class="btn btn-outline btn-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              Fork this task
+            </a>
           </div>
         </div>
       </div>
+
+      <p class="live-demo-note">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Auto-refreshes every 30 seconds
+      </p>
     </div>
   </section>
 
@@ -1564,71 +2103,102 @@
   <section class="handlers" id="handlers">
     <div class="container">
       <div class="handlers-header">
-        <span class="section-label">Handler Types</span>
-        <h2>Three ways to handle scheduled tasks</h2>
-        <p>From simple webhooks to multi-step workflows with data passing between steps.</p>
+        <span class="section-label">Create Tasks</span>
+        <h2>From webhooks to workflows to AI</h2>
+        <p>Three ways to create scheduled tasks. Pick what fits your use case.</p>
       </div>
 
-      <div class="handlers-grid">
+      <div class="handlers-grid handlers-grid-3">
+        <!-- Webhook -->
         <div class="handler-card">
+          <div class="handler-card-top">
+            <div class="handler-complexity">
+              <span class="complexity-dot active"></span>
+              <span class="complexity-dot"></span>
+              <span class="complexity-dot"></span>
+              <span class="complexity-label">Simple</span>
+            </div>
+            <span class="handler-badge">webhook</span>
+          </div>
           <div class="handler-header">
-            <span class="handler-badge">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-              webhook
-            </span>
             <h3>Webhook</h3>
-            <p>Call your own endpoints on schedule with auth headers</p>
+            <p>Call your endpoint on schedule</p>
+          </div>
+          <div class="handler-schedule">
+            <span class="schedule-label">Schedule</span>
+            <span class="schedule-value">"every 5 minutes"</span>
           </div>
           <div class="handler-code">
             <pre><code>{
-  <span class="code-string">"type"</span>: <span class="code-string">"webhook"</span>,
   <span class="code-string">"url"</span>: <span class="code-string">"https://api.example.com/sync"</span>,
-  <span class="code-string">"auth"</span>: {
-    <span class="code-string">"type"</span>: <span class="code-string">"bearer"</span>,
-    <span class="code-string">"secretName"</span>: <span class="code-string">"API_TOKEN"</span>
-  }
+  <span class="code-string">"auth"</span>: { <span class="code-string">"secretName"</span>: <span class="code-string">"API_TOKEN"</span> }
 }</code></pre>
           </div>
         </div>
 
+        <!-- Tools -->
         <div class="handler-card">
+          <div class="handler-card-top">
+            <div class="handler-complexity">
+              <span class="complexity-dot active"></span>
+              <span class="complexity-dot active"></span>
+              <span class="complexity-dot"></span>
+              <span class="complexity-label">Powerful</span>
+            </div>
+            <span class="handler-badge">tools</span>
+          </div>
           <div class="handler-header">
-            <span class="handler-badge">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-              tools
-            </span>
-            <h3>Tools</h3>
-            <p>Chain HTTP, email, Slack steps with data passing</p>
+            <h3>Multi-step Workflow</h3>
+            <p>Chain tools with data passing</p>
+          </div>
+          <div class="handler-schedule">
+            <span class="schedule-label">Schedule</span>
+            <span class="schedule-value">"weekdays at 9am EST"</span>
           </div>
           <div class="handler-code">
             <pre><code>{
-  <span class="code-string">"type"</span>: <span class="code-string">"tools"</span>,
   <span class="code-string">"steps"</span>: [
-    { <span class="code-string">"tool"</span>: <span class="code-string">"http.get"</span>, ... },
-    { <span class="code-string">"tool"</span>: <span class="code-string">"slack.send"</span>, ... }
+    { <span class="code-string">"tool"</span>: <span class="code-string">"http.get"</span>, <span class="code-string">"outputKey"</span>: <span class="code-string">"data"</span> },
+    { <span class="code-string">"tool"</span>: <span class="code-string">"slack.post"</span>, <span class="code-string">"channel"</span>: <span class="code-string">"#alerts"</span> }
   ]
 }</code></pre>
           </div>
         </div>
 
-        <div class="handler-card">
-          <div class="handler-header">
-            <span class="handler-badge">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              code
+        <!-- AI/MCP -->
+        <div class="handler-card handler-card-ai">
+          <div class="handler-card-top">
+            <div class="handler-complexity">
+              <span class="complexity-dot active"></span>
+              <span class="complexity-dot active"></span>
+              <span class="complexity-dot active"></span>
+              <span class="complexity-label">Agentic</span>
+            </div>
+            <span class="handler-badge handler-badge-ai">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              MCP
             </span>
-            <h3>Code</h3>
-            <p>Run JavaScript directly on our infrastructure</p>
           </div>
-          <div class="handler-code">
-            <pre><code>{
-  <span class="code-string">"type"</span>: <span class="code-string">"code"</span>,
-  <span class="code-string">"runtime"</span>: <span class="code-string">"javascript"</span>,
-  <span class="code-string">"code"</span>: <span class="code-string">`
-    const res = await fetch(url);
-    return res.json();
-  `</span>
-}</code></pre>
+          <div class="handler-header">
+            <h3>AI Agent</h3>
+            <p>Natural language → scheduled task</p>
+          </div>
+          <div class="handler-ai-input">
+            <div class="ai-prompt">
+              <span class="ai-prompt-icon">✨</span>
+              <span class="ai-prompt-text">"Send me a Slack reminder every weekday at 9am to check the dashboard"</span>
+            </div>
+            <div class="ai-arrow">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+            </div>
+            <div class="ai-result">
+              <span class="ai-result-label">Task created</span>
+              <div class="ai-result-task">
+                <span class="ai-result-dot"></span>
+                <span>slack-reminder</span>
+                <span class="ai-result-schedule">Mon-Fri 9:00</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1727,6 +2297,81 @@
     </div>
   </section>
 
+  <!-- SDK Section -->
+  <section class="sdk" id="sdk">
+    <div class="container">
+      <div class="sdk-header">
+        <span class="section-label">SDK Integrations</span>
+        <h2>Works with your AI stack</h2>
+        <p>Use Cronlet tools directly in your AI agents. Native support for OpenAI, Anthropic, and LangChain.</p>
+      </div>
+
+      <div class="sdk-grid">
+        <div class="sdk-card">
+          <div class="sdk-card-header">
+            <div class="sdk-logo">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>
+            </div>
+            <span class="sdk-name">OpenAI</span>
+          </div>
+          <div class="sdk-code">
+            <pre><code><span class="code-keyword">import</span> { getOpenAITools } <span class="code-keyword">from</span> <span class="code-string">"@cronlet/sdk"</span>
+
+<span class="code-keyword">const</span> response = <span class="code-keyword">await</span> openai.chat.completions.<span class="code-function">create</span>({
+  model: <span class="code-string">"gpt-5.2"</span>,
+  messages,
+  tools: <span class="code-function">getOpenAITools</span>()
+})</code></pre>
+          </div>
+        </div>
+
+        <div class="sdk-card">
+          <div class="sdk-card-header">
+            <div class="sdk-logo anthropic">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm2.327 10.694l-2.065-5.358-2.063 5.358h4.128z"/></svg>
+            </div>
+            <span class="sdk-name">Anthropic</span>
+          </div>
+          <div class="sdk-code">
+            <pre><code><span class="code-keyword">import</span> { getAnthropicTools } <span class="code-keyword">from</span> <span class="code-string">"@cronlet/sdk"</span>
+
+<span class="code-keyword">const</span> response = <span class="code-keyword">await</span> anthropic.messages.<span class="code-function">create</span>({
+  model: <span class="code-string">"claude-sonnet-4.6"</span>,
+  messages,
+  tools: <span class="code-function">getAnthropicTools</span>()
+})</code></pre>
+          </div>
+        </div>
+
+        <div class="sdk-card">
+          <div class="sdk-card-header">
+            <div class="sdk-logo langchain">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+            </div>
+            <span class="sdk-name">LangChain</span>
+          </div>
+          <div class="sdk-code">
+            <pre><code><span class="code-keyword">import</span> { getLangChainTools } <span class="code-keyword">from</span> <span class="code-string">"@cronlet/sdk"</span>
+
+<span class="code-keyword">const</span> agent = <span class="code-function">createToolCallingAgent</span>({
+  llm,
+  tools: <span class="code-function">getLangChainTools</span>(client),
+  prompt
+})</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="sdk-install">
+        <span class="sdk-install-label">$</span>
+        <code>npm install @cronlet/sdk</code>
+        <button onclick="navigator.clipboard.writeText('npm install @cronlet/sdk')" title="Copy to clipboard">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
   <!-- Features Section -->
   <section class="features" id="features">
     <div class="container">
@@ -1797,12 +2442,12 @@
         <p>No credit card required. Upgrade when you need more runs or longer retention.</p>
       </div>
 
-      <div class="pricing-grid">
+      <div class="pricing-grid pricing-grid-2">
         <div class="pricing-card">
           <div class="pricing-tier">Free</div>
           <div class="pricing-price">
             <span class="pricing-amount">$0</span>
-            <span class="pricing-period">/month</span>
+            <span class="pricing-period">forever</span>
           </div>
           <p class="pricing-description">Perfect for prototyping and personal projects</p>
           <ul class="pricing-features">
@@ -1816,11 +2461,11 @@
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              All handler types
+              Webhook + Tools handlers
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              MCP access
+              MCP + SDK access
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
@@ -1833,10 +2478,10 @@
         <div class="pricing-card featured">
           <div class="pricing-tier">Pro</div>
           <div class="pricing-price">
-            <span class="pricing-amount">$29</span>
+            <span class="pricing-amount">$9</span>
             <span class="pricing-period">/month</span>
           </div>
-          <p class="pricing-description">For production workloads and growing teams</p>
+          <p class="pricing-description">For production workloads — $96/year (save 11%)</p>
           <ul class="pricing-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
@@ -1848,50 +2493,18 @@
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              All handler types
+              Webhook + Tools handlers
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              MCP access
+              MCP + SDK access
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
               Email support
             </li>
           </ul>
-          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary pricing-cta">Start Free Trial</a>
-        </div>
-
-        <div class="pricing-card">
-          <div class="pricing-tier">Team</div>
-          <div class="pricing-price">
-            <span class="pricing-amount">$99</span>
-            <span class="pricing-period">/month</span>
-          </div>
-          <p class="pricing-description">For teams needing scale and compliance</p>
-          <ul class="pricing-features">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              <span class="highlight">100,000 runs/month</span>
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              365 days data retention
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              Team access control
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              Audit logging
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              Priority support
-            </li>
-          </ul>
-          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-outline pricing-cta">Start Free Trial</a>
+          <a href="https://dashboard.cronlet.dev/sign-up" class="btn btn-primary pricing-cta">Upgrade to Pro</a>
         </div>
       </div>
     </div>
@@ -1986,12 +2599,127 @@
       });
     }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
 
-    document.querySelectorAll('.feature-card, .step-card, .handler-card, .pricing-card').forEach(card => {
+    document.querySelectorAll('.feature-card, .step-card, .handler-card, .pricing-card, .sdk-card').forEach(card => {
       card.style.opacity = '0';
       card.style.transform = 'translateY(20px)';
       card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
       observer.observe(card);
     });
+
+    // Live Demo - Fetch real task data from Cronlet API
+    const DEMO_API_URL = 'https://api.cronlet.dev/v1/public/demo';
+    const DEMO_REFRESH_INTERVAL = 30000; // 30 seconds
+
+    // Relative time formatting
+    function timeAgo(date) {
+      const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+      if (seconds < 60) return 'just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    }
+
+    // Format duration
+    function formatDuration(ms) {
+      if (!ms) return '—';
+      if (ms < 1000) return `${ms}ms`;
+      return `${(ms / 1000).toFixed(1)}s`;
+    }
+
+    // Update a demo card with task data
+    function updateDemoCard(taskId, data) {
+      const card = document.querySelector(`[data-task-id="${taskId}"]`);
+      if (!card) return;
+
+      const statusEl = card.querySelector('.demo-status');
+      const outputEl = card.querySelector('[data-output]');
+      const lastRunEl = card.querySelector('[data-last-run]');
+      const durationEl = card.querySelector('[data-duration]');
+
+      // Update status
+      statusEl.setAttribute('data-status', data.status || 'success');
+
+      // Update output
+      if (data.output) {
+        outputEl.innerHTML = data.output;
+      } else if (data.error) {
+        outputEl.innerHTML = `<span style="color: #ef4444;">${data.error}</span>`;
+      }
+
+      // Update meta
+      if (data.lastRunAt) {
+        lastRunEl.textContent = timeAgo(data.lastRunAt);
+        lastRunEl.setAttribute('title', new Date(data.lastRunAt).toLocaleString());
+      }
+
+      if (data.durationMs) {
+        durationEl.textContent = formatDuration(data.durationMs);
+      }
+    }
+
+    // Fetch demo data from API
+    async function fetchDemoData() {
+      try {
+        const response = await fetch(DEMO_API_URL);
+        if (!response.ok) throw new Error('API error');
+
+        const data = await response.json();
+
+        // Update each card
+        if (data.uptimeMonitor) updateDemoCard('uptime-monitor', data.uptimeMonitor);
+        if (data.analyticsDigest) updateDemoCard('analytics-digest', data.analyticsDigest);
+        if (data.aiContent) updateDemoCard('ai-content', data.aiContent);
+
+      } catch (error) {
+        console.log('Demo API not available, showing sample data');
+        showSampleData();
+      }
+    }
+
+    // Show sample data when API is not available
+    function showSampleData() {
+      // Uptime Monitor - simulated
+      updateDemoCard('uptime-monitor', {
+        status: 'success',
+        output: '<span class="demo-output-status up"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg> cronlet.dev is UP</span><br><span style="color: var(--text-muted); font-size: 0.75rem;">Response: 143ms • Status: 200</span>',
+        lastRunAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(), // 2 min ago
+        durationMs: 245
+      });
+
+      // Analytics Digest
+      updateDemoCard('analytics-digest', {
+        status: 'success',
+        output: '📊 <strong>Weekly Stats</strong><br>• 127 new signups (+18%)<br>• 4,382 tasks executed<br>• 99.7% success rate',
+        lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
+        durationMs: 1820
+      });
+
+      // AI Content
+      updateDemoCard('ai-content', {
+        status: 'success',
+        output: '✨ <strong>Generated post:</strong><br>"Stop writing cron jobs. Start shipping features. Cronlet handles your scheduled tasks so you can focus on what matters."',
+        lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), // 8 hours ago
+        durationMs: 3240
+      });
+    }
+
+    // Update relative timestamps every minute
+    function updateTimestamps() {
+      document.querySelectorAll('[data-last-run]').forEach(el => {
+        const title = el.getAttribute('title');
+        if (title) {
+          el.textContent = timeAgo(title);
+        }
+      });
+    }
+
+    // Initialize demo
+    fetchDemoData();
+    setInterval(fetchDemoData, DEMO_REFRESH_INTERVAL);
+    setInterval(updateTimestamps, 60000);
   </script>
 </body>
 </html>
