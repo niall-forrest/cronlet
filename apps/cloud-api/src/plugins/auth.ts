@@ -69,6 +69,13 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
   const internalToken = process.env.CLOUD_INTERNAL_TOKEN
     ?? (process.env.NODE_ENV === "production" ? undefined : "dev-internal-token");
 
+  // Log auth configuration on startup
+  if (clerkJwks) {
+    app.log.info({ jwksUrl: clerkJwksUrl, issuer: clerkIssuer }, "Auth: Clerk JWT validation enabled");
+  } else {
+    app.log.warn("Auth: Clerk JWKS not configured, using header fallback (not secure for production)");
+  }
+
   app.addHook("preHandler", async (request) => {
     if (request.url.startsWith("/health")) {
       request.auth = {
@@ -203,6 +210,7 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
         const orgIdHeader = request.headers["x-org-id"];
         const orgIdFromHeader = typeof orgIdHeader === "string" ? orgIdHeader : null;
         const orgId = orgFromPayload(payload) ?? orgIdFromHeader ?? personalOrgIdForUser(payload.sub ?? "");
+        app.log.debug({ userId: payload.sub, orgId }, "JWT verified successfully");
 
         if (!orgId) {
           throw new AppError(401, ERROR_CODES.UNAUTHORIZED, "No organization selected");
@@ -245,6 +253,8 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
         if (error instanceof AppError) {
           throw error;
         }
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        app.log.warn({ error: errorMessage, issuer: clerkIssuer }, "JWT verification failed");
         throw new AppError(401, ERROR_CODES.UNAUTHORIZED, "Invalid bearer token");
       }
     }
