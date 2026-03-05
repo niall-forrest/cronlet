@@ -10,7 +10,9 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
+        display: ["Syne", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: [
+          "IBM Plex Mono",
           "JetBrains Mono",
           "Fira Code",
           "ui-monospace",

@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -44,8 +44,10 @@ import {
   EyeSlash,
   Copy,
   ArrowsClockwise,
+  CheckCircle,
 } from "@phosphor-icons/react";
-import { LoadingInline } from "@/components/Loading";
+import { Skeleton } from "@/components/Skeleton";
+import { SectionHeader } from "@/components/ui/section-header";
 
 export function SettingsPage() {
   return (
@@ -109,78 +111,84 @@ function SecretsSection() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Lock size={20} />
-              Secrets
-            </CardTitle>
-            <CardDescription>
-              Store sensitive values like API tokens for use in tasks
-            </CardDescription>
-          </div>
+    <section className="space-y-4">
+      <SectionHeader
+        label="Secrets"
+        action={
           <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus size={14} className="mr-2" />
+            <Plus size={14} weight="bold" className="mr-2" />
             Add Secret
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <LoadingInline className="py-8 justify-center w-full" />
-        ) : secrets.length === 0 ? (
-          <div className="text-center py-8">
-            <Lock size={32} className="mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground mb-4">
-              No secrets yet. Add secrets for Slack tokens, API keys, etc.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => setShowCreate(true)}>
-              <Plus size={14} className="mr-2" />
-              Add your first secret
-            </Button>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Updated</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {secrets.map((secret) => (
-                <TableRow key={secret.name}>
-                  <TableCell>
-                    <code className="bg-muted px-2 py-0.5 rounded text-sm">
-                      {secret.name}
-                    </code>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(secret.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(secret.updatedAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(secret.name)}
-                    >
-                      <Trash size={14} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+        }
+      />
+
+      <Card variant="flat">
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-4 space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-4 py-2">
+                  <Skeleton className="h-5 w-32 rounded" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
+            </div>
+          ) : secrets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                <Lock size={28} weight="duotone" className="text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No secrets yet</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto text-center mb-6">
+                Add secrets for Slack tokens, API keys, database credentials, and other sensitive values.
+              </p>
+              <Button variant="outline" onClick={() => setShowCreate(true)}>
+                <Plus size={14} weight="bold" className="mr-2" />
+                Add your first secret
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Name</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Created</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Updated</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {secrets.map((secret) => (
+                  <TableRow key={secret.name} className="group">
+                    <TableCell>
+                      <code className="bg-zinc-950 border border-border/50 px-2.5 py-1 rounded-md text-xs font-mono text-primary">
+                        {secret.name}
+                      </code>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(secret.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(secret.updatedAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDelete(secret.name)}
+                      >
+                        <Trash size={14} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Create Secret Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
@@ -209,7 +217,7 @@ function SecretsSection() {
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
                   placeholder="xoxb-..."
-                  className="pr-10"
+                  className="pr-10 font-mono"
                 />
                 <Button
                   type="button"
@@ -236,7 +244,7 @@ function SecretsSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </section>
   );
 }
 
@@ -249,6 +257,7 @@ function ApiKeysSection() {
   const [showCreate, setShowCreate] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const { data: apiKeys = [], isLoading } = useQuery({
     queryKey: ["apiKeys"],
@@ -297,101 +306,110 @@ function ApiKeysSection() {
     }
   };
 
-  const copyToken = () => {
+  const copyToken = async () => {
     if (newToken) {
-      navigator.clipboard.writeText(newToken);
+      await navigator.clipboard.writeText(newToken);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Key size={20} />
-              API Keys
-            </CardTitle>
-            <CardDescription>
-              Keys for programmatic access to the Cronlet API
-            </CardDescription>
-          </div>
+    <section className="space-y-4">
+      <SectionHeader
+        label="API Keys"
+        action={
           <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus size={14} className="mr-2" />
+            <Plus size={14} weight="bold" className="mr-2" />
             Create Key
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <LoadingInline className="py-8 justify-center w-full" />
-        ) : apiKeys.length === 0 ? (
-          <div className="text-center py-8">
-            <Key size={32} className="mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground mb-4">
-              No API keys yet. Create one to access the API programmatically.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => setShowCreate(true)}>
-              <Plus size={14} className="mr-2" />
-              Create your first key
-            </Button>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Label</TableHead>
-                <TableHead>Prefix</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Last Used</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {apiKeys.map((key) => (
-                <TableRow key={key.id}>
-                  <TableCell className="font-medium">{key.label}</TableCell>
-                  <TableCell>
-                    <code className="bg-muted px-2 py-0.5 rounded text-sm">
-                      {key.keyPreview}
-                    </code>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(key.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {key.lastUsedAt
-                      ? new Date(key.lastUsedAt).toLocaleDateString()
-                      : "Never"}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <DotsThree size={18} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleRotate(key.id)}>
-                          <ArrowsClockwise size={14} className="mr-2" />
-                          Rotate
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => handleRevoke(key.id)}
-                        >
-                          <Trash size={14} className="mr-2" />
-                          Revoke
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
+        }
+      />
+
+      <Card variant="flat">
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-4 space-y-3">
+              {[1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-4 py-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-5 w-24 rounded" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
+            </div>
+          ) : apiKeys.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[hsl(var(--accent)/0.15)]">
+                <Key size={28} weight="duotone" className="text-[hsl(var(--accent))]" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No API keys yet</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto text-center mb-6">
+                Create an API key to access the Cronlet API programmatically or configure the MCP server.
+              </p>
+              <Button variant="outline" onClick={() => setShowCreate(true)}>
+                <Plus size={14} weight="bold" className="mr-2" />
+                Create your first key
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Label</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Prefix</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Created</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Last Used</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {apiKeys.map((key) => (
+                  <TableRow key={key.id} className="group">
+                    <TableCell className="font-medium">{key.label}</TableCell>
+                    <TableCell>
+                      <code className="bg-zinc-950 border border-border/50 px-2.5 py-1 rounded-md text-xs font-mono text-muted-foreground">
+                        {key.keyPreview}
+                      </code>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(key.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {key.lastUsedAt
+                        ? new Date(key.lastUsedAt).toLocaleDateString()
+                        : "Never"}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <DotsThree size={18} weight="bold" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleRotate(key.id)}>
+                            <ArrowsClockwise size={14} className="mr-2" />
+                            Rotate
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleRevoke(key.id)}
+                          >
+                            <Trash size={14} className="mr-2" />
+                            Revoke
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Create API Key Dialog */}
       <Dialog open={showCreate} onOpenChange={(open) => {
@@ -399,6 +417,7 @@ function ApiKeysSection() {
         if (!open) {
           setNewToken(null);
           setNewLabel("");
+          setCopied(false);
         }
       }}>
         <DialogContent>
@@ -414,11 +433,11 @@ function ApiKeysSection() {
                 Copy your API key now. You won't be able to see it again.
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono break-all">
+                <code className="flex-1 bg-zinc-950 border border-border/50 px-3 py-2.5 rounded-lg text-sm font-mono break-all text-primary">
                   {newToken}
                 </code>
-                <Button variant="outline" size="sm" onClick={copyToken}>
-                  <Copy size={14} />
+                <Button variant="outline" size="icon" onClick={copyToken}>
+                  {copied ? <CheckCircle size={16} className="text-emerald-400" /> : <Copy size={16} />}
                 </Button>
               </div>
             </div>
@@ -440,6 +459,7 @@ function ApiKeysSection() {
               <Button onClick={() => {
                 setShowCreate(false);
                 setNewToken(null);
+                setCopied(false);
               }}>
                 Done
               </Button>
@@ -462,7 +482,10 @@ function ApiKeysSection() {
 
       {/* Token Display Dialog (for rotated keys) */}
       <Dialog open={!!newToken && !showCreate} onOpenChange={(open) => {
-        if (!open) setNewToken(null);
+        if (!open) {
+          setNewToken(null);
+          setCopied(false);
+        }
       }}>
         <DialogContent>
           <DialogHeader>
@@ -473,19 +496,22 @@ function ApiKeysSection() {
               Copy your new API key now. You won't be able to see it again.
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono break-all">
+              <code className="flex-1 bg-zinc-950 border border-border/50 px-3 py-2.5 rounded-lg text-sm font-mono break-all text-primary">
                 {newToken}
               </code>
-              <Button variant="outline" size="sm" onClick={copyToken}>
-                <Copy size={14} />
+              <Button variant="outline" size="icon" onClick={copyToken}>
+                {copied ? <CheckCircle size={16} className="text-emerald-400" /> : <Copy size={16} />}
               </Button>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setNewToken(null)}>Done</Button>
+            <Button onClick={() => {
+              setNewToken(null);
+              setCopied(false);
+            }}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </section>
   );
 }

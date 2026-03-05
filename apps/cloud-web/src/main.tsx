@@ -15,6 +15,8 @@ import { TasksPage } from "./routes/TasksPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { RunsPage } from "./routes/RunsPage";
+import { ActivityPage } from "./routes/ActivityPage";
+import { AgentConnectPage } from "./routes/AgentConnectPage";
 import { SettingsPage } from "./routes/SettingsPage";
 import { AlertsPage } from "./routes/AlertsPage";
 import { AuditEventsPage } from "./routes/AuditEventsPage";
@@ -64,6 +66,20 @@ const runsRoute = createRoute({
   component: RunsPage,
 });
 
+// Activity - event feed
+const activityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/activity",
+  component: ActivityPage,
+});
+
+// Agent Connect - MCP, SDK, API integration
+const agentConnectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent-connect",
+  component: AgentConnectPage,
+});
+
 // Settings - secrets, API keys
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -105,6 +121,8 @@ const routeTree = rootRoute.addChildren([
   taskDetailRoute,
   createTaskRoute,
   runsRoute,
+  activityRoute,
+  agentConnectRoute,
   settingsRoute,
   alertsRoute,
   auditEventsRoute,
@@ -155,9 +173,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         },
         elements: {
           // Organization switcher trigger
-          organizationSwitcherTrigger: { color: "white" },
+          organizationSwitcherTrigger: {
+            color: "white",
+            outline: "none",
+            boxShadow: "none",
+          },
           organizationPreviewMainIdentifier: { color: "white" },
-          organizationSwitcherTriggerIcon: { color: "white" },
+          organizationSwitcherTriggerIcon: { color: "#a1a1aa" },
           // Dropdown and popover
           organizationSwitcherPopoverActionButton: { color: "white" },
           organizationSwitcherPopoverActionButtonText: { color: "white" },

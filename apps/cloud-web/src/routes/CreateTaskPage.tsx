@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wrench, Globe, Code, ArrowLeft, ArrowRight, Check, Copy, Terminal, Robot } from "@phosphor-icons/react";
+import { Wrench, Globe, Code, ArrowLeft, ArrowRight, Copy, Terminal, Robot, CheckCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { ScheduleBuilder } from "@/components/task/ScheduleBuilder";
 import { ToolStepBuilder } from "@/components/task/ToolStepBuilder";
@@ -296,9 +296,9 @@ console.log("Created task:", task.id);`;
         {/* Left: Form */}
         <div className="space-y-6">
           {/* Progress Steps */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {STEPS.map((s, i) => (
-              <div key={s} className="flex items-center gap-3">
+              <div key={s} className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -307,21 +307,23 @@ console.log("Created task:", task.id);`;
                     }
                   }}
                   className={cn(
-                    "flex items-center gap-2 transition-colors",
-                    i <= currentStepIndex ? "cursor-pointer" : "cursor-default"
+                    "flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all",
+                    i < currentStepIndex && "cursor-pointer hover:bg-primary/5",
+                    i === currentStepIndex && "bg-primary/10",
+                    i > currentStepIndex && "cursor-default opacity-50"
                   )}
                 >
                   <div
                     className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
+                      "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-semibold transition-all",
                       i < currentStepIndex
                         ? "bg-primary text-primary-foreground"
                         : i === currentStepIndex
-                          ? "bg-primary/20 text-primary ring-2 ring-primary"
+                          ? "bg-primary/20 text-primary ring-1 ring-primary/50"
                           : "bg-muted text-muted-foreground"
                     )}
                   >
-                    {i < currentStepIndex ? <Check size={14} /> : i + 1}
+                    {i < currentStepIndex ? <CheckCircle size={14} weight="fill" /> : i + 1}
                   </div>
                   <span
                     className={cn(
@@ -333,19 +335,19 @@ console.log("Created task:", task.id);`;
                   </span>
                 </button>
                 {i < STEPS.length - 1 && (
-                  <div className="h-px w-8 bg-border" />
+                  <div className="h-px w-6 bg-border/50" />
                 )}
               </div>
             ))}
           </div>
 
           {/* Step Content */}
-          <Card className="border-border/50 bg-card/60">
-            <CardContent className="pt-6">
+          <Card variant="flat">
+            <CardContent className="p-5">
               {step === "handler" && (
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <Label className="text-base font-medium">What should this task do?</Label>
+                    <Label className="text-base font-semibold">What should this task do?</Label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
                         {
@@ -374,20 +376,30 @@ console.log("Created task:", task.id);`;
                           disabled={opt.disabled}
                           onClick={() => setHandlerType(opt.type)}
                           className={cn(
-                            "flex flex-col items-center gap-2 rounded-lg border p-4 transition-all",
+                            "group flex flex-col items-center gap-2.5 rounded-xl border p-4 transition-all duration-200",
                             handlerType === opt.type
-                              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                              : "border-border/50 bg-card/50 hover:border-border hover:bg-card",
-                            opt.disabled && "opacity-50 cursor-not-allowed"
+                              ? "border-primary/50 bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]"
+                              : "border-border/30 bg-card/30 hover:border-border/50 hover:bg-card/50",
+                            opt.disabled && "opacity-40 cursor-not-allowed"
                           )}
                         >
-                          <opt.icon
-                            size={24}
-                            className={cn(
-                              handlerType === opt.type ? "text-primary" : "text-muted-foreground"
-                            )}
-                          />
-                          <span className="text-sm font-medium">{opt.label}</span>
+                          <div className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
+                            handlerType === opt.type ? "bg-primary/15" : "bg-muted/50 group-hover:bg-muted"
+                          )}>
+                            <opt.icon
+                              size={22}
+                              weight={handlerType === opt.type ? "fill" : "regular"}
+                              className={cn(
+                                "transition-colors",
+                                handlerType === opt.type ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                              )}
+                            />
+                          </div>
+                          <span className={cn(
+                            "text-sm font-medium transition-colors",
+                            handlerType === opt.type ? "text-primary" : "text-foreground"
+                          )}>{opt.label}</span>
                           <span className="text-xs text-muted-foreground text-center">
                             {opt.desc}
                           </span>
@@ -415,7 +427,7 @@ console.log("Created task:", task.id);`;
 
               {step === "schedule" && (
                 <div className="space-y-6">
-                  <Label className="text-base font-medium">When should it run?</Label>
+                  <Label className="text-base font-semibold">When should it run?</Label>
                   <ScheduleBuilder
                     value={schedule}
                     onChange={handleScheduleChange}
@@ -586,34 +598,43 @@ console.log("Created task:", task.id);`;
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Tabs value={codeTab} onValueChange={(v) => setCodeTab(v as CodeTab)}>
-              <TabsList className="bg-muted/50 h-9">
-                <TabsTrigger value="mcp" className="gap-1.5 text-xs px-3">
+              <TabsList className="bg-muted/30 h-9">
+                <TabsTrigger value="mcp" className="gap-1.5 text-xs px-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                   <Robot size={14} />
                   MCP
                 </TabsTrigger>
-                <TabsTrigger value="sdk" className="gap-1.5 text-xs px-3">
+                <TabsTrigger value="sdk" className="gap-1.5 text-xs px-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                   <Code size={14} />
                   SDK
                 </TabsTrigger>
-                <TabsTrigger value="curl" className="gap-1.5 text-xs px-3">
+                <TabsTrigger value="curl" className="gap-1.5 text-xs px-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                   <Terminal size={14} />
                   cURL
                 </TabsTrigger>
               </TabsList>
             </Tabs>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="h-8 px-2 text-muted-foreground hover:text-foreground"
+              className="h-8 px-3"
               onClick={() => handleCopy(currentCode)}
             >
-              <Copy size={14} className="mr-1.5" />
-              {copied ? "Copied!" : "Copy"}
+              {copied ? (
+                <>
+                  <CheckCircle size={14} weight="fill" className="mr-1.5 text-emerald-400" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy size={14} className="mr-1.5" />
+                  Copy
+                </>
+              )}
             </Button>
           </div>
 
           <div className="relative">
-            <pre className="bg-zinc-950 border border-border/50 rounded-lg p-4 overflow-auto text-[13px] text-zinc-300 font-mono leading-relaxed min-h-[400px] max-h-[600px]">
+            <pre className="bg-zinc-950 border border-border/30 rounded-xl p-5 overflow-auto text-[13px] text-zinc-300 font-mono leading-relaxed min-h-[400px] max-h-[600px]">
               <code>{currentCode}</code>
             </pre>
           </div>
@@ -625,7 +646,7 @@ console.log("Created task:", task.id);`;
           )}
           {codeTab === "sdk" && (
             <p className="text-xs text-muted-foreground">
-              Install: <code className="bg-muted px-1.5 py-0.5 rounded">npm install @cronlet/cloud-sdk</code>
+              Install: <code className="bg-zinc-950 border border-border/50 px-2 py-1 rounded-md text-primary">npm install @cronlet/cloud-sdk</code>
             </p>
           )}
         </div>

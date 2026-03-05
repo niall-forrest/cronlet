@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { TaskRecord, HandlerConfig, ScheduleConfig, RunRecord } from "@cronlet/cloud-shared";
+import type { TaskRecord, ScheduleConfig, RunRecord } from "@cronlet/cloud-shared";
 import {
   listTasks,
   listRuns,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +26,11 @@ import {
   Pause,
   Trash,
   Clock,
+  PencilSimple,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/Skeleton";
+import { SectionHeader } from "@/components/ui/section-header";
 
 export function TasksPage() {
   const queryClient = useQueryClient();
@@ -90,73 +93,118 @@ export function TasksPage() {
     triggerMutation.mutate(taskId);
   };
 
+  // Separate active and paused tasks
+  const activeTasks = tasks.filter((t) => t.active);
+  const pausedTasks = tasks.filter((t) => !t.active);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="display-title">Tasks</h1>
           <p className="text-muted-foreground mt-1">
-            {tasks.length} task{tasks.length === 1 ? "" : "s"}
+            Manage your scheduled tasks
           </p>
         </div>
         <Button asChild>
           <Link to="/tasks/create">
-            <Plus size={16} className="mr-2" />
+            <Plus size={16} weight="bold" className="mr-2" />
             Create Task
           </Link>
         </Button>
       </div>
 
       {loadingTasks ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="border-border/50 bg-card/80">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="space-y-1.5">
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="h-4 w-24" />
+        <div className="space-y-6">
+          <SectionHeader label="Active Tasks" />
+          <div className="grid gap-4 md:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} variant="flat">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-2.5 w-2.5 rounded-full" />
+                      <Skeleton className="h-5 w-40" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-md" />
                   </div>
-                  <Skeleton className="h-4 w-16" />
-                </div>
-                <Skeleton className="h-4 w-32 mb-4" />
-                <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-8 w-20" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <Skeleton className="h-4 w-48 mb-5" />
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-9 w-full rounded-lg" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       ) : tasks.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Clock size={48} className="text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium mb-2">No tasks yet</h3>
-            <p className="text-muted-foreground text-center mb-4 max-w-md">
+        <Card variant="flat" className="border-dashed border-border/30">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Clock size={28} weight="duotone" className="text-primary" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No tasks yet</h3>
+            <p className="text-muted-foreground text-center mb-6 max-w-md text-sm">
               Create your first scheduled task to automate HTTP calls, Slack messages, emails, and more.
             </p>
             <Button asChild>
               <Link to="/tasks/create">
-                <Plus size={16} className="mr-2" />
+                <Plus size={16} weight="bold" className="mr-2" />
                 Create your first task
               </Link>
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              lastRun={lastRunByTask.get(task.id)}
-              onToggleActive={() => handleToggleActive(task)}
-              onTrigger={() => handleTrigger(task.id)}
-              onDelete={() => handleDelete(task.id)}
-              isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
-            />
-          ))}
+        <div className="space-y-8">
+          {/* Active Tasks */}
+          {activeTasks.length > 0 && (
+            <section className="space-y-4">
+              <SectionHeader label="Active Tasks" />
+              <div className="grid gap-4 md:grid-cols-2">
+                {activeTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    lastRun={lastRunByTask.get(task.id)}
+                    onToggleActive={() => handleToggleActive(task)}
+                    onTrigger={() => handleTrigger(task.id)}
+                    onDelete={() => handleDelete(task.id)}
+                    isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Paused Tasks */}
+          {pausedTasks.length > 0 && (
+            <section className="space-y-4">
+              <SectionHeader label="Paused Tasks" />
+              <div className="grid gap-4 md:grid-cols-2">
+                {pausedTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    lastRun={lastRunByTask.get(task.id)}
+                    onToggleActive={() => handleToggleActive(task)}
+                    onTrigger={() => handleTrigger(task.id)}
+                    onDelete={() => handleDelete(task.id)}
+                    isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -174,89 +222,102 @@ interface TaskCardProps {
 
 function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTriggering }: TaskCardProps) {
   const isRunning = lastRun?.status === "running" || lastRun?.status === "queued";
+  const taskStatus = getTaskStatus(task, lastRun);
 
   return (
-    <Card className="border-border/50 bg-card/80 hover:border-border transition-colors group">
-      <CardContent className="p-4">
-        {/* Header: Name + Status */}
-        <div className="flex items-start justify-between mb-3">
-          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex-1 min-w-0">
-            <h3 className="text-foreground font-medium group-hover:text-primary transition-colors">
+    <Card variant="interactive" className={cn(!task.active && "opacity-60")}>
+      <CardContent className="p-5">
+        {/* Header: Status dot + Name + Type badge */}
+        <div className="flex items-start justify-between mb-1">
+          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-2.5 min-w-0 group/link">
+            <StatusDot status={taskStatus} />
+            <h3 className="text-foreground font-semibold truncate group-hover/link:text-primary transition-colors">
               {task.name}
             </h3>
-            <p className="text-sm text-muted-foreground">
-              {formatHandlerSummary(task.handlerConfig)}
-            </p>
           </Link>
-          <StatusBadge status={getTaskStatus(task, lastRun)} />
+          <HandlerBadge type={task.handlerType} />
         </div>
 
         {/* Schedule */}
-        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block mb-4">
-          <div className="flex items-center gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Schedule:</span>{" "}
-              <span className="text-foreground/80">{formatScheduleSummary(task.scheduleConfig)}</span>
-            </div>
-          </div>
+        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block mb-5">
+          <p className="text-sm text-muted-foreground pl-5">
+            {formatScheduleSummary(task.scheduleConfig)}
+          </p>
         </Link>
 
-        {/* Footer: Last run + Actions */}
-        <div className="flex items-center justify-between pt-3 border-t border-border/50">
-          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            {lastRun ? (
-              <span>
-                Last run: {formatTimeAgo(lastRun.createdAt)}
-                {lastRun.durationMs && ` (${formatDuration(lastRun.durationMs)})`}
-              </span>
-            ) : (
-              <span>Never run</span>
-            )}
-          </Link>
-
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={onTrigger}
-              disabled={isTriggering || isRunning}
-              className="h-8"
-            >
-              {isTriggering ? "Running..." : "Run Now"}
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <DotsThree size={18} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onToggleActive}>
-                  {task.active ? (
-                    <>
-                      <Pause size={14} className="mr-2" />
-                      Pause task
-                    </>
-                  ) : (
-                    <>
-                      <Play size={14} className="mr-2" />
-                      Resume task
-                    </>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-                  <Trash size={14} className="mr-2" />
-                  Delete task
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <span className="meta-label">Last Run</span>
+            <p className="text-sm text-foreground">
+              {lastRun ? formatTimeAgo(lastRun.createdAt) : "Never"}
+            </p>
           </div>
+          <div>
+            <span className="meta-label">Duration</span>
+            <p className="text-sm text-foreground">
+              {lastRun?.durationMs ? formatDuration(lastRun.durationMs) : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* Action row */}
+        <div className="flex items-center gap-2">
+          <Button
+            className="flex-1"
+            onClick={onTrigger}
+            disabled={isTriggering || isRunning || !task.active}
+          >
+            {isTriggering ? (
+              "Running..."
+            ) : isRunning ? (
+              "Running..."
+            ) : (
+              <>
+                <Play size={14} weight="fill" className="mr-2" />
+                Run Now
+              </>
+            )}
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="shrink-0">
+                <DotsThree size={18} weight="bold" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
+                  <PencilSimple size={14} className="mr-2" />
+                  Edit task
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onToggleActive}>
+                {task.active ? (
+                  <>
+                    <Pause size={14} className="mr-2" />
+                    Pause task
+                  </>
+                ) : (
+                  <>
+                    <Play size={14} className="mr-2" />
+                    Resume task
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+                <Trash size={14} className="mr-2" />
+                Delete task
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Description if present */}
         {task.description && (
-          <p className="text-sm text-muted-foreground mt-3 pt-3 border-t border-border/50">
+          <p className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border/30 line-clamp-2">
             {task.description}
           </p>
         )}
@@ -276,48 +337,42 @@ function getTaskStatus(task: TaskRecord, lastRun?: RunRecord): TaskStatus {
   return "idle";
 }
 
-function StatusBadge({ status }: { status: TaskStatus }) {
-  const config: Record<TaskStatus, { color: string; text: string }> = {
-    idle: { color: "bg-muted-foreground", text: "Idle" },
-    running: { color: "bg-yellow-500 animate-pulse", text: "Running" },
-    success: { color: "bg-green-500", text: "Success" },
-    failed: { color: "bg-red-500", text: "Failed" },
-    paused: { color: "bg-muted-foreground/50", text: "Paused" },
+function StatusDot({ status }: { status: TaskStatus }) {
+  const statusClasses: Record<TaskStatus, string> = {
+    idle: "status-dot-idle",
+    running: "status-dot-running",
+    success: "status-dot-success",
+    failed: "status-dot-failed",
+    paused: "status-dot-paused",
   };
 
-  const { color, text } = config[status];
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className={cn("w-2 h-2 rounded-full", color)} />
-      <span className="text-sm text-muted-foreground">{text}</span>
-    </div>
-  );
+  return <span className={cn("status-dot", statusClasses[status])} />;
 }
 
-function formatHandlerSummary(config: HandlerConfig): string {
-  switch (config.type) {
-    case "tools":
-      return `${config.steps.length} step${config.steps.length === 1 ? "" : "s"}`;
-    case "webhook":
-      try {
-        return new URL(config.url).hostname;
-      } catch {
-        return "Webhook";
-      }
-    case "code":
-      return "JavaScript";
-  }
+function HandlerBadge({ type }: { type: string }) {
+  const variantMap: Record<string, "webhook" | "tools" | "code"> = {
+    webhook: "webhook",
+    tools: "tools",
+    code: "code",
+  };
+
+  const variant = variantMap[type] ?? "tools";
+
+  return (
+    <Badge variant={variant}>
+      {type.toUpperCase()}
+    </Badge>
+  );
 }
 
 function formatScheduleSummary(config: ScheduleConfig): string {
   switch (config.type) {
     case "every":
-      return `Every ${config.interval}`;
+      return `Every ${formatInterval(config.interval)}`;
     case "daily":
       return `Daily at ${config.times.join(", ")}`;
     case "weekly":
-      return `${config.days.join(", ")} at ${config.time}`;
+      return `${capitalizeFirst(config.days.join(", "))} at ${config.time}`;
     case "monthly":
       return `Monthly on ${config.day} at ${config.time}`;
     case "once":
@@ -327,9 +382,22 @@ function formatScheduleSummary(config: ScheduleConfig): string {
   }
 }
 
+function formatInterval(interval: string): string {
+  const match = interval.match(/^(\d+)([smhd])$/);
+  if (!match) return interval;
+  const [, num, unit] = match;
+  const units: Record<string, string> = { s: "second", m: "minute", h: "hour", d: "day" };
+  const unitName = units[unit] ?? unit;
+  return num === "1" ? `${unitName}` : `${num} ${unitName}s`;
+}
+
+function capitalizeFirst(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 function formatTimeAgo(date: string): string {
   const diffMs = Date.now() - new Date(date).getTime();
-  if (diffMs < 60000) return "just now";
+  if (diffMs < 60000) return "Just now";
   if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)}m ago`;
   if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)}h ago`;
   return `${Math.floor(diffMs / 86400000)}d ago`;

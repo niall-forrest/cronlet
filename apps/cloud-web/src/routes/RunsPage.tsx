@@ -10,11 +10,12 @@ import {
   ArrowRight,
   Play,
   Funnel,
-  CaretDown,
+  CaretRight,
+  Spinner,
 } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -37,29 +38,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/Skeleton";
+import { SectionHeader } from "@/components/ui/section-header";
 import { listRuns, listTasks } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 function StatusBadge({ status }: { status: string }) {
-  const variants: Record<string, { variant: "secondary" | "destructive" | "outline"; icon: React.ReactNode }> = {
-    success: { variant: "secondary", icon: <CheckCircle size={12} weight="fill" className="text-green-400" /> },
-    failure: { variant: "destructive", icon: <XCircle size={12} weight="fill" /> },
-    timeout: { variant: "destructive", icon: <Timer size={12} weight="fill" /> },
-    queued: { variant: "outline", icon: <Clock size={12} /> },
-    running: { variant: "outline", icon: <Clock size={12} className="animate-pulse" /> },
+  const variantMap: Record<string, "success" | "error" | "warning" | "secondary"> = {
+    success: "success",
+    failure: "error",
+    timeout: "error",
+    queued: "secondary",
+    running: "warning",
   };
 
-  const config = variants[status] ?? variants.queued;
+  const variant = variantMap[status] ?? "secondary";
+
+  const icons: Record<string, React.ReactNode> = {
+    success: <CheckCircle size={12} weight="fill" />,
+    failure: <XCircle size={12} weight="fill" />,
+    timeout: <Timer size={12} weight="fill" />,
+    queued: <Clock size={12} />,
+    running: <Spinner size={12} className="animate-spin" />,
+  };
 
   return (
-    <Badge variant={config.variant} className="gap-1">
-      {config.icon}
+    <Badge variant={variant} className="gap-1.5 capitalize">
+      {icons[status] ?? icons.queued}
       {status}
     </Badge>
   );
 }
 
 function formatDuration(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined) return "-";
+  if (ms === null || ms === undefined) return "—";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.round(ms / 60000)}min`;
@@ -117,9 +128,12 @@ export function RunsPage() {
   // Calculate stats
   const successCount = runs.filter((r) => r.status === "success").length;
   const failureCount = runs.filter((r) => r.status === "failure" || r.status === "timeout").length;
+  const runningCount = runs.filter((r) => r.status === "running" || r.status === "queued").length;
+  const successRate = runs.length > 0 ? Math.round((successCount / runs.length) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="display-title">Runs</h1>
@@ -131,7 +145,7 @@ export function RunsPage() {
         {hasTasks && (
           <Select value={taskFilter} onValueChange={setTaskFilter}>
             <SelectTrigger className="w-[200px]">
-              <Funnel size={14} className="mr-2" />
+              <Funnel size={14} className="mr-2 text-muted-foreground" />
               <SelectValue placeholder="Filter by task" />
             </SelectTrigger>
             <SelectContent>
@@ -146,158 +160,165 @@ export function RunsPage() {
         )}
       </div>
 
-      {/* Stats header */}
-      {hasRuns && (
-        <div className="flex gap-4">
-          <Card className="border-border/50 bg-card/60 flex-1">
+      {/* Stats */}
+      <section className="space-y-4">
+        <SectionHeader label="Overview" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card variant="flat">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <CheckCircle size={20} weight="fill" className="text-green-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{successCount}</p>
-                  <p className="text-xs text-muted-foreground">Successful</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/60 flex-1">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <XCircle size={20} weight="fill" className="text-red-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{failureCount}</p>
-                  <p className="text-xs text-muted-foreground">Failed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/60 flex-1">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
                   <Clock size={20} className="text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{runs.length}</p>
-                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-2xl font-semibold tabular-nums">{runs.length}</p>
+                  <p className="meta-label">Total Runs</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card variant="flat">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+                  <CheckCircle size={20} weight="fill" className="text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums">{successCount}</p>
+                  <p className="meta-label">Successful</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card variant="flat">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
+                  <XCircle size={20} weight="fill" className="text-red-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums">{failureCount}</p>
+                  <p className="meta-label">Failed</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card variant="flat">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--accent)/0.15)]">
+                  <span className="text-lg font-bold text-[hsl(var(--accent))]">{successRate}%</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums">{runningCount}</p>
+                  <p className="meta-label">Running</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-      )}
+      </section>
 
       {/* Runs table */}
-      <Card className="border-border/50 bg-card/60">
-        <CardHeader>
-          <CardTitle className="display-title">Run History</CardTitle>
-          <CardDescription>
-            Recent task executions across manual triggers and schedules.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-4 py-2">
-                  <Skeleton className="h-4 w-4 rounded" />
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-12" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-              ))}
-            </div>
-          ) : hasRuns ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Task</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Trigger</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Time</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {runs.map((run) => (
-                  <TableRow
-                    key={run.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setSelectedRun(run)}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Clock size={16} className="text-primary" />
-                        <span className="font-medium">
-                          {taskNames.get(run.taskId) ?? run.taskId}
-                        </span>
-                        {run.attempt > 1 && (
-                          <Badge variant="outline" className="text-xs">
-                            Retry {run.attempt}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={run.status} />
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground capitalize">
-                      {run.trigger}
-                    </TableCell>
-                    <TableCell className="text-sm tabular-nums">
-                      {formatDuration(run.durationMs)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      <span title={new Date(run.createdAt).toLocaleString()}>
-                        {formatTimeAgo(run.createdAt)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" className="h-7 px-2">
-                        <CaretDown size={14} />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+      <section className="space-y-4">
+        <SectionHeader label="Run History" />
+        <Card variant="flat">
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-4 py-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-12" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Clock size={24} className="text-primary" />
               </div>
-              <h3 className="font-medium text-foreground mb-2">No runs yet</h3>
-              <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
-                {hasTasks
-                  ? "Trigger a task manually or wait for a scheduled run to appear here."
-                  : "Create a task and schedule to start seeing runs."}
-              </p>
-              {hasTasks ? (
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/tasks">
-                    <Play size={14} className="mr-1" />
-                    View tasks
-                  </Link>
-                </Button>
-              ) : (
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/tasks">
-                    Create a task
-                    <ArrowRight size={14} className="ml-1" />
-                  </Link>
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : hasRuns ? (
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Task</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Status</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Trigger</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Duration</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Time</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {runs.map((run) => (
+                    <TableRow
+                      key={run.id}
+                      className="cursor-pointer group"
+                      onClick={() => setSelectedRun(run)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground group-hover:text-primary transition-colors">
+                            {taskNames.get(run.taskId) ?? run.taskId.slice(0, 8)}
+                          </span>
+                          {run.attempt > 1 && (
+                            <Badge variant="outline" className="text-[10px] px-1.5">
+                              Retry {run.attempt}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={run.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground capitalize">
+                        {run.trigger}
+                      </TableCell>
+                      <TableCell className="text-sm tabular-nums text-muted-foreground">
+                        {formatDuration(run.durationMs)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <span title={new Date(run.createdAt).toLocaleString()}>
+                          {formatTimeAgo(run.createdAt)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <CaretRight size={16} className="text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Clock size={28} weight="duotone" className="text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No runs yet</h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto text-center mb-6">
+                  {hasTasks
+                    ? "Trigger a task manually or wait for a scheduled run to appear here."
+                    : "Create a task and schedule to start seeing runs."}
+                </p>
+                {hasTasks ? (
+                  <Button asChild variant="outline">
+                    <Link to="/tasks">
+                      <Play size={14} weight="fill" className="mr-2" />
+                      View tasks
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <Link to="/tasks/create">
+                      Create a task
+                      <ArrowRight size={14} className="ml-2" />
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Run Detail Dialog */}
       <RunDetailDialog
@@ -323,47 +344,47 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <span>{taskName ?? run.taskId}</span>
+            <span className="font-semibold">{taskName ?? run.taskId}</span>
             <StatusBadge status={run.status} />
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Run metadata */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-muted-foreground">Trigger</p>
-              <p className="font-medium capitalize">{run.trigger}</p>
+              <span className="meta-label">Trigger</span>
+              <p className="text-sm font-medium capitalize">{run.trigger}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Attempt</p>
-              <p className="font-medium">{run.attempt}</p>
+              <span className="meta-label">Attempt</span>
+              <p className="text-sm font-medium">{run.attempt}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Duration</p>
-              <p className="font-medium">{formatDuration(run.durationMs)}</p>
+              <span className="meta-label">Duration</span>
+              <p className="text-sm font-medium tabular-nums">{formatDuration(run.durationMs)}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Started</p>
-              <p className="font-medium">
-                {run.startedAt ? new Date(run.startedAt).toLocaleString() : "-"}
+              <span className="meta-label">Started</span>
+              <p className="text-sm font-medium">
+                {run.startedAt ? new Date(run.startedAt).toLocaleString() : "—"}
               </p>
             </div>
           </div>
 
           {/* Error message */}
           {run.errorMessage && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
               <p className="text-sm font-medium text-destructive mb-1">Error</p>
-              <p className="text-sm text-destructive/80">{run.errorMessage}</p>
+              <p className="text-sm text-destructive/80 font-mono">{run.errorMessage}</p>
             </div>
           )}
 
           {/* Output */}
           {run.output && (
             <div className="space-y-2">
-              <p className="text-sm font-medium">Output</p>
-              <pre className="rounded-lg bg-muted p-4 text-xs overflow-x-auto">
+              <span className="meta-label">Output</span>
+              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto">
                 {JSON.stringify(run.output, null, 2)}
               </pre>
             </div>
@@ -372,8 +393,11 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
           {/* Logs */}
           {run.logs && (
             <div className="space-y-2">
-              <p className="text-sm font-medium">Logs</p>
-              <pre className="rounded-lg bg-muted p-4 text-xs overflow-x-auto whitespace-pre-wrap">
+              <span className="meta-label">Logs</span>
+              <pre className={cn(
+                "rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre-wrap",
+                "max-h-64"
+              )}>
                 {run.logs}
               </pre>
             </div>

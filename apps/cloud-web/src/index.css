@@ -213,3 +213,16 @@
     animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
 }
+
+/* Clerk overrides */
+.cl-organizationSwitcherTrigger {
+  outline: none !important;
+  box-shadow: none !important;
+  border: 1px solid hsl(var(--border) / 0.5) !important;
+}
+
+.cl-organizationSwitcherTrigger:focus,
+.cl-organizationSwitcherTrigger:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
