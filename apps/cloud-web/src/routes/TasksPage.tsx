@@ -240,7 +240,7 @@ function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTrigge
 
         {/* Schedule */}
         <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block mb-5">
-          <p className="text-sm text-muted-foreground pl-5">
+          <p className="text-sm text-muted-foreground">
             {formatScheduleSummary(task.scheduleConfig)}
           </p>
         </Link>
