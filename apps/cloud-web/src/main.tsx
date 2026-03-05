@@ -12,6 +12,7 @@ import { ClerkAuthBridge } from "./components/ClerkAuthBridge";
 import { Layout } from "./components/Layout";
 import { OverviewPage } from "./routes/OverviewPage";
 import { TasksPage } from "./routes/TasksPage";
+import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { RunsPage } from "./routes/RunsPage";
 import { ProjectsPage } from "./routes/ProjectsPage";
@@ -45,6 +46,16 @@ const createTaskRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks/create",
   component: CreateTaskPage,
+});
+
+// Task detail page
+const taskDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks/$taskId",
+  component: function TaskDetailWrapper() {
+    const { taskId } = taskDetailRoute.useParams();
+    return <TaskDetailPage taskId={taskId} />;
+  },
 });
 
 // Runs - execution history
@@ -99,6 +110,7 @@ const billingRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   overviewRoute,
   tasksRoute,
+  taskDetailRoute,
   createTaskRoute,
   runsRoute,
   projectsRoute,

@@ -176,32 +176,34 @@ function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTrigge
   const isRunning = lastRun?.status === "running" || lastRun?.status === "queued";
 
   return (
-    <Card className="border-border/50 bg-card/80 hover:border-border transition-colors">
+    <Card className="border-border/50 bg-card/80 hover:border-border transition-colors group">
       <CardContent className="p-4">
         {/* Header: Name + Status */}
         <div className="flex items-start justify-between mb-3">
-          <div>
-            <h3 className="text-foreground font-medium hover:text-primary transition-colors">
+          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex-1 min-w-0">
+            <h3 className="text-foreground font-medium group-hover:text-primary transition-colors">
               {task.name}
             </h3>
             <p className="text-sm text-muted-foreground">
               {formatHandlerSummary(task.handlerConfig)}
             </p>
-          </div>
+          </Link>
           <StatusBadge status={getTaskStatus(task, lastRun)} />
         </div>
 
         {/* Schedule */}
-        <div className="flex items-center gap-4 mb-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Schedule:</span>{" "}
-            <span className="text-foreground/80">{formatScheduleSummary(task.scheduleConfig)}</span>
+        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block mb-4">
+          <div className="flex items-center gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Schedule:</span>{" "}
+              <span className="text-foreground/80">{formatScheduleSummary(task.scheduleConfig)}</span>
+            </div>
           </div>
-        </div>
+        </Link>
 
         {/* Footer: Last run + Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-border/50">
-          <div className="text-sm text-muted-foreground">
+          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             {lastRun ? (
               <span>
                 Last run: {formatTimeAgo(lastRun.createdAt)}
@@ -210,7 +212,7 @@ function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTrigge
             ) : (
               <span>Never run</span>
             )}
-          </div>
+          </Link>
 
           <div className="flex items-center gap-2">
             <Button
