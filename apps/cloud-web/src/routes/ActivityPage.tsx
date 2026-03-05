@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { AuditEventRecord } from "@cronlet/cloud-shared";
+import type { AuditEventRecord } from "@cronlet/shared";
 import {
   Lightning,
   CheckCircle,

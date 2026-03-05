@@ -1,4 +1,4 @@
-import type { WebhookHandlerConfig } from "@cronlet/cloud-shared";
+import type { WebhookHandlerConfig } from "@cronlet/shared";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

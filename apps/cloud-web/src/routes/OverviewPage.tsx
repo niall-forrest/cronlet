@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { TaskRecord, RunRecord } from "@cronlet/cloud-shared";
+import type { TaskRecord, RunRecord } from "@cronlet/shared";
 import {
   CheckCircle,
   XCircle,

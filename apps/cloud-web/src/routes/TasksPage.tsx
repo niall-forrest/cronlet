@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { TaskRecord, ScheduleConfig, RunRecord } from "@cronlet/cloud-shared";
+import type { TaskRecord, ScheduleConfig, RunRecord } from "@cronlet/shared";
 import {
   listTasks,
   listRuns,

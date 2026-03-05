@@ -6,7 +6,7 @@ import type {
   TaskCreateInput,
   ToolsHandlerConfig,
   WebhookHandlerConfig,
-} from "@cronlet/cloud-shared";
+} from "@cronlet/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -21,6 +21,28 @@ export interface CloudClientOptions {
    * Base URL for the API. Defaults to https://api.cronlet.dev
    */
   baseUrl?: string;
+  /**
+   * Organization ID for multi-tenant contexts (internal use)
+   */
+  orgId?: string;
+  /**
+   * User ID for audit attribution (internal use)
+   */
+  userId?: string;
+  /**
+   * Role for authorization context (internal use)
+   */
+  role?: "viewer" | "member" | "admin" | "owner";
+}
+
+export interface AuditRecordInput {
+  action: string;
+  targetType: string;
+  targetId: string;
+  payloadHash?: string;
+  actorType: string;
+  actorId: string;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -51,6 +73,9 @@ export interface CloudClientOptions {
 export class CloudClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly orgId?: string;
+  private readonly userId?: string;
+  private readonly role?: string;
 
   constructor(options: CloudClientOptions) {
     if (!options.apiKey) {
@@ -58,12 +83,20 @@ export class CloudClient {
     }
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.apiKey = options.apiKey;
+    this.orgId = options.orgId;
+    this.userId = options.userId;
+    this.role = options.role;
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.apiKey}`,
     };
+
+    // Add internal context headers if provided
+    if (this.orgId) headers["x-cronlet-org-id"] = this.orgId;
+    if (this.userId) headers["x-cronlet-user-id"] = this.userId;
+    if (this.role) headers["x-cronlet-role"] = this.role;
 
     // Only set content-type for requests with a body
     if (init?.body) {
@@ -215,6 +248,20 @@ export class CloudClient {
      * Get current usage snapshot
      */
     get: (): Promise<UsageSnapshot> => this.request<UsageSnapshot>("/v1/usage"),
+  };
+
+  /**
+   * Audit event recording (internal use)
+   */
+  readonly audit = {
+    /**
+     * Record an audit event
+     */
+    record: (input: AuditRecordInput): Promise<{ id: string }> =>
+      this.request<{ id: string }>("/v1/audit", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   };
 }
 

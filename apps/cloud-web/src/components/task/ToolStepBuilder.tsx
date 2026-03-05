@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ToolsHandlerConfig } from "@cronlet/cloud-shared";
+import type { ToolsHandlerConfig } from "@cronlet/shared";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listSecrets, createSecret } from "@/lib/api";
 import { Label } from "@/components/ui/label";

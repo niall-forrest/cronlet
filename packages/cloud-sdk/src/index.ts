@@ -1,4 +1,4 @@
-export { CloudClient, CronletError, type CloudClientOptions } from "./client.js";
+export { CloudClient, CronletError, type CloudClientOptions, type AuditRecordInput } from "./client.js";
 export {
   cronletTools,
   createToolHandler,
