@@ -93,6 +93,7 @@ export function CreateTaskPage() {
   const [retryBackoff, setRetryBackoff] = useState<"linear" | "exponential">("linear");
   const [retryDelay, setRetryDelay] = useState("1s");
   const [taskTimeout, setTaskTimeout] = useState("30s");
+  const [callbackUrl, setCallbackUrl] = useState("");
 
   // Set default project when projects load
   if (projects.length > 0 && !projectId) {
@@ -131,7 +132,7 @@ export function CreateTaskPage() {
     const handler = handlerType === "tools" ? toolsConfig : webhookConfig;
 
     // Full payload for REST/SDK (includes all options)
-    const fullPayload = {
+    const fullPayload: Record<string, unknown> = {
       projectId: projectId || "<PROJECT_ID>",
       name: name || "My Task",
       description: description || undefined,
@@ -144,6 +145,9 @@ export function CreateTaskPage() {
       timeout: taskTimeout,
       active: true,
     };
+    if (callbackUrl) {
+      fullPayload.callbackUrl = callbackUrl;
+    }
     const payloadJson = JSON.stringify(fullPayload, null, 2);
 
     const curl = `curl -X POST https://api.cronlet.dev/v1/tasks \\
@@ -177,6 +181,9 @@ console.log("Created task:", task.id);`;
     if (timezone !== "UTC") {
       mcpArgs.timezone = timezone;
     }
+    if (callbackUrl) {
+      mcpArgs.callbackUrl = callbackUrl;
+    }
 
     const mcp = `// MCP Tool: create_task
 // Sensible defaults for retry/timeout - just specify what matters
@@ -194,7 +201,7 @@ console.log("Created task:", task.id);`;
 //   "monthly on the 1st at 9am"`;
 
     return { curl, sdk, mcp };
-  }, [handlerType, toolsConfig, webhookConfig, projectId, name, description, schedule, scheduleDescription, timezone, retryAttempts, retryBackoff, retryDelay, taskTimeout]);
+  }, [handlerType, toolsConfig, webhookConfig, projectId, name, description, schedule, scheduleDescription, timezone, retryAttempts, retryBackoff, retryDelay, taskTimeout, callbackUrl]);
 
   const handleCopy = useCallback(async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -265,6 +272,7 @@ console.log("Created task:", task.id);`;
       retryBackoff,
       retryDelay,
       timeout: taskTimeout,
+      callbackUrl: callbackUrl || undefined,
       active: true,
     };
     createMutation.mutate(input);
@@ -542,6 +550,27 @@ console.log("Created task:", task.id);`;
                           </SelectContent>
                         </Select>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Callback URL */}
+                  <div className="space-y-3 pt-3 border-t border-border/50">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Completion Callback
+                    </Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Callback URL <span className="text-muted-foreground">(optional)</span>
+                      </Label>
+                      <Input
+                        value={callbackUrl}
+                        onChange={(e) => setCallbackUrl(e.target.value)}
+                        placeholder="https://your-api.com/webhook/task-complete"
+                        className="h-9"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        We'll POST the run result to this URL when the task completes. Useful for agent loops.
+                      </p>
                     </div>
                   </div>
                 </div>

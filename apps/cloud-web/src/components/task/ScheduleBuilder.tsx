@@ -383,8 +383,22 @@ function formatSchedulePreview(config: ScheduleConfig, timezone: string): string
   const tz = timezone === "UTC" ? "UTC" : timezone.split("/").pop()?.replace(/_/g, " ");
 
   switch (config.type) {
-    case "every":
-      return `Runs every ${config.interval.replace(/(\d+)/, "$1 ").replace("m", "minutes").replace("h", "hours").replace("d", "days").replace("s", "seconds")}`;
+    case "every": {
+      const match = config.interval.match(/^(\d+)([smhd])$/);
+      if (match) {
+        const [, num, unit] = match;
+        const n = parseInt(num, 10);
+        const units: Record<string, [string, string]> = {
+          s: ["second", "seconds"],
+          m: ["minute", "minutes"],
+          h: ["hour", "hours"],
+          d: ["day", "days"],
+        };
+        const [singular, plural] = units[unit] ?? ["unit", "units"];
+        return `Runs every ${n} ${n === 1 ? singular : plural}`;
+      }
+      return `Runs every ${config.interval}`;
+    }
     case "daily":
       return `Runs daily at ${config.times.join(", ")} (${tz})`;
     case "weekly": {
