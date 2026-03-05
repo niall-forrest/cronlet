@@ -10,7 +10,7 @@ import {
   triggerTask,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardContent, CardFooter, CardAction } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -225,103 +225,106 @@ function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTrigge
   const taskStatus = getTaskStatus(task, lastRun);
 
   return (
-    <Card variant="interactive" className={cn(!task.active && "opacity-60")}>
-      <CardContent>
-        {/* Header: Status dot + Name + Type badge */}
-        <div className="flex items-start justify-between mb-1">
-          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-2.5 min-w-0 group/link">
-            <StatusDot status={taskStatus} />
-            <h2 className="font-display text-lg text-foreground font-semibold truncate group-hover/link:text-primary transition-colors">
-              {task.name}
-            </h2>
-          </Link>
+    <Card variant="interactive" className={cn("p-0", !task.active && "opacity-60")}>
+      {/* Header */}
+      <CardHeader className="border-b border-border/30">
+        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-2.5 min-w-0 group/link">
+          <StatusDot status={taskStatus} />
+          <h2 className="font-display text-base text-foreground font-semibold truncate group-hover/link:text-primary transition-colors">
+            {task.name}
+          </h2>
+        </Link>
+        <CardAction>
           <HandlerBadge type={task.handlerType} />
-        </div>
+        </CardAction>
+      </CardHeader>
 
+      {/* Content */}
+      <CardContent className="px-5 py-4 space-y-4">
         {/* Schedule */}
-        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block mb-5">
+        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block">
           <p className="text-sm text-muted-foreground">
             {formatScheduleSummary(task.scheduleConfig)}
           </p>
         </Link>
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <span className="meta-label">Last Run</span>
-            <p className="text-sm text-foreground">
+            <p className="text-sm text-foreground mt-0.5">
               {lastRun ? formatTimeAgo(lastRun.createdAt) : "Never"}
             </p>
           </div>
           <div>
             <span className="meta-label">Duration</span>
-            <p className="text-sm text-foreground">
+            <p className="text-sm text-foreground mt-0.5">
               {lastRun?.durationMs ? formatDuration(lastRun.durationMs) : "—"}
             </p>
           </div>
         </div>
 
-        {/* Action row */}
-        <div className="flex items-center gap-2">
-          <Button
-            className="flex-1"
-            onClick={onTrigger}
-            disabled={isTriggering || isRunning || !task.active}
-          >
-            {isTriggering ? (
-              "Running..."
-            ) : isRunning ? (
-              "Running..."
-            ) : (
-              <>
-                <Play size={14} weight="fill" className="mr-2" />
-                Run Now
-              </>
-            )}
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="shrink-0">
-                <DotsThree size={18} weight="bold" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
-                  <PencilSimple size={14} className="mr-2" />
-                  Edit task
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onToggleActive}>
-                {task.active ? (
-                  <>
-                    <Pause size={14} className="mr-2" />
-                    Pause task
-                  </>
-                ) : (
-                  <>
-                    <Play size={14} className="mr-2" />
-                    Resume task
-                  </>
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-                <Trash size={14} className="mr-2" />
-                Delete task
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
         {/* Description if present */}
         {task.description && (
-          <p className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border/30 line-clamp-2">
+          <p className="text-xs text-muted-foreground line-clamp-2">
             {task.description}
           </p>
         )}
       </CardContent>
+
+      {/* Footer with actions */}
+      <CardFooter className="gap-2">
+        <Button
+          className="flex-1"
+          onClick={onTrigger}
+          disabled={isTriggering || isRunning || !task.active}
+        >
+          {isTriggering ? (
+            "Running..."
+          ) : isRunning ? (
+            "Running..."
+          ) : (
+            <>
+              <Play size={14} weight="fill" className="mr-2" />
+              Run Now
+            </>
+          )}
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="shrink-0">
+              <DotsThree size={18} weight="bold" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
+                <PencilSimple size={14} className="mr-2" />
+                Edit task
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onToggleActive}>
+              {task.active ? (
+                <>
+                  <Pause size={14} className="mr-2" />
+                  Pause task
+                </>
+              ) : (
+                <>
+                  <Play size={14} className="mr-2" />
+                  Resume task
+                </>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+              <Trash size={14} className="mr-2" />
+              Delete task
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </CardFooter>
     </Card>
   );
 }
