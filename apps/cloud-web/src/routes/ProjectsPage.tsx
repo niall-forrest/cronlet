@@ -63,15 +63,18 @@ export function ProjectsPage() {
   const hasProjects = query.data && query.data.length > 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-      <Card className="border-border/50 bg-card/60">
-        <CardHeader>
-          <CardTitle className="display-title">Projects</CardTitle>
-          <CardDescription>
-            A project groups your jobs together. Most teams create one project per application.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="display-title">Projects</h1>
+        <p className="text-muted-foreground mt-1">
+          A project groups your jobs together. Most teams create one project per application.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+        <Card className="border-border/50 bg-card/60">
+          <CardContent className="pt-6">
           {hasProjects ? (
             <Table>
               <TableHeader>
@@ -183,7 +186,8 @@ export function ProjectsPage() {
             ) : null}
           </form>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -122,7 +122,7 @@ export function RunsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Runs</h1>
+          <h1 className="display-title">Runs</h1>
           <p className="text-muted-foreground mt-1">
             Execution history for your scheduled tasks
           </p>
@@ -150,7 +150,7 @@ export function RunsPage() {
       {hasRuns && (
         <div className="flex gap-4">
           <Card className="border-border/50 bg-card/60 flex-1">
-            <CardContent className="pt-4">
+            <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
                   <CheckCircle size={20} weight="fill" className="text-green-400" />
@@ -163,7 +163,7 @@ export function RunsPage() {
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card/60 flex-1">
-            <CardContent className="pt-4">
+            <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
                   <XCircle size={20} weight="fill" className="text-red-400" />
@@ -176,7 +176,7 @@ export function RunsPage() {
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card/60 flex-1">
-            <CardContent className="pt-4">
+            <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <Clock size={20} className="text-primary" />
