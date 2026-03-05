@@ -46,6 +46,10 @@
 }
 
 @layer components {
+  .font-display {
+    font-family: "Syne", ui-sans-serif, system-ui, sans-serif;
+  }
+
   .display-title {
     font-family: "Syne", ui-sans-serif, system-ui, sans-serif;
     @apply text-2xl font-bold tracking-tight text-cyan-200;

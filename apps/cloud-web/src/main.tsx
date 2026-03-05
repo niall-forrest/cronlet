@@ -111,7 +111,16 @@ const routeTree = rootRoute.addChildren([
 
 const router = createRouter({ routeTree });
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // 1 minute - data is fresh for this long
+      gcTime: 1000 * 60 * 5, // 5 minutes - keep in cache
+      refetchOnWindowFocus: false, // Don't refetch on tab focus
+      retry: 1,
+    },
+  },
+});
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 
 if (!PUBLISHABLE_KEY) {

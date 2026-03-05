@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loading } from "@/components/Loading";
 import { getUsage } from "../lib/api";
 
 export function UsagePage() {
@@ -11,7 +12,7 @@ export function UsagePage() {
   });
 
   if (query.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading usage...</p>;
+    return <Loading />;
   }
 
   if (query.error) {

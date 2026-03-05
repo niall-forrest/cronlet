@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loading } from "@/components/Loading";
 import { createAlert, listAlerts, listProjects } from "../lib/api";
 
 export function AlertsPage() {
@@ -45,7 +46,7 @@ export function AlertsPage() {
   }, [projectsQuery.data]);
 
   if (projectsQuery.isLoading || alertsQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading alerts...</p>;
+    return <Loading />;
   }
 
   if (projectsQuery.error || alertsQuery.error) {

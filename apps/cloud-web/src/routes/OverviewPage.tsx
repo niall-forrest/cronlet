@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton, SkeletonCard, SkeletonRow } from "@/components/Skeleton";
 import { listTasks, listRuns, listProjects } from "@/lib/api";
 
 function CopyButton({ text }: { text: string }) {
@@ -150,15 +151,6 @@ export function OverviewPage() {
   });
 
   const isLoading = projectsQuery.isLoading || tasksQuery.isLoading;
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
   const projects = projectsQuery.data ?? [];
   const tasks = tasksQuery.data ?? [];
   const runs = runsQuery.data ?? [];
@@ -183,6 +175,47 @@ export function OverviewPage() {
     time: formatTimeAgo(run.createdAt),
     duration: formatDuration(run.durationMs),
   }));
+
+  // Show skeleton dashboard while loading (LCP optimization)
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="display-title">Overview</h1>
+            <Skeleton className="h-4 w-32 mt-2" />
+          </div>
+          <Skeleton className="h-9 w-24" />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <Card className="border-border/50 bg-card/60">
+            <CardHeader className="pb-2">
+              <Skeleton className="h-5 w-28" />
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/60">
+            <CardHeader className="pb-2">
+              <Skeleton className="h-5 w-16" />
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <SkeletonRow />
+              <SkeletonRow />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // New user experience
   if (!hasTasks) {

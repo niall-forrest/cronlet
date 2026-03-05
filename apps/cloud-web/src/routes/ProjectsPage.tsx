@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Loading } from "@/components/Loading";
 import { createProject, listProjects } from "../lib/api";
 
 export function ProjectsPage() {
@@ -52,7 +53,7 @@ export function ProjectsPage() {
   };
 
   if (query.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading projects...</p>;
+    return <Loading />;
   }
 
   if (query.error) {

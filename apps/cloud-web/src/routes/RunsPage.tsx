@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/Skeleton";
 import { listRuns, listTasks } from "@/lib/api";
 
 function StatusBadge({ status }: { status: string }) {
@@ -102,9 +103,7 @@ export function RunsPage() {
     return map;
   }, [tasksQuery.data]);
 
-  if (runsQuery.isLoading || tasksQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading runs...</p>;
-  }
+  const isLoading = runsQuery.isLoading || tasksQuery.isLoading;
 
   if (runsQuery.error) {
     return <p className="text-sm text-destructive">Failed to load runs: {(runsQuery.error as Error).message}</p>;
@@ -201,7 +200,20 @@ export function RunsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {hasRuns ? (
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center gap-4 py-2">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </div>
+          ) : hasRuns ? (
             <Table>
               <TableHeader>
                 <TableRow>

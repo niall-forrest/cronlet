@@ -27,6 +27,7 @@ import {
   Clock,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/Skeleton";
 
 export function TasksPage() {
   const queryClient = useQueryClient();
@@ -72,14 +73,6 @@ export function TasksPage() {
     triggerMutation.mutate(taskId);
   };
 
-  if (loadingTasks) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-muted-foreground">Loading tasks...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -97,7 +90,29 @@ export function TasksPage() {
         </Button>
       </div>
 
-      {tasks.length === 0 ? (
+      {loadingTasks ? (
+        <div className="grid gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="border-border/50">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-lg" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-12" />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Skeleton className="h-4 w-40" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : tasks.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Clock size={48} className="text-muted-foreground/50 mb-4" />

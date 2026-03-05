@@ -45,6 +45,7 @@ import {
   Copy,
   ArrowsClockwise,
 } from "@phosphor-icons/react";
+import { LoadingInline } from "@/components/Loading";
 
 export function SettingsPage() {
   return (
@@ -128,7 +129,7 @@ function SecretsSection() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <LoadingInline className="py-8 justify-center w-full" />
         ) : secrets.length === 0 ? (
           <div className="text-center py-8">
             <Lock size={32} className="mx-auto text-muted-foreground/50 mb-3" />
@@ -323,7 +324,7 @@ function ApiKeysSection() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <LoadingInline className="py-8 justify-center w-full" />
         ) : apiKeys.length === 0 ? (
           <div className="text-center py-8">
             <Key size={32} className="mx-auto text-muted-foreground/50 mb-3" />
