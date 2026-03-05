@@ -343,7 +343,7 @@ console.log("Created task:", task.id);`;
 
           {/* Step Content */}
           <Card variant="flat">
-            <CardContent className="p-5">
+            <CardContent>
               {step === "handler" && (
                 <div className="space-y-6">
                   <div className="space-y-4">

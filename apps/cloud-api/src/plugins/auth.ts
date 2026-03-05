@@ -104,9 +104,12 @@ export async function registerAuthPlugin(app: FastifyInstance): Promise<void> {
     // Accept internal token for any route (used by MCP and worker)
     const providedInternalToken = request.headers["x-internal-token"];
     if (internalToken && providedInternalToken === internalToken) {
+      // Use x-org-id header if provided (worker sends this for per-org operations)
+      const orgIdHeader = request.headers["x-org-id"];
+      const orgId = typeof orgIdHeader === "string" ? orgIdHeader : DEFAULT_ORG_ID;
       request.auth = {
         userId: "internal_service",
-        orgId: DEFAULT_ORG_ID,
+        orgId,
         role: "owner",
         actorType: "internal",
         scopes: ["*"],

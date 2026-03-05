@@ -121,7 +121,7 @@ export function TasksPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {[1, 2, 3, 4].map((i) => (
               <Card key={i} variant="flat">
-                <CardContent className="p-5">
+                <CardContent>
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <Skeleton className="h-2.5 w-2.5 rounded-full" />
@@ -226,7 +226,7 @@ function TaskCard({ task, lastRun, onToggleActive, onTrigger, onDelete, isTrigge
 
   return (
     <Card variant="interactive" className={cn(!task.active && "opacity-60")}>
-      <CardContent className="p-5">
+      <CardContent>
         {/* Header: Status dot + Name + Type badge */}
         <div className="flex items-start justify-between mb-1">
           <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-2.5 min-w-0 group/link">

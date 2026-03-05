@@ -368,7 +368,7 @@ export function OverviewPage() {
             variant="interactive"
             className="h-full cursor-pointer"
           >
-            <CardContent className="p-5">
+            <CardContent>
               <div className="flex items-center gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                   <Clock size={22} className="text-primary" />
@@ -389,7 +389,7 @@ export function OverviewPage() {
             variant="interactive"
             className="h-full cursor-pointer hover:border-emerald-500/30"
           >
-            <CardContent className="p-5">
+            <CardContent>
               <div className="flex items-center gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
                   <CheckCircle
@@ -416,7 +416,7 @@ export function OverviewPage() {
             variant="interactive"
             className="h-full cursor-pointer hover:border-red-500/30"
           >
-            <CardContent className="p-5">
+            <CardContent>
               <div className="flex items-center gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
                   <XCircle size={22} weight="fill" className="text-red-500" />
@@ -433,7 +433,7 @@ export function OverviewPage() {
         </Link>
 
         <Card className="h-full">
-          <CardContent className="p-5">
+          <CardContent>
             <div className="flex items-center gap-4">
               <div
                 className={cn(
@@ -474,7 +474,7 @@ export function OverviewPage() {
       {/* Alerts for failing tasks */}
       {failingTasks.length > 0 && (
         <Card className="border-red-500/30 bg-red-500/5">
-          <CardContent className="p-5">
+          <CardContent>
             <div className="flex items-start gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
                 <Warning size={20} weight="fill" className="text-red-500" />

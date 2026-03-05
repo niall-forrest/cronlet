@@ -205,7 +205,7 @@ export function AgentConnectPage() {
 
       {/* Quick start banner */}
       <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="flex items-center gap-6 p-5">
+        <CardContent className="flex items-center gap-6">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
             <Lightning size={28} weight="duotone" className="text-primary" />
           </div>

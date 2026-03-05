@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { ToolsHandlerConfig } from "@cronlet/cloud-shared";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { listSecrets, createSecret } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +18,15 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { CaretDown, Plus, Trash, DotsSixVertical } from "@phosphor-icons/react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { CaretDown, Plus, Trash, DotsSixVertical, Key } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 interface ToolStep {
@@ -87,6 +97,168 @@ const TOOLS = [
     ],
   },
 ] as const;
+
+// Secret selector with dropdown and create new functionality
+interface SecretSelectorProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
+function SecretSelector({ value, onChange, placeholder }: SecretSelectorProps) {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newSecretName, setNewSecretName] = useState("");
+  const [newSecretValue, setNewSecretValue] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+
+  const { data: secrets = [], isLoading } = useQuery({
+    queryKey: ["secrets"],
+    queryFn: listSecrets,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (input: { name: string; value: string }) => createSecret(input),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["secrets"] });
+      onChange(created.name);
+      setShowCreateDialog(false);
+      setNewSecretName("");
+      setNewSecretValue("");
+      setCreateError(null);
+    },
+    onError: (err) => {
+      setCreateError(err instanceof Error ? err.message : "Failed to create secret");
+    },
+  });
+
+  const handleCreate = () => {
+    if (!newSecretName.trim()) {
+      setCreateError("Secret name is required");
+      return;
+    }
+    if (!newSecretValue.trim()) {
+      setCreateError("Secret value is required");
+      return;
+    }
+    createMutation.mutate({ name: newSecretName.trim(), value: newSecretValue.trim() });
+  };
+
+  return (
+    <>
+      <Select
+        value={value || "_none_"}
+        onValueChange={(val) => {
+          if (val === "_create_new_") {
+            setShowCreateDialog(true);
+          } else if (val === "_none_") {
+            onChange("");
+          } else {
+            onChange(val);
+          }
+        }}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={isLoading ? "Loading..." : placeholder}>
+            {value ? (
+              <span className="flex items-center gap-2">
+                <Key size={14} className="text-primary" />
+                {value}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">{placeholder || "Select a secret..."}</span>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_none_">
+            <span className="text-muted-foreground">None</span>
+          </SelectItem>
+          {secrets.length > 0 && (
+            <>
+              {secrets.map((secret) => (
+                <SelectItem key={secret.name} value={secret.name}>
+                  <span className="flex items-center gap-2">
+                    <Key size={14} className="text-primary" />
+                    {secret.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </>
+          )}
+          <SelectItem value="_create_new_" className="border-t border-border/50 mt-1 pt-1">
+            <span className="flex items-center gap-2 text-primary">
+              <Plus size={14} />
+              Create new secret...
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="!max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Secret</DialogTitle>
+            <DialogDescription>
+              Secrets are stored securely and can be used across multiple tasks.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs">Name</Label>
+              <Input
+                value={newSecretName}
+                onChange={(e) => {
+                  setNewSecretName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_"));
+                  setCreateError(null);
+                }}
+                placeholder="RESEND_API_KEY"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use SCREAMING_SNAKE_CASE (e.g., SLACK_TOKEN, RESEND_API_KEY)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Value</Label>
+              <Input
+                type="password"
+                value={newSecretValue}
+                onChange={(e) => {
+                  setNewSecretValue(e.target.value);
+                  setCreateError(null);
+                }}
+                placeholder="re_xxxxxxxxxxxxx"
+              />
+            </div>
+
+            {createError && (
+              <p className="text-xs text-destructive">{createError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? "Creating..." : "Create Secret"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 interface ToolStepBuilderProps {
   value: ToolsHandlerConfig;
@@ -224,7 +396,17 @@ export function ToolStepBuilder({ value, onChange }: ToolStepBuilderProps) {
                           <span className="text-destructive ml-1">*</span>
                         )}
                       </Label>
-                      {argDef.type === "json" ? (
+                      {argDef.name === "secretName" ? (
+                        <SecretSelector
+                          value={String(step.args[argDef.name] ?? "")}
+                          onChange={(val) =>
+                            updateStep(index, {
+                              args: { ...step.args, [argDef.name]: val || undefined },
+                            })
+                          }
+                          placeholder={argDef.placeholder}
+                        />
+                      ) : argDef.type === "json" ? (
                         <Textarea
                           value={
                             typeof step.args[argDef.name] === "object"

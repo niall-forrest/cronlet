@@ -128,7 +128,7 @@
 
   /* Status dot indicators */
   .status-dot {
-    @apply h-2 w-2 shrink-0 rounded-full;
+    @apply h-2.5 w-2.5 shrink-0 rounded-full;
   }
 
   .status-dot-success {
@@ -136,7 +136,8 @@
     box-shadow: 0 0 8px hsl(var(--success) / 0.5);
   }
 
-  .status-dot-error {
+  .status-dot-error,
+  .status-dot-failed {
     @apply bg-red-500;
     box-shadow: 0 0 8px hsl(var(--destructive) / 0.5);
   }
@@ -147,10 +148,27 @@
   }
 
   .status-dot-running {
-    @apply bg-primary animate-pulse;
+    @apply bg-primary;
     box-shadow: 0 0 8px hsl(var(--primary) / 0.5);
+    animation: pulse-glow 2s ease-in-out infinite;
   }
 
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 0 0 8px hsl(var(--primary) / 0.5);
+    }
+    50% {
+      opacity: 0.6;
+      box-shadow: 0 0 12px hsl(var(--primary) / 0.8);
+    }
+  }
+
+  .status-dot-idle {
+    @apply bg-muted-foreground/40;
+  }
+
+  .status-dot-paused,
   .status-dot-muted {
     @apply bg-muted-foreground/50;
   }
