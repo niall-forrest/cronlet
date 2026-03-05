@@ -1,18 +1,26 @@
 {
-  "name": "@cronlet/cloud-sdk",
+  "name": "@cronlet/sdk",
   "version": "0.1.0",
-  "private": true,
+  "description": "Official SDK for Cronlet Cloud - scheduled tasks for AI agents and automation",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -21,8 +29,35 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
   },
+  "keywords": [
+    "cronlet",
+    "cron",
+    "scheduler",
+    "tasks",
+    "ai",
+    "agents",
+    "mcp",
+    "openai",
+    "anthropic",
+    "langchain",
+    "automation"
+  ],
+  "author": "Cronlet",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cronlet/cronlet",
+    "directory": "packages/cloud-sdk"
+  },
+  "homepage": "https://cronlet.dev",
+  "bugs": {
+    "url": "https://github.com/cronlet/cronlet/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "@cronlet/cloud-shared": "workspace:*"
+    "@cronlet/shared": "^0.1.0"
   },
   "devDependencies": {
     "@cronlet/eslint-config": "workspace:*",

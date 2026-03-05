@@ -1,4 +1,4 @@
-import { auditEventCreateSchema, auditEventListSchema } from "@cronlet/cloud-shared";
+import { auditEventCreateSchema, auditEventListSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { authorize } from "../lib/permissions.js";
 import { handleError, ok } from "../lib/http.js";

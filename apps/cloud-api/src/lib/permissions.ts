@@ -1,4 +1,4 @@
-import { ERROR_CODES, type CloudAuthContext } from "@cronlet/cloud-shared";
+import { ERROR_CODES, type CloudAuthContext } from "@cronlet/shared";
 import { AppError } from "./errors.js";
 
 export type Role = CloudAuthContext["role"];

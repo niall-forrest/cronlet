@@ -1,4 +1,4 @@
-import { alertCreateSchema } from "@cronlet/cloud-shared";
+import { alertCreateSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";

@@ -1,4 +1,4 @@
-import { apiKeyCreateSchema, apiKeyRotateSchema } from "@cronlet/cloud-shared";
+import { apiKeyCreateSchema, apiKeyRotateSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { recordAuditEvent } from "../lib/audit.js";
 import { handleError, ok } from "../lib/http.js";

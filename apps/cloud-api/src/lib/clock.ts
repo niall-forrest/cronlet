@@ -1,5 +1,5 @@
 import { Cron } from "croner";
-import type { ScheduleConfig } from "@cronlet/cloud-shared";
+import type { ScheduleConfig } from "@cronlet/shared";
 
 export function nowIso(): string {
   return new Date().toISOString();

@@ -24,8 +24,8 @@ import {
   type TaskRecord,
   type UsageSnapshot,
   parseDuration,
-} from "@cronlet/cloud-shared";
-import { ERROR_CODES } from "@cronlet/cloud-shared";
+} from "@cronlet/shared";
+import { ERROR_CODES } from "@cronlet/shared";
 import { nanoid } from "nanoid";
 import { AppError } from "./errors.js";
 import { computeNextRun, nowIso } from "./clock.js";

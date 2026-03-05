@@ -1,4 +1,4 @@
-import type { ErrorCode } from "@cronlet/cloud-shared";
+import type { ErrorCode } from "@cronlet/shared";
 
 export class AppError extends Error {
   readonly statusCode: number;

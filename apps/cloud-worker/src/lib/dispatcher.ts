@@ -7,7 +7,7 @@ import type {
   ToolsHandlerConfig,
   TaskCallbackPayload,
   TaskCallbackEventType,
-} from "@cronlet/cloud-shared";
+} from "@cronlet/shared";
 import type { CloudApiClient } from "./api.js";
 import { parseDurationToMs } from "./time.js";
 import { executeTool, type ToolContext } from "./tools/index.js";

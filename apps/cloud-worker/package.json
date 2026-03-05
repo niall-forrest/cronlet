@@ -14,7 +14,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@cronlet/cloud-shared": "workspace:*",
+    "@cronlet/shared": "workspace:*",
     "bullmq": "^5.12.12",
     "ioredis": "5.9.3"
   },

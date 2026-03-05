@@ -26,7 +26,7 @@ importers:
 
   apps/cloud-api:
     dependencies:
-      '@cronlet/cloud-shared':
+      '@cronlet/shared':
         specifier: workspace:*
         version: link:../../packages/cloud-shared
       '@fastify/cors':
@@ -78,10 +78,10 @@ importers:
 
   apps/cloud-mcp:
     dependencies:
-      '@cronlet/cloud-sdk':
+      '@cronlet/sdk':
         specifier: workspace:*
         version: link:../../packages/cloud-sdk
-      '@cronlet/cloud-shared':
+      '@cronlet/shared':
         specifier: workspace:*
         version: link:../../packages/cloud-shared
       fastify:
@@ -109,7 +109,7 @@ importers:
       '@clerk/clerk-react':
         specifier: 5.61.3
         version: 5.61.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@cronlet/cloud-shared':
+      '@cronlet/shared':
         specifier: workspace:*
         version: link:../../packages/cloud-shared
       '@phosphor-icons/react':
@@ -173,7 +173,7 @@ importers:
 
   apps/cloud-worker:
     dependencies:
-      '@cronlet/cloud-shared':
+      '@cronlet/shared':
         specifier: workspace:*
         version: link:../../packages/cloud-shared
       bullmq:
@@ -262,7 +262,7 @@ importers:
 
   packages/cloud-sdk:
     dependencies:
-      '@cronlet/cloud-shared':
+      '@cronlet/shared':
         specifier: workspace:*
         version: link:../cloud-shared
     devDependencies:
@@ -322,12 +322,12 @@ importers:
 
   packages/cronlet-cli:
     dependencies:
-      '@cronlet/cloud-shared':
-        specifier: workspace:*
-        version: link:../cloud-shared
       '@cronlet/dashboard':
         specifier: workspace:*
         version: link:../../apps/dashboard
+      '@cronlet/shared':
+        specifier: workspace:*
+        version: link:../cloud-shared
       '@fastify/static':
         specifier: ^7.0.0
         version: 7.0.4

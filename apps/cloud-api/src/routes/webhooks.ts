@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Webhook } from "svix";
-import type { PlanTier } from "@cronlet/cloud-shared";
-import { ERROR_CODES } from "@cronlet/cloud-shared";
+import type { PlanTier } from "@cronlet/shared";
+import { ERROR_CODES } from "@cronlet/shared";
 import { AppError } from "../lib/errors.js";
 import { handleError, ok } from "../lib/http.js";
 import { recordAuditEvent } from "../lib/audit.js";

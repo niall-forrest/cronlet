@@ -1,14 +1,21 @@
 {
-  "name": "@cronlet/cloud-shared",
+  "name": "@cronlet/shared",
   "version": "0.1.0",
-  "private": true,
+  "description": "Shared types and schemas for Cronlet Cloud",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
@@ -20,6 +27,21 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
+  },
+  "keywords": [
+    "cronlet",
+    "types",
+    "schemas"
+  ],
+  "author": "Cronlet",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cronlet/cronlet",
+    "directory": "packages/cloud-shared"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "zod": "^3.25.76"

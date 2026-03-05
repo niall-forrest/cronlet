@@ -26,8 +26,8 @@ import {
   type TaskPatchInput,
   type TaskRecord,
   type UsageSnapshot,
-} from "@cronlet/cloud-shared";
-import { ERROR_CODES } from "@cronlet/cloud-shared";
+} from "@cronlet/shared";
+import { ERROR_CODES } from "@cronlet/shared";
 import { AppError } from "./errors.js";
 import { computeNextRun } from "./clock.js";
 import type { CloudStore, EntitlementUpdateInput, OrganizationUpsertInput } from "./store-contract.js";

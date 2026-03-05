@@ -1,4 +1,4 @@
-import { taskCreateSchema, taskPatchSchema } from "@cronlet/cloud-shared";
+import { taskCreateSchema, taskPatchSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";

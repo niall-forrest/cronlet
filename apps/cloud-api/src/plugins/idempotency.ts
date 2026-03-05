@@ -1,4 +1,4 @@
-import { ERROR_CODES } from "@cronlet/cloud-shared";
+import { ERROR_CODES } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../lib/errors.js";
 import { handleError } from "../lib/http.js";

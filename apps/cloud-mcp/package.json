@@ -14,8 +14,8 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@cronlet/cloud-sdk": "workspace:*",
-    "@cronlet/cloud-shared": "workspace:*",
+    "@cronlet/sdk": "workspace:*",
+    "@cronlet/shared": "workspace:*",
     "fastify": "^4.28.1"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { CloudClient } from "@cronlet/cloud-sdk";
-import { handlerConfigSchema } from "@cronlet/cloud-shared";
+import { handlerConfigSchema } from "@cronlet/shared";
 import { MCP_TOOLS, type McpToolName } from "./lib/tools.js";
 import { resolveSchedule, parseSchedule } from "./lib/schedule-parser.js";
 

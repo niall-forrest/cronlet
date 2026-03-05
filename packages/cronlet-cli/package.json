@@ -30,7 +30,7 @@
   "dependencies": {
     "cronlet": "workspace:*",
     "@cronlet/dashboard": "workspace:*",
-    "@cronlet/cloud-shared": "workspace:*",
+    "@cronlet/shared": "workspace:*",
     "@fastify/static": "^7.0.0",
     "commander": "^12.0.0",
     "chokidar": "^3.6.0",

@@ -1,4 +1,4 @@
-import type { ScheduleConfig } from "@cronlet/cloud-shared";
+import type { ScheduleConfig } from "@cronlet/shared";
 
 interface ParseResult {
   success: boolean;

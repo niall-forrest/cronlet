@@ -12,7 +12,7 @@ import type {
   TaskPatchInput,
   SecretCreateInput,
   SecretPatchInput,
-} from "@cronlet/cloud-shared";
+} from "@cronlet/shared";
 
 const BASE_URL = (import.meta.env.VITE_CLOUD_API_BASE_URL as string | undefined)?.replace(/\/$/, "")
   ?? "http://127.0.0.1:4050";

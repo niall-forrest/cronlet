@@ -1,5 +1,5 @@
 import type { CloudClient } from "./client.js";
-import type { HandlerConfigInput, ScheduleConfigInput } from "@cronlet/cloud-shared";
+import type { HandlerConfigInput, ScheduleConfigInput } from "@cronlet/shared";
 
 // =============================================================================
 // Tool Definitions - Compatible with OpenAI, Anthropic, and LangChain

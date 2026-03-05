@@ -1,4 +1,4 @@
-import { ERROR_CODES, type ApiResponse } from "@cronlet/cloud-shared";
+import { ERROR_CODES, type ApiResponse } from "@cronlet/shared";
 import type { FastifyReply } from "fastify";
 import { AppError } from "./errors.js";
 

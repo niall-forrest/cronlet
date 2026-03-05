@@ -1,4 +1,4 @@
-import type { DispatchInstruction, InternalRunStatusInput } from "@cronlet/cloud-shared";
+import type { DispatchInstruction, InternalRunStatusInput } from "@cronlet/shared";
 
 interface ApiResponse<T> {
   ok: boolean;

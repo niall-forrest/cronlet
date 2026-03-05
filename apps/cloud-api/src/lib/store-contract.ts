@@ -20,7 +20,7 @@ import type {
   TaskPatchInput,
   TaskRecord,
   UsageSnapshot,
-} from "@cronlet/cloud-shared";
+} from "@cronlet/shared";
 
 export interface EntitlementUpdateInput {
   tier: PlanTier;
