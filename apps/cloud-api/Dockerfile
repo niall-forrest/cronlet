@@ -20,7 +20,7 @@ COPY packages/cloud-shared ./packages/cloud-shared
 COPY apps/cloud-api ./apps/cloud-api
 
 # Generate Prisma client and build
-RUN pnpm --filter @cronlet/cloud-shared build
+RUN pnpm --filter @cronlet/shared build
 RUN pnpm --filter @cronlet/cloud-api prisma:generate
 RUN pnpm --filter @cronlet/cloud-api build
 

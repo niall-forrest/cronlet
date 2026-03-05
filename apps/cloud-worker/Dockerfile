@@ -20,7 +20,7 @@ COPY packages/cloud-shared ./packages/cloud-shared
 COPY apps/cloud-worker ./apps/cloud-worker
 
 # Build
-RUN pnpm --filter @cronlet/cloud-shared build
+RUN pnpm --filter @cronlet/shared build
 RUN pnpm --filter @cronlet/cloud-worker build
 
 # Production stage

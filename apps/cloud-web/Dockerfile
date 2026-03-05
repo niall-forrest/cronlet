@@ -20,7 +20,7 @@ COPY packages/cloud-shared ./packages/cloud-shared
 COPY apps/cloud-web ./apps/cloud-web
 
 # Build shared package first
-RUN pnpm --filter @cronlet/cloud-shared build
+RUN pnpm --filter @cronlet/shared build
 
 # Build args for Vite (passed at build time)
 ARG VITE_CLOUD_API_BASE_URL
