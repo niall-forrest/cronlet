@@ -192,11 +192,11 @@ function SecretsSection() {
 
       {/* Create Secret Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Add Secret</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Name</Label>
               <Input
@@ -420,7 +420,7 @@ function ApiKeysSection() {
           setCopied(false);
         }
       }}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>
               {newToken ? "API Key Created" : "Create API Key"}
@@ -428,7 +428,7 @@ function ApiKeysSection() {
           </DialogHeader>
 
           {newToken ? (
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <p className="text-sm text-muted-foreground">
                 Copy your API key now. You won't be able to see it again.
               </p>
@@ -442,7 +442,7 @@ function ApiKeysSection() {
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label>Label</Label>
                 <Input
@@ -487,11 +487,11 @@ function ApiKeysSection() {
           setCopied(false);
         }
       }}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>New API Key</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
               Copy your new API key now. You won't be able to see it again.
             </p>

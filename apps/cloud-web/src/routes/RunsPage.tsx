@@ -36,11 +36,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/Skeleton";
 import { SectionHeader } from "@/components/ui/section-header";
 import { listRuns, listTasks } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 function StatusBadge({ status }: { status: string }) {
   const variantMap: Record<string, "success" | "error" | "warning" | "secondary"> = {
@@ -341,30 +341,30 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
 
   return (
     <Dialog open={!!run} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="!max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent size="2xl" className="max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-3">
-            <span className="font-semibold">{taskName ?? run.taskId}</span>
+            <span>{taskName ?? run.taskId}</span>
             <StatusBadge status={run.status} />
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="flex-1 overflow-y-auto space-y-5 py-2">
           {/* Run metadata */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="space-y-1">
               <span className="meta-label">Trigger</span>
               <p className="text-sm font-medium capitalize">{run.trigger}</p>
             </div>
-            <div>
+            <div className="space-y-1">
               <span className="meta-label">Attempt</span>
               <p className="text-sm font-medium">{run.attempt}</p>
             </div>
-            <div>
+            <div className="space-y-1">
               <span className="meta-label">Duration</span>
               <p className="text-sm font-medium tabular-nums">{formatDuration(run.durationMs)}</p>
             </div>
-            <div>
+            <div className="space-y-1">
               <span className="meta-label">Started</span>
               <p className="text-sm font-medium">
                 {run.startedAt ? new Date(run.startedAt).toLocaleString() : "—"}
@@ -375,8 +375,8 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
           {/* Error message */}
           {run.errorMessage && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              <p className="text-sm font-medium text-destructive mb-1">Error</p>
-              <p className="text-sm text-destructive/80 font-mono break-words whitespace-pre-wrap">{run.errorMessage}</p>
+              <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-2">Error</p>
+              <p className="text-sm text-destructive/90 font-mono break-words whitespace-pre-wrap">{run.errorMessage}</p>
             </div>
           )}
 
@@ -384,7 +384,7 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
           {run.output && (
             <div className="space-y-2">
               <span className="meta-label">Output</span>
-              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto">
+              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto max-h-48">
                 {JSON.stringify(run.output, null, 2)}
               </pre>
             </div>
@@ -394,15 +394,18 @@ function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
           {run.logs && (
             <div className="space-y-2">
               <span className="meta-label">Logs</span>
-              <pre className={cn(
-                "rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre-wrap",
-                "max-h-64"
-              )}>
+              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre-wrap max-h-64">
                 {run.logs}
               </pre>
             </div>
           )}
         </div>
+
+        <DialogFooter className="shrink-0">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

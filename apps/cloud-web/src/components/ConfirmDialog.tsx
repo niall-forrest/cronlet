@@ -49,8 +49,8 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-md">
-        <DialogHeader>
+      <DialogContent size="sm">
+        <DialogHeader className="border-b-0 pb-0">
           <div className="flex items-start gap-4">
             {variant === "danger" && (
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
@@ -62,14 +62,14 @@ export function ConfirmDialog({
                 <Warning size={20} weight="fill" className="text-warning" />
               </div>
             )}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <DialogTitle>{title}</DialogTitle>
               <DialogDescription>{description}</DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <DialogFooter className="mt-4">
+        <DialogFooter>
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

@@ -374,11 +374,11 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
 
           {/* Delete Confirmation Dialog */}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogContent>
+            <DialogContent size="sm">
               <DialogHeader>
                 <DialogTitle>Delete Task</DialogTitle>
               </DialogHeader>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground py-2">
                 Are you sure you want to delete <span className="font-medium text-foreground">{task.name}</span>?
                 This action cannot be undone and all run history will be permanently deleted.
               </p>
@@ -622,11 +622,11 @@ function EditTaskDialog({ task, open, onOpenChange, onSave, isSaving }: EditTask
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -673,50 +673,50 @@ function RunDetailDialog({ run, onClose }: RunDetailDialogProps) {
 
   return (
     <Dialog open={!!run} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="!max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent size="2xl" className="max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-3">
             Run Details
             <RunStatusBadge status={run.status} attempt={run.attempt} />
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-5 py-2">
           {/* Run metadata */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Trigger</p>
-              <p className="font-medium capitalize">{run.trigger}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <p className="meta-label">Trigger</p>
+              <p className="text-sm font-medium capitalize">{run.trigger}</p>
             </div>
-            <div>
-              <p className="text-muted-foreground">Attempt</p>
-              <p className="font-medium">{run.attempt}</p>
+            <div className="space-y-1">
+              <p className="meta-label">Attempt</p>
+              <p className="text-sm font-medium">{run.attempt}</p>
             </div>
-            <div>
-              <p className="text-muted-foreground">Duration</p>
-              <p className="font-medium">{formatDuration(run.durationMs)}</p>
+            <div className="space-y-1">
+              <p className="meta-label">Duration</p>
+              <p className="text-sm font-medium tabular-nums">{formatDuration(run.durationMs)}</p>
             </div>
-            <div>
-              <p className="text-muted-foreground">Started</p>
-              <p className="font-medium">
-                {run.startedAt ? new Date(run.startedAt).toLocaleString() : "-"}
+            <div className="space-y-1">
+              <p className="meta-label">Started</p>
+              <p className="text-sm font-medium">
+                {run.startedAt ? new Date(run.startedAt).toLocaleString() : "—"}
               </p>
             </div>
           </div>
 
           {/* Error message */}
           {run.errorMessage && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-              <p className="text-sm font-medium text-destructive mb-1">Error</p>
-              <p className="text-sm text-destructive/80 break-words whitespace-pre-wrap">{run.errorMessage}</p>
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-2">Error</p>
+              <p className="text-sm text-destructive/90 font-mono break-words whitespace-pre-wrap">{run.errorMessage}</p>
             </div>
           )}
 
           {/* Output */}
           {run.output && (
             <div className="space-y-2">
-              <p className="text-sm font-medium">Output</p>
-              <pre className="rounded-lg bg-muted p-4 text-xs overflow-x-auto">
+              <p className="meta-label">Output</p>
+              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto max-h-48">
                 {JSON.stringify(run.output, null, 2)}
               </pre>
             </div>
@@ -725,13 +725,19 @@ function RunDetailDialog({ run, onClose }: RunDetailDialogProps) {
           {/* Logs */}
           {run.logs && (
             <div className="space-y-2">
-              <p className="text-sm font-medium">Logs</p>
-              <pre className="rounded-lg bg-muted p-4 text-xs overflow-x-auto whitespace-pre-wrap">
+              <p className="meta-label">Logs</p>
+              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre-wrap max-h-64">
                 {run.logs}
               </pre>
             </div>
           )}
         </div>
+
+        <DialogFooter className="shrink-0">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

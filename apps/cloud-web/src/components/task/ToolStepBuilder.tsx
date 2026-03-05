@@ -197,7 +197,7 @@ function SecretSelector({ value, onChange, placeholder }: SecretSelectorProps) {
       </Select>
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="!max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Create Secret</DialogTitle>
             <DialogDescription>
