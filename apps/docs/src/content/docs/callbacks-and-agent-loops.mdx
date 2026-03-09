@@ -1,0 +1,224 @@
+---
+title: Callbacks and Agent Loops
+description: How to wire callback URLs, reconcile runs into your product, and safely build agent feedback loops.
+sidebar:
+  order: 5
+  label: Callbacks and Agent Loops
+---
+
+Callbacks are what turn Cronlet from "hosted scheduler" into "useful part of your product".
+
+Use a `callbackUrl` whenever your app needs to:
+
+- update internal state after a run
+- store output back into product records
+- trigger agent follow-up logic
+- adapt schedules after success or failure
+- stop a schedule when product-side conditions change
+
+## Set a callback URL on task creation
+
+```ts
+await cronlet.tasks.create({
+  name: "User report scheduler",
+  handler: {
+    type: "webhook",
+    url: "https://app.example.com/internal/reports/run",
+    method: "POST",
+  },
+  schedule: {
+    type: "daily",
+    times: ["09:00"],
+  },
+  timezone: "UTC",
+  retryAttempts: 1,
+  retryBackoff: "linear",
+  retryDelay: "1s",
+  timeout: "30s",
+  active: true,
+  callbackUrl: "https://app.example.com/api/cronlet/callback",
+  metadata: {
+    userId: "user_123",
+    reportId: "report_456",
+  },
+});
+```
+
+## Current callback payload shape
+
+The shared types define this payload:
+
+```ts
+interface TaskCallbackPayload {
+  event: "task.run.completed" | "task.run.failed" | "task.expired";
+  timestamp: string;
+  task: {
+    id: string;
+    name: string;
+    metadata: Record<string, unknown> | null;
+  };
+  run?: {
+    id: string;
+    status: "queued" | "running" | "success" | "failure" | "timeout";
+    output: Record<string, unknown> | null;
+    errorMessage: string | null;
+    durationMs: number | null;
+    attempt: number;
+  };
+  stats: {
+    totalRuns: number;
+    remainingRuns: number | null;
+    expiresAt: string | null;
+  };
+  reason?: "max_runs_reached" | "expired_at_reached";
+}
+```
+
+## Current implementation caveats
+
+The worker currently sends:
+
+- `task.id`
+- `task.metadata`
+- `run.id`
+- `run.status`
+- `run.output`
+- `run.errorMessage`
+- `run.durationMs`
+- `run.attempt`
+- `stats.totalRuns`
+- `stats.remainingRuns`
+
+But right now:
+
+- `task.name` is sent as an empty string
+- `stats.expiresAt` is sent as `null`
+- callback delivery has an `x-cronlet-event` header, but there is no request signature or HMAC verification yet
+
+Design your callback code around `task.id`, `task.metadata`, and `run.id`.
+
+## Minimal callback handler
+
+```ts
+import type { TaskCallbackPayload } from "@cronlet/shared";
+
+export async function handleCronletCallback(req: Request) {
+  const payload = (await req.json()) as TaskCallbackPayload;
+  const event = req.headers.get("x-cronlet-event");
+
+  if (!event || event !== payload.event) {
+    return new Response("Bad event header", { status: 400 });
+  }
+
+  const taskId = payload.task.id;
+  const metadata = payload.task.metadata ?? {};
+  const run = payload.run;
+
+  // Lookup internal schedule record by taskId first.
+  // Use metadata only as a secondary safety check.
+  const schedule = await db.reportSchedules.findByCronletTaskId(taskId);
+  if (!schedule) {
+    return new Response("Unknown task", { status: 404 });
+  }
+
+  // Idempotency: ignore duplicate run deliveries.
+  if (run && (await db.runEvents.exists(run.id))) {
+    return new Response("ok", { status: 200 });
+  }
+
+  if (run) {
+    await db.runEvents.insert({
+      cronletRunId: run.id,
+      cronletTaskId: taskId,
+      status: run.status,
+      output: run.output,
+      errorMessage: run.errorMessage,
+      durationMs: run.durationMs,
+      metadata,
+    });
+  }
+
+  return new Response("ok", { status: 200 });
+}
+```
+
+## Required callback design rules
+
+### 1. Be idempotent
+
+Store `run.id` and ignore duplicates.
+
+### 2. Reconcile by `task.id`
+
+Do not trust display names. Persist the Cronlet task ID in your own DB when the task is created, then look up by `task.id` on callback.
+
+### 3. Treat metadata as guardrails
+
+Use metadata to confirm user/account ownership and internal record identity:
+
+```ts
+metadata: {
+  userId: "user_123",
+  orgId: "org_456",
+  scheduleType: "follow-up",
+  leadId: "lead_789",
+}
+```
+
+### 4. Keep business logic product-side
+
+Cronlet should run the schedule. Your app should decide what that means for users, alerts, follow-ups, and internal records.
+
+### 5. Assume retries can happen
+
+Cronlet retries task execution. Your callback path should also be safe if the same completion event is delivered more than once.
+
+## Common agent loop patterns
+
+### 1. Create -> run -> write back
+
+- agent creates task
+- Cronlet executes
+- callback updates product record
+- UI shows latest output
+
+### 2. Create -> run -> patch schedule
+
+- agent creates task with baseline cadence
+- callback sees failure
+- product patches schedule to a faster cadence
+- later callback sees recovery
+- product patches schedule back to baseline
+
+### 3. Create -> run -> stop
+
+- agent schedules bounded follow-up
+- callback checks conversion state
+- product deletes or pauses task once the goal is reached
+
+## What to return from the callback endpoint
+
+Return a fast `200 OK` once you have safely persisted or queued processing.
+
+If downstream work is heavy:
+
+- persist the callback event
+- enqueue internal processing
+- acknowledge quickly
+
+Do not make the callback handler itself do expensive fan-out work if you can avoid it.
+
+## Security note
+
+Because callback signing is not implemented yet, the safest current pattern is:
+
+- use a hard-to-guess callback URL
+- only accept JSON
+- validate task ownership against stored `task.id`
+- validate metadata against expected internal IDs
+- keep the endpoint private to server-side infrastructure
+
+## Next steps
+
+- [Agent Tooling](/agent-tooling/)
+- [SDK API Reference](/sdk-api-reference/)

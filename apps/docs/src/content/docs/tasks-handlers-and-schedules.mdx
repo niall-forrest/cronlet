@@ -1,0 +1,341 @@
+---
+title: Tasks, Handlers, and Schedules
+description: Accurate reference for the Cloud task model, supported handlers, schedules, metadata, and lifecycle controls.
+sidebar:
+  order: 4
+  label: Tasks, Handlers, and Schedules
+---
+
+Cronlet Cloud tasks are the core execution unit.
+
+A task combines:
+
+- human-readable metadata (`name`, `description`)
+- a `handler`
+- a `schedule`
+- execution controls (`retryAttempts`, `retryBackoff`, `retryDelay`, `timeout`)
+- lifecycle controls (`active`, `maxRuns`, `expiresAt`)
+- optional `callbackUrl`
+- optional `metadata`
+
+## Task create shape
+
+```ts
+await cronlet.tasks.create({
+  name: "API health check",
+  description: "Ping the production health endpoint",
+  handler: {
+    type: "webhook",
+    url: "https://api.example.com/health",
+    method: "GET",
+  },
+  schedule: {
+    type: "every",
+    interval: "5m",
+  },
+  timezone: "UTC",
+  retryAttempts: 2,
+  retryBackoff: "linear",
+  retryDelay: "5s",
+  timeout: "30s",
+  active: true,
+  callbackUrl: "https://app.example.com/api/cronlet/callback",
+  metadata: {
+    userId: "user_123",
+    monitorId: "monitor_456",
+  },
+  maxRuns: 100,
+  expiresAt: "2026-12-31T23:59:59.000Z",
+});
+```
+
+## Handlers
+
+### `webhook`
+
+Use this when Cronlet should call an HTTP endpoint directly.
+
+```ts
+handler: {
+  type: "webhook",
+  url: "https://api.example.com/webhook",
+  method: "POST",
+  headers: {
+    "X-Source": "cronlet",
+  },
+  body: {
+    kind: "report",
+  },
+  auth: {
+    type: "bearer",
+    secretName: "INTERNAL_API_TOKEN",
+  },
+}
+```
+
+Supported fields:
+
+- `url: string`
+- `method?: "GET" | "POST"`
+- `headers?: Record<string, string>`
+- `body?: unknown`
+- `auth?: { type: "bearer" | "basic" | "header"; secretName: string }`
+
+### `tools`
+
+Use this when Cronlet should execute a hosted multi-step workflow.
+
+```ts
+handler: {
+  type: "tools",
+  steps: [
+    {
+      tool: "http.get",
+      args: {
+        url: "https://api.example.com/report",
+      },
+      outputKey: "report",
+    },
+    {
+      tool: "slack.post",
+      args: {
+        channel: "#ops",
+        text: "Weekly digest: {{report.body}}",
+        secretName: "SLACK_TOKEN",
+      },
+    },
+  ],
+}
+```
+
+Each tool step supports:
+
+- `tool: string`
+- `args: Record<string, unknown>`
+- `outputKey?: string`
+
+Current tool names visible in the product UI include:
+
+- `http.get`
+- `http.post`
+- `slack.post`
+- `email.send`
+- `log`
+- `sleep`
+
+### `code`
+
+The shared schemas include a `code` handler type, but the hosted worker currently rejects it. Do not build production Cloud integrations around hosted code handlers until that runtime is actually shipped.
+
+## Schedules
+
+The SDK currently expects schedule **objects**.
+
+### Every
+
+```ts
+schedule: {
+  type: "every",
+  interval: "15m",
+}
+```
+
+Supported duration format:
+
+- `100ms`
+- `1s`
+- `5m`
+- `1h`
+- `1d`
+
+### Daily
+
+```ts
+schedule: {
+  type: "daily",
+  times: ["09:00", "17:00"],
+}
+```
+
+### Weekly
+
+```ts
+schedule: {
+  type: "weekly",
+  days: ["mon", "wed", "fri"],
+  time: "09:00",
+}
+```
+
+### Monthly
+
+```ts
+schedule: {
+  type: "monthly",
+  day: "last-fri",
+  time: "17:00",
+}
+```
+
+Supported `day` values:
+
+- integers `1..31`
+- `"last"`
+- `"last-mon"`
+- `"last-tue"`
+- `"last-wed"`
+- `"last-thu"`
+- `"last-fri"`
+- `"last-sat"`
+- `"last-sun"`
+
+### Once
+
+```ts
+schedule: {
+  type: "once",
+  at: "2026-03-15T09:00:00.000Z",
+}
+```
+
+### Cron
+
+```ts
+schedule: {
+  type: "cron",
+  expression: "0 9 * * 1-5",
+}
+```
+
+## Timezone
+
+Use an IANA timezone string:
+
+```ts
+timezone: "America/New_York"
+```
+
+If omitted, the SDK defaults to `UTC`.
+
+## Execution controls
+
+```ts
+retryAttempts: 3,
+retryBackoff: "exponential",
+retryDelay: "30s",
+timeout: "5m",
+```
+
+Constraints from the shared schema:
+
+- `retryAttempts`: `1..10`
+- `retryBackoff`: `"linear"` or `"exponential"`
+- `retryDelay`: duration string
+- `timeout`: duration string
+
+## Lifecycle controls
+
+### Pause on create
+
+```ts
+active: false
+```
+
+### Limit total runs
+
+```ts
+maxRuns: 20
+```
+
+### Expire at a specific time
+
+```ts
+expiresAt: "2026-06-30T23:59:59.000Z"
+```
+
+## Metadata
+
+Treat metadata as the bridge between Cronlet and your product data model.
+
+Recommended metadata shape:
+
+```ts
+metadata: {
+  userId: "user_123",
+  orgId: "org_456",
+  feature: "scheduled-report",
+  entityId: "report_789",
+  createdBy: "agent",
+}
+```
+
+Use stable IDs, not display names.
+
+## Patching tasks
+
+```ts
+await cronlet.tasks.patch(taskId, {
+  schedule: {
+    type: "every",
+    interval: "1m",
+  },
+  timezone: "UTC",
+  callbackUrl: null,
+  metadata: {
+    userId: "user_123",
+    monitorId: "monitor_456",
+    mode: "degraded",
+  },
+  maxRuns: null,
+  expiresAt: null,
+});
+```
+
+`patch()` supports updates for:
+
+- `name`
+- `description`
+- `handler`
+- `schedule`
+- `timezone`
+- `retryAttempts`
+- `retryBackoff`
+- `retryDelay`
+- `timeout`
+- `active`
+- `callbackUrl`
+- `metadata`
+- `maxRuns`
+- `expiresAt`
+
+## Runs
+
+Task execution creates runs with:
+
+- `status`
+- `attempt`
+- `durationMs`
+- `output`
+- `logs`
+- `errorMessage`
+
+Read runs via:
+
+```ts
+await cronlet.runs.list(taskId, 20);
+await cronlet.runs.get(runId);
+```
+
+## Best practices
+
+- make task names readable in the dashboard
+- use metadata for ownership and reconciliation
+- store `task.id` in your own database
+- prefer `webhook` when your product already owns the business logic
+- prefer `tools` when you want Cronlet-hosted step orchestration
+- use `maxRuns` and `expiresAt` for bounded workflows
+
+## Next steps
+
+- [Callbacks and Agent Loops](/callbacks-and-agent-loops/)
+- [SDK API Reference](/sdk-api-reference/)

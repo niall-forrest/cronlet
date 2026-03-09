@@ -1,0 +1,204 @@
+---
+title: Agent Tooling
+description: OpenAI, Anthropic, and LangChain integrations using the SDK tool definitions and execution helpers.
+sidebar:
+  order: 6
+  label: Agent Tooling
+---
+
+`@cronlet/sdk` includes tool definitions and a handler layer so LLMs can create and manage schedules directly.
+
+Exports:
+
+- `cronletTools`
+- `openaiTools`
+- `anthropicTools`
+- `langchainTools`
+- `createToolHandler()`
+
+## Important caveat about schedules
+
+The tool definitions describe `schedule` as either an object or a natural-language string, but the current SDK tool handler passes that value directly into `client.tasks.create()`.
+
+In practice, you should have your model emit a **schedule object**, not a string.
+
+Recommended:
+
+```json
+{
+  "type": "weekly",
+  "days": ["mon"],
+  "time": "09:00"
+}
+```
+
+Avoid relying on:
+
+```json
+"daily at 9am"
+```
+
+unless you add a parser in your own application before calling the SDK.
+
+## OpenAI
+
+```ts
+import OpenAI from "openai";
+import { CloudClient, cronletTools, createToolHandler } from "@cronlet/sdk";
+
+const openai = new OpenAI();
+const cronlet = new CloudClient({
+  apiKey: process.env.CRONLET_API_KEY!,
+});
+const handler = createToolHandler(cronlet);
+
+const response = await openai.chat.completions.create({
+  model: "gpt-4o",
+  messages: [
+    {
+      role: "system",
+      content:
+        "When scheduling tasks with Cronlet, always emit schedule objects, not natural-language schedule strings.",
+    },
+    {
+      role: "user",
+      content: "Create a weekly report every Monday at 9am New York time.",
+    },
+  ],
+  tools: cronletTools.openai,
+});
+
+for (const toolCall of response.choices[0].message.tool_calls ?? []) {
+  const result = await handler.handleOpenAI(toolCall);
+  console.log(result);
+}
+```
+
+## Anthropic
+
+```ts
+import Anthropic from "@anthropic-ai/sdk";
+import { CloudClient, cronletTools, createToolHandler } from "@cronlet/sdk";
+
+const anthropic = new Anthropic();
+const cronlet = new CloudClient({
+  apiKey: process.env.CRONLET_API_KEY!,
+});
+const handler = createToolHandler(cronlet);
+
+const response = await anthropic.messages.create({
+  model: "claude-sonnet-4-20250514",
+  max_tokens: 1024,
+  system:
+    "When using Cronlet tools, always provide schedule objects. Do not emit natural-language schedule strings.",
+  messages: [
+    {
+      role: "user",
+      content: "Schedule a health check every 5 minutes.",
+    },
+  ],
+  tools: cronletTools.anthropic,
+});
+
+for (const block of response.content) {
+  if (block.type === "tool_use") {
+    const result = await handler.handleAnthropic(block);
+    console.log(result);
+  }
+}
+```
+
+## LangChain
+
+```ts
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { CloudClient, langchainTools, createToolHandler } from "@cronlet/sdk";
+
+const cronlet = new CloudClient({
+  apiKey: process.env.CRONLET_API_KEY!,
+});
+const handler = createToolHandler(cronlet);
+
+const tools = langchainTools.map(
+  (tool) =>
+    new DynamicStructuredTool({
+      name: tool.name,
+      description: `${tool.description}. Use schedule objects, not strings.`,
+      schema: tool.schema,
+      func: async (args) => {
+        const result = await handler.execute(tool.name, args);
+        return JSON.stringify(result);
+      },
+    })
+);
+```
+
+## Direct handler usage
+
+You can also skip the framework adapters and execute the SDK tool handler directly:
+
+```ts
+const result = await handler.execute("cronlet_create_task", {
+  name: "API health check",
+  handler: {
+    type: "webhook",
+    url: "https://api.example.com/health",
+    method: "GET",
+  },
+  schedule: {
+    type: "every",
+    interval: "5m",
+  },
+  timezone: "UTC",
+  callbackUrl: "https://app.example.com/api/cronlet/callback",
+  metadata: {
+    userId: "user_123",
+  },
+});
+```
+
+## Available tool names
+
+- `cronlet_list_tasks`
+- `cronlet_create_task`
+- `cronlet_get_task`
+- `cronlet_trigger_task`
+- `cronlet_pause_task`
+- `cronlet_resume_task`
+- `cronlet_delete_task`
+- `cronlet_list_runs`
+- `cronlet_get_run`
+
+## Recommended system-prompt guidance
+
+Give the model explicit constraints:
+
+- use schedule objects, not natural-language schedules
+- include timezone when user intent implies local time
+- include metadata for ownership and app reconciliation
+- use callback URLs when the product needs to react to results
+- avoid creating duplicate schedules if one already exists for the same internal record
+
+Example:
+
+```text
+You can manage Cronlet tasks. Always emit schedule objects, never schedule strings.
+When creating a task, include metadata with userId, orgId, and internal record IDs.
+If the user is updating an existing schedule, patch or pause the existing task instead of creating duplicates.
+```
+
+## Recommended product-side pattern
+
+Do not let the LLM call the raw SDK from a browser or untrusted environment.
+
+Instead:
+
+1. keep `CloudClient` on the server
+2. expose product-specific functions for agent use
+3. let those functions call the SDK with validated metadata and callback URLs
+4. use callbacks to reconcile results back into your app
+
+## Next steps
+
+- [Callbacks and Agent Loops](/callbacks-and-agent-loops/)
+- [SDK API Reference](/sdk-api-reference/)

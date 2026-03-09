@@ -1,36 +1,58 @@
 ---
 title: Overview
-description: What cronlet is, where it fits, and how to use these docs.
+description: Cronlet Cloud, the SDK, agent tooling, callbacks, and the local runtime in one docs set.
 sidebar:
   order: 1
   label: Overview
 ---
 
-`cronlet` is a TypeScript-first scheduling toolkit for Node.js apps. It is built for teams that want cron jobs to live with application code instead of a separate orchestration product.
+Cronlet has two developer-facing surfaces:
 
-## Why teams use cronlet
+1. `Cronlet Cloud` for hosted scheduled tasks, run history, callbacks, and agent-triggered automation.
+2. `cronlet` local runtime + CLI for file-based jobs inside your own Node.js app.
 
-- Typed schedule builders: `every`, `daily`, `weekly`, `monthly`, `cron`
-- File-based discovery with deterministic job IDs
-- Local dashboard with live job status and manual triggering
-- Built-in retries, timeouts, and overlap controls
-- Deploy helpers for Vercel and a standalone worker mode for any Node host
+This docs site now leads with the Cloud SDK path because that is the integration surface used by the web product, agent tooling, and the `@cronlet/sdk` package.
 
-## Where cronlet fits
+## Use Cronlet Cloud when
 
-Use cronlet when you want scheduling integrated into your existing app and repo:
+- your product needs hosted scheduled tasks
+- AI agents should be able to create or manage schedules
+- you want callbacks when runs complete
+- you need a dashboard, task history, manual triggering, and hosted execution
 
-- Next.js monorepos
-- API/backoffice services with recurring tasks
-- Jobs that need shared app code and types
+## Use the local runtime when
 
-If you need distributed workflows, multi-step orchestration, or cross-service state machines, cronlet is usually too small by itself.
+- jobs should live entirely inside your app repo
+- you want file-based job discovery
+- you do not need the hosted Cloud control plane
+- you want local scheduler + dashboard during development
 
-## Read this docs set in order
+## Recommended reading order
 
-1. [Quickstart](/getting-started/) for first run
-2. [Jobs and Scheduling Model](/jobs-and-scheduling-model/) for job architecture
-3. [Config Reference](/config-reference/) and [CLI Commands](/cli-commands/) for day-to-day usage
-4. [Local Dev and Hot Reload](/local-dev-and-hot-reload/) for team DX
-5. [Deploy Targets and Caveats](/deploy-targets-and-caveats/) before production rollout
-6. [Troubleshooting and FAQ](/troubleshooting-and-faq/) when things do not behave as expected
+### Cloud + SDK
+
+1. [Cloud Quickstart](/cloud-quickstart/)
+2. [SDK Overview](/sdk-overview/)
+3. [Tasks, Handlers, and Schedules](/tasks-handlers-and-schedules/)
+4. [Callbacks and Agent Loops](/callbacks-and-agent-loops/)
+5. [Agent Tooling](/agent-tooling/)
+6. [SDK API Reference](/sdk-api-reference/)
+
+### Local runtime + CLI
+
+1. [Local Runtime Quickstart](/local-runtime-quickstart/)
+2. [Local Runtime Reference](/local-runtime-reference/)
+
+## Package map
+
+- `@cronlet/sdk`: official Cloud SDK for tasks, runs, secrets, usage, audit, and LLM tool definitions
+- `@cronlet/shared`: shared Cloud types and schemas used by the SDK and web app
+- `cronlet` / `cronlet-cli`: local scheduler, file-based jobs, dev dashboard, and deployment helpers
+
+## Important accuracy notes
+
+- The current SDK `tasks.create()` API expects a **schedule object**, not a natural-language schedule string.
+- The SDK tool definitions currently describe `schedule` as object-or-string for LLM use, but the tool handler passes the value straight through. In practice, generate schedule **objects** unless you add your own parser.
+- Cloud callbacks are real and useful, but the current payload does **not** include a populated `task.name`, and `stats.expiresAt` is currently `null` in worker callbacks. Build your callback handlers around `task.id`, `task.metadata`, and `run.id`.
+
+If you are integrating Cronlet into a product, treat `task.metadata` + your own database records as the source of truth for ownership and lifecycle.

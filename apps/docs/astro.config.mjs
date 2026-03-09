@@ -6,7 +6,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Cronlet Docs",
-      description: "Human-first guides for scheduling jobs in Node.js apps with cronlet",
+      description: "Developer documentation for Cronlet Cloud, the SDK, agent tooling, callbacks, and the local runtime",
       customCss: ["/src/styles/custom.css"],
       social: {
         github: "https://github.com/niall-forrest/cronlet",
@@ -17,28 +17,22 @@ export default defineConfig({
       },
       sidebar: [
         {
-          label: "Documentation",
+          label: "Cloud + SDK",
           items: [
             { label: "Overview", link: "/" },
-            { label: "Quickstart", link: "/getting-started/" },
-            {
-              label: "Jobs and Scheduling Model",
-              link: "/jobs-and-scheduling-model/",
-            },
-            { label: "Config Reference", link: "/config-reference/" },
-            { label: "CLI Commands", link: "/cli-commands/" },
-            {
-              label: "Local Dev and Hot Reload",
-              link: "/local-dev-and-hot-reload/",
-            },
-            {
-              label: "Deploy Targets and Caveats",
-              link: "/deploy-targets-and-caveats/",
-            },
-            {
-              label: "Troubleshooting and FAQ",
-              link: "/troubleshooting-and-faq/",
-            },
+            { label: "Cloud Quickstart", link: "/cloud-quickstart/" },
+            { label: "SDK Overview", link: "/sdk-overview/" },
+            { label: "Tasks, Handlers, and Schedules", link: "/tasks-handlers-and-schedules/" },
+            { label: "Callbacks and Agent Loops", link: "/callbacks-and-agent-loops/" },
+            { label: "Agent Tooling", link: "/agent-tooling/" },
+            { label: "SDK API Reference", link: "/sdk-api-reference/" },
+          ],
+        },
+        {
+          label: "Local Runtime",
+          items: [
+            { label: "Local Runtime Quickstart", link: "/local-runtime-quickstart/" },
+            { label: "Local Runtime Reference", link: "/local-runtime-reference/" },
           ],
         },
       ],

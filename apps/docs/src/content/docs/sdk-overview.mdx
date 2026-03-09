@@ -1,0 +1,164 @@
+---
+title: SDK Overview
+description: What the Cloud SDK exposes, how to structure it in an app, and where it fits in product integrations.
+sidebar:
+  order: 3
+  label: SDK Overview
+---
+
+`@cronlet/sdk` is the official TypeScript SDK for Cronlet Cloud.
+
+It exposes:
+
+- a typed API client: `CloudClient`
+- task lifecycle methods
+- run history methods
+- secret management
+- usage lookup
+- audit recording
+- preformatted tool definitions for OpenAI, Anthropic, and LangChain
+
+## Installation
+
+```bash
+npm install @cronlet/sdk
+```
+
+## Exported surface
+
+```ts
+import {
+  CloudClient,
+  CronletError,
+  cronletTools,
+  createToolHandler,
+  openaiTools,
+  anthropicTools,
+  langchainTools,
+} from "@cronlet/sdk";
+```
+
+## `CloudClient`
+
+```ts
+const cronlet = new CloudClient({
+  apiKey: process.env.CRONLET_API_KEY!,
+  baseUrl: process.env.CRONLET_BASE_URL,
+  orgId: "org_123",   // optional internal context
+  userId: "user_456", // optional internal context
+  role: "admin",      // optional internal context
+});
+```
+
+### Options
+
+- `apiKey: string` required
+- `baseUrl?: string` optional, defaults to `https://api.cronlet.dev`
+- `orgId?: string` optional internal context header
+- `userId?: string` optional internal context header
+- `role?: "viewer" | "member" | "admin" | "owner"` optional internal context header
+
+## Recommended app structure
+
+For product integrations, keep the SDK behind a server-side module:
+
+```txt
+src/
+  lib/
+    cronlet/
+      client.ts
+      tasks.ts
+      callbacks.ts
+      metadata.ts
+```
+
+Example:
+
+```ts
+// src/lib/cronlet/client.ts
+import { CloudClient } from "@cronlet/sdk";
+
+export const cronlet = new CloudClient({
+  apiKey: process.env.CRONLET_API_KEY!,
+  baseUrl: process.env.CRONLET_BASE_URL,
+});
+```
+
+Then wrap the raw SDK in domain-specific functions:
+
+```ts
+// src/lib/cronlet/reportSchedules.ts
+import { cronlet } from "./client";
+
+export async function createUserReportSchedule(input: {
+  userId: string;
+  reportId: string;
+  timezone: string;
+}) {
+  return cronlet.tasks.create({
+    name: `User report ${input.reportId}`,
+    handler: {
+      type: "webhook",
+      url: "https://app.example.com/internal/reports/run",
+      method: "POST",
+    },
+    schedule: {
+      type: "daily",
+      times: ["09:00"],
+    },
+    timezone: input.timezone,
+    retryAttempts: 1,
+    retryBackoff: "linear",
+    retryDelay: "1s",
+    timeout: "30s",
+    active: true,
+    metadata: {
+      userId: input.userId,
+      reportId: input.reportId,
+      scheduleType: "user-report",
+    },
+    callbackUrl: "https://app.example.com/api/cronlet/callback",
+  });
+}
+```
+
+## Why wrap the SDK instead of calling it everywhere
+
+- centralizes task naming and metadata conventions
+- prevents API key leakage
+- keeps Cronlet-specific logic out of UI code
+- makes callback handling and task lifecycle changes testable
+- lets your agent layer call product-specific functions instead of raw task primitives
+
+## Error handling
+
+The SDK throws `CronletError` when the API returns an error:
+
+```ts
+import { CronletError } from "@cronlet/sdk";
+
+try {
+  await cronlet.tasks.get("task_missing");
+} catch (error) {
+  if (error instanceof CronletError) {
+    console.error(error.message);
+    console.error(error.code);
+    console.error(error.status);
+  }
+}
+```
+
+## What the SDK does not currently do for you
+
+- it does **not** parse natural-language schedules into schedule objects
+- it does **not** verify callback signatures
+- it does **not** manage persistence of Cronlet task IDs in your app
+- it does **not** reconcile callbacks into your domain model
+
+You need to build those product-side pieces yourself.
+
+## Next steps
+
+- [Tasks, Handlers, and Schedules](/tasks-handlers-and-schedules/)
+- [Callbacks and Agent Loops](/callbacks-and-agent-loops/)
+- [SDK API Reference](/sdk-api-reference/)

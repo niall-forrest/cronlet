@@ -1,0 +1,273 @@
+---
+title: SDK API Reference
+description: Method-by-method reference for CloudClient, tool exports, errors, and real payload shapes.
+sidebar:
+  order: 7
+  label: SDK API Reference
+---
+
+This page mirrors the current `@cronlet/sdk` package surface.
+
+## `CloudClient`
+
+```ts
+import { CloudClient } from "@cronlet/sdk";
+
+const cronlet = new CloudClient({
+  apiKey: process.env.CRONLET_API_KEY!,
+  baseUrl: process.env.CRONLET_BASE_URL,
+  orgId: "org_123",
+  userId: "user_456",
+  role: "admin",
+});
+```
+
+### Constructor options
+
+```ts
+interface CloudClientOptions {
+  apiKey: string;
+  baseUrl?: string;
+  orgId?: string;
+  userId?: string;
+  role?: "viewer" | "member" | "admin" | "owner";
+}
+```
+
+## `tasks`
+
+### `tasks.create(input, createdBy?)`
+
+Creates a task.
+
+```ts
+const task = await cronlet.tasks.create(
+  {
+    name: "Daily report",
+    handler: {
+      type: "webhook",
+      url: "https://api.example.com/report",
+      method: "POST",
+    },
+    schedule: {
+      type: "daily",
+      times: ["09:00"],
+    },
+    timezone: "UTC",
+    retryAttempts: 1,
+    retryBackoff: "linear",
+    retryDelay: "1s",
+    timeout: "30s",
+    active: true,
+  },
+  {
+    type: "agent",
+    id: "assistant_123",
+    name: "support-agent",
+  }
+);
+```
+
+### `tasks.list()`
+
+```ts
+const tasks = await cronlet.tasks.list();
+```
+
+### `tasks.get(taskId)`
+
+```ts
+const task = await cronlet.tasks.get(taskId);
+```
+
+### `tasks.patch(taskId, input)`
+
+```ts
+await cronlet.tasks.patch(taskId, {
+  active: false,
+  maxRuns: null,
+  callbackUrl: null,
+});
+```
+
+### `tasks.delete(taskId)`
+
+```ts
+await cronlet.tasks.delete(taskId);
+```
+
+### `tasks.trigger(taskId)`
+
+```ts
+const run = await cronlet.tasks.trigger(taskId);
+```
+
+### `tasks.pause(taskId)`
+
+Equivalent to `patch(taskId, { active: false })`.
+
+### `tasks.resume(taskId)`
+
+Equivalent to `patch(taskId, { active: true })`.
+
+## `runs`
+
+### `runs.list(taskId?, limit?)`
+
+```ts
+const allRuns = await cronlet.runs.list();
+const taskRuns = await cronlet.runs.list(taskId, 20);
+```
+
+### `runs.get(runId)`
+
+```ts
+const run = await cronlet.runs.get(runId);
+```
+
+## `secrets`
+
+### `secrets.list()`
+
+```ts
+const secrets = await cronlet.secrets.list();
+```
+
+### `secrets.create(input)`
+
+```ts
+await cronlet.secrets.create({
+  name: "SLACK_TOKEN",
+  value: "xoxb-...",
+});
+```
+
+### `secrets.delete(name)`
+
+```ts
+await cronlet.secrets.delete("SLACK_TOKEN");
+```
+
+## `usage`
+
+### `usage.get()`
+
+```ts
+const usage = await cronlet.usage.get();
+```
+
+## `audit`
+
+### `audit.record(input)`
+
+This is exposed by the SDK but documented as internal-use oriented.
+
+```ts
+await cronlet.audit.record({
+  action: "task.created",
+  targetType: "task",
+  targetId: "task_123",
+  actorType: "agent",
+  actorId: "assistant_456",
+  metadata: {
+    source: "agent-loop",
+  },
+});
+```
+
+## Return types you will see often
+
+### `TaskRecord`
+
+Notable fields:
+
+- `id`
+- `name`
+- `description`
+- `handlerType`
+- `handlerConfig`
+- `scheduleType`
+- `scheduleConfig`
+- `timezone`
+- `nextRunAt`
+- `active`
+- `callbackUrl`
+- `metadata`
+- `maxRuns`
+- `expiresAt`
+- `runCount`
+
+### `RunRecord`
+
+Notable fields:
+
+- `id`
+- `taskId`
+- `status`
+- `trigger`
+- `attempt`
+- `durationMs`
+- `output`
+- `logs`
+- `errorMessage`
+
+## Tool exports
+
+```ts
+import {
+  cronletTools,
+  openaiTools,
+  anthropicTools,
+  langchainTools,
+  createToolHandler,
+} from "@cronlet/sdk";
+```
+
+### `cronletTools`
+
+```ts
+cronletTools.openai
+cronletTools.anthropic
+cronletTools.langchain
+cronletTools.definitions
+```
+
+### `createToolHandler(client)`
+
+Returns helpers for:
+
+- `execute(name, args)`
+- `handleOpenAI(toolCall)`
+- `handleAnthropic(toolUse)`
+
+## `CronletError`
+
+```ts
+import { CronletError } from "@cronlet/sdk";
+
+try {
+  await cronlet.tasks.get("missing");
+} catch (error) {
+  if (error instanceof CronletError) {
+    console.log(error.message);
+    console.log(error.code);
+    console.log(error.status);
+  }
+}
+```
+
+## Current behavioral notes
+
+- `CloudClient` assumes JSON API responses and throws `CronletError` on non-OK payloads.
+- `tasks.create()` and `tasks.patch()` use typed object schedules.
+- Tool definitions mention string schedules, but the handler does not currently parse them.
+- Use the SDK from server-side code only.
+
+## Reference types
+
+For exact TypeScript shapes, see:
+
+- `packages/cloud-sdk/src/client.ts`
+- `packages/cloud-sdk/src/tools.ts`
+- `packages/cloud-shared/src/types.ts`
+- `packages/cloud-shared/src/schemas.ts`

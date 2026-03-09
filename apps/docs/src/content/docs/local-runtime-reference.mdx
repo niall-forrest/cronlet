@@ -1,0 +1,219 @@
+---
+title: Local Runtime Reference
+description: Config files, commands, job model, local dashboard behavior, and deployment caveats for the file-based runtime.
+sidebar:
+  order: 9
+  label: Local Runtime Reference
+---
+
+This page consolidates the local runtime reference that used to be spread across multiple pages.
+
+## Config files
+
+Cronlet loads the first config file it finds in this order:
+
+1. `cronlet.config.ts`
+2. `cronlet.config.mts`
+3. `cronlet.config.cts`
+4. `cronlet.config.js`
+5. `cronlet.config.mjs`
+6. `cronlet.config.cjs`
+
+Example:
+
+```ts
+import { defineConfig } from "cronlet";
+
+export default defineConfig({
+  jobsDir: "./src/jobs",
+  deploy: {
+    prefix: "/api/cron",
+    vercel: {
+      maxDuration: 60,
+    },
+  },
+});
+```
+
+## Config fields
+
+### `jobsDir?: string`
+
+Path to the jobs directory.
+
+### `deploy.prefix?: string`
+
+Route prefix used by `cronlet deploy --platform vercel`.
+
+Default:
+
+```txt
+/api/cron
+```
+
+### `deploy.vercel.maxDuration?: number`
+
+Maximum function duration in seconds for generated Vercel route files.
+
+## Directory resolution
+
+Commands resolve the jobs directory in this order:
+
+1. `--dir <path>`
+2. `jobsDir` from config
+3. auto-detect (`./jobs`, `./src/jobs`, `./app/jobs`)
+
+## Job model
+
+A local cronlet job is a default export from `schedule()`:
+
+```ts
+import { schedule, daily } from "cronlet";
+
+export default schedule(daily("09:00"), async (ctx) => {
+  await sendReport(ctx.jobId);
+});
+```
+
+### Deterministic job IDs
+
+Job IDs are:
+
+1. `config.name` if provided
+2. otherwise file path relative to the resolved jobs directory
+
+### Schedule builders
+
+- `every("15m")`
+- `daily("09:00")`
+- `weekly("fri", "09:00")`
+- `monthly(1, "09:00")`
+- `monthly("last-fri", "17:00")`
+- `cron("0 9 * * 1-5")`
+
+### Job context
+
+```ts
+interface JobContext {
+  jobId: string;
+  jobName: string;
+  runId: string;
+  scheduledAt: Date;
+  startedAt: Date;
+  attempt: number;
+  signal: AbortSignal;
+}
+```
+
+### Concurrency
+
+- `concurrency: "skip"` default
+- `concurrency: "allow"`
+- `concurrency: "queue"`
+
+`catchup: true` only applies to `concurrency: "skip"`.
+
+## CLI commands
+
+### `cronlet init`
+
+```bash
+npx cronlet init
+```
+
+### `cronlet dev`
+
+```bash
+npx cronlet dev
+npx cronlet dev --port 4000
+npx cronlet dev --dir ./jobs
+npx cronlet dev --no-watch
+```
+
+### `cronlet list`
+
+```bash
+npx cronlet list
+```
+
+### `cronlet run <job-id>`
+
+```bash
+npx cronlet run billing/sync-stripe
+```
+
+### `cronlet validate`
+
+```bash
+npx cronlet validate
+```
+
+### `cronlet deploy --platform vercel`
+
+```bash
+npx cronlet deploy --platform vercel
+npx cronlet deploy --platform vercel --dry-run
+```
+
+## Local dev behavior
+
+`cronlet dev` starts:
+
+- discovery
+- scheduler
+- dashboard API + UI
+- file watcher
+
+The local dashboard updates primarily via Server-Sent Events (`/api/events`) with polling fallback.
+
+## Deployment notes
+
+### Vercel
+
+Cronlet can generate Vercel cron routes and `vercel.json` cron entries.
+
+Important caveats:
+
+1. Vercel cron is minute-granularity, not second-granularity.
+2. Vercel cron runs in UTC.
+3. Retry + timeout settings can exceed function limits if you are careless.
+4. Monthly `last-*` schedules compile to `L` syntax, which depends on platform support.
+
+### Long-lived worker
+
+For Docker, Fly, Railway, Kubernetes, or any Node host:
+
+```ts
+import { createWorker } from "cronlet";
+
+const worker = createWorker({ dir: "./src/jobs" });
+await worker.start();
+```
+
+## Troubleshooting
+
+### No jobs found
+
+Check directory resolution, then run:
+
+```bash
+npx cronlet list
+```
+
+### Duplicate job IDs
+
+Rename one file or set distinct explicit `config.name` values.
+
+### Invalid durations
+
+Use integer + unit values such as:
+
+- `100ms`
+- `30s`
+- `5m`
+- `1h`
+- `1d`
+
+### Vercel jobs not firing
+
+Check generated routes, `vercel.json`, prefix alignment, schedule compatibility, and deployment logs.
