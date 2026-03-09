@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightCopyButton from "starlight-copy-button";
 
 export default defineConfig({
   site: "https://docs.cronlet.dev",
@@ -7,6 +8,7 @@ export default defineConfig({
     starlight({
       title: "Cronlet Docs",
       description: "Developer documentation for Cronlet Cloud, the SDK, agent tooling, callbacks, and the local runtime",
+      plugins: [starlightCopyButton()],
       customCss: ["/src/styles/custom.css"],
       social: {
         github: "https://github.com/niall-forrest/cronlet",

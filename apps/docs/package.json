@@ -12,6 +12,7 @@
   "dependencies": {
     "@astrojs/starlight": "^0.32.0",
     "astro": "^5.2.0",
-    "sharp": "^0.33.0"
+    "sharp": "^0.33.0",
+    "starlight-copy-button": "github:dionysuzx/starlight-copy-button"
   }
 }
