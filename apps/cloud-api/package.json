@@ -23,9 +23,11 @@
     "croner": "^8.1.2",
     "fastify": "^4.28.1",
     "fastify-raw-body": "^4.3.0",
+    "ioredis": "^5.9.3",
     "jose": "^5.9.6",
     "svix": "^1.59.0",
-    "nanoid": "^5.1.5"
+    "nanoid": "^5.1.5",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@cronlet/eslint-config": "workspace:*",

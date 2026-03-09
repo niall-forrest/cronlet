@@ -11,7 +11,7 @@ import type {
   CreatedBy,
   TaskSource,
 } from "@cronlet/shared";
-import { resolveSchedule, ScheduleParseError } from "@cronlet/shared";
+import { ERROR_CODES, resolveSchedule, ScheduleParseError } from "@cronlet/shared";
 import type {
   SummarizeAllOptions,
   TaskSummary,
@@ -57,6 +57,13 @@ export interface AuditRecordInput {
   actorType: string;
   actorId: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface RateLimitInfo {
+  retryAfter?: number;
+  limit?: number;
+  remaining?: number;
+  reset?: number;
 }
 
 export type ScheduleInput = ScheduleConfigInput | string;
@@ -170,10 +177,36 @@ export class CloudClient {
 
     const payload = (await response.json()) as ApiResponse<T>;
     if (!response.ok || !payload.ok || !payload.data) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const limitHeader = response.headers.get("x-ratelimit-limit");
+      const remainingHeader = response.headers.get("x-ratelimit-remaining");
+      const resetHeader = response.headers.get("x-ratelimit-reset");
+      const details = payload.error?.details as Record<string, unknown> | undefined;
+      const retryAfter = Number(details?.retryAfter ?? retryAfterHeader);
+      const limit = Number(limitHeader);
+      const remaining = Number(remainingHeader);
+      const reset = Number(resetHeader);
+
+      if (response.status === 429 || payload.error?.code === ERROR_CODES.RATE_LIMITED) {
+        throw new RateLimitError(
+          payload.error?.message ?? `Request failed (${response.status})`,
+          payload.error?.code,
+          response.status,
+          {
+            retryAfter: Number.isFinite(retryAfter) ? retryAfter : undefined,
+            limit: Number.isFinite(limit) ? limit : undefined,
+            remaining: Number.isFinite(remaining) ? remaining : undefined,
+            reset: Number.isFinite(reset) ? reset : undefined,
+          },
+          details,
+        );
+      }
+
       throw new CronletError(
         payload.error?.message ?? `Request failed (${response.status})`,
         payload.error?.code,
-        response.status
+        response.status,
+        details,
       );
     }
 
@@ -359,10 +392,33 @@ export class CronletError extends Error {
   constructor(
     message: string,
     public readonly code?: string,
-    public readonly status?: number
+    public readonly status?: number,
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = "CronletError";
+  }
+}
+
+export class RateLimitError extends CronletError {
+  readonly retryAfter?: number;
+  readonly limit?: number;
+  readonly remaining?: number;
+  readonly reset?: number;
+
+  constructor(
+    message: string,
+    code?: string,
+    status?: number,
+    info?: RateLimitInfo,
+    details?: Record<string, unknown>,
+  ) {
+    super(message, code, status, details);
+    this.name = "RateLimitError";
+    this.retryAfter = info?.retryAfter;
+    this.limit = info?.limit;
+    this.remaining = info?.remaining;
+    this.reset = info?.reset;
   }
 }
 

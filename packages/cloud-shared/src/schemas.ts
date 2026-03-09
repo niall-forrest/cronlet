@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TASK_HANDLER_STEPS, MAX_TASK_METADATA_BYTES, getMetadataSizeBytes } from "./guardrails";
 
 // ============================================
 // COMMON
@@ -21,7 +22,17 @@ const toolStepSchema = z.object({
 
 const toolsHandlerConfigSchema = z.object({
   type: z.literal("tools"),
-  steps: z.array(toolStepSchema).min(1).max(20),
+  steps: z.array(toolStepSchema).min(1).max(MAX_TASK_HANDLER_STEPS),
+});
+
+const metadataSchema = z.record(z.unknown()).superRefine((metadata, ctx) => {
+  const sizeBytes = getMetadataSizeBytes(metadata);
+  if (sizeBytes > MAX_TASK_METADATA_BYTES) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Metadata must be ${MAX_TASK_METADATA_BYTES} bytes or less.`,
+    });
+  }
 });
 
 const webhookHandlerConfigSchema = z.object({
@@ -125,7 +136,7 @@ export const taskCreateSchema = z.object({
   source: taskSourceSchema.default("dashboard"),
   // Agent callback - closes the autonomous loop
   callbackUrl: z.string().url().max(500).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: metadataSchema.optional(),
   // Conditional scheduling - task auto-expires
   maxRuns: z.number().int().min(1).max(10000).optional(),
   expiresAt: z.string().datetime().optional(),
@@ -144,7 +155,7 @@ export const taskPatchSchema = z.object({
   active: z.boolean().optional(),
   // Agent callback
   callbackUrl: z.string().url().max(500).nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: metadataSchema.nullable().optional(),
   // Conditional scheduling
   maxRuns: z.number().int().min(1).max(10000).nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(),

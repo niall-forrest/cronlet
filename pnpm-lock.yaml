@@ -44,6 +44,9 @@ importers:
       fastify-raw-body:
         specifier: ^4.3.0
         version: 4.3.0
+      ioredis:
+        specifier: ^5.9.3
+        version: 5.9.3
       jose:
         specifier: ^5.9.6
         version: 5.10.0
@@ -53,6 +56,9 @@ importers:
       svix:
         specifier: ^1.59.0
         version: 1.86.0
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
     devDependencies:
       '@cronlet/eslint-config':
         specifier: workspace:*

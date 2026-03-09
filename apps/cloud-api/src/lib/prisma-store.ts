@@ -2,7 +2,9 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import {
   type AuditEventListInput,
   type AuditEventRecord,
+  getTaskLimitForTier,
   PLAN_LIMITS,
+  type PlanTier,
   type ApiKeyCreateInput,
   type ApiKeyRecord,
   type ApiKeyRotateInput,
@@ -50,6 +52,10 @@ function orgSlug(orgId: string, preferredSlug?: string): string {
   const base = slugify(preferredSlug ?? orgId).slice(0, 48);
   const suffix = slugify(orgId).slice(-8) || "org";
   return `${base}-${suffix}`;
+}
+
+function formatPlanLabel(tier: PlanTier): string {
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
 function toTaskRecord(value: {
@@ -342,6 +348,25 @@ export class PrismaCloudStore implements CloudStore {
     }
   }
 
+  private async assertWithinTaskLimit(orgId: string): Promise<void> {
+    const entitlement = await this.getBillingState(orgId);
+    const currentCount = await this.countTasks(orgId);
+    const limit = getTaskLimitForTier(entitlement.tier);
+
+    if (currentCount >= limit) {
+      throw new AppError(
+        403,
+        ERROR_CODES.TASK_LIMIT_EXCEEDED,
+        `Task limit reached (${limit} tasks on ${formatPlanLabel(entitlement.tier)} plan).`,
+        {
+          currentCount,
+          limit,
+          tier: entitlement.tier,
+        }
+      );
+    }
+  }
+
   private async incrementUsage(orgId: string): Promise<void> {
     const yearMonth = formatYearMonth();
     await this.prisma.usageCounter.upsert({
@@ -378,6 +403,14 @@ export class PrismaCloudStore implements CloudStore {
     return tasks.map(toTaskRecord);
   }
 
+  async countTasks(orgId: string): Promise<number> {
+    return this.prisma.task.count({
+      where: {
+        organizationId: orgId,
+      },
+    });
+  }
+
   async getTask(orgId: string, taskId: string): Promise<TaskRecord> {
     const task = await this.prisma.task.findFirst({
       where: {
@@ -393,6 +426,7 @@ export class PrismaCloudStore implements CloudStore {
 
   async createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> {
     await this.assertWritable(orgId);
+    await this.assertWithinTaskLimit(orgId);
     await this.ensureOrganization(orgId);
 
     const scheduleConfig = input.schedule;

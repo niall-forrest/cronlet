@@ -1,9 +1,11 @@
 export {
   CloudClient,
   CronletError,
+  RateLimitError,
   ScheduleParseError,
   type CloudClientOptions,
   type AuditRecordInput,
+  type RateLimitInfo,
   type ScheduleInput,
   type TaskCreateRequest,
   type TaskPatchRequest,

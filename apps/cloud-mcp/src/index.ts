@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
-import { CloudClient } from "@cronlet/sdk";
+import { CloudClient, RateLimitError } from "@cronlet/sdk";
 import { handlerConfigSchema } from "@cronlet/shared";
 import { MCP_TOOLS, type McpToolName } from "./lib/tools.js";
 import { resolveSchedule, parseSchedule } from "@cronlet/shared";
@@ -204,6 +204,20 @@ function deny(reply: FastifyReply, status: number, message: string): void {
       message,
     },
   });
+}
+
+function formatRateLimitMessage(toolName: McpToolName, error: RateLimitError): string {
+  const retryAfter = error.retryAfter ?? 60;
+
+  if (toolName === "create_task") {
+    return `Task creation rate limit exceeded. Wait ${retryAfter} seconds before creating more tasks.`;
+  }
+
+  if (toolName === "trigger_task") {
+    return `Manual trigger rate limit exceeded. Wait ${retryAfter} seconds before triggering more tasks.`;
+  }
+
+  return `Rate limit exceeded. Wait ${retryAfter} seconds before retrying.`;
 }
 
 function cleanupApprovals(): void {
@@ -811,6 +825,12 @@ app.post<{ Params: { tool: McpToolName }; Body: Record<string, unknown> }>("/too
       payloadHash,
       message: error instanceof Error ? error.message : String(error),
     });
+
+    if (error instanceof RateLimitError) {
+      deny(reply, 429, formatRateLimitMessage(tool.name, error));
+      return;
+    }
+
     deny(reply, 500, error instanceof Error ? error.message : String(error));
   }
 });

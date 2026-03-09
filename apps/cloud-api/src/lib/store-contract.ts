@@ -37,6 +37,7 @@ export interface OrganizationUpsertInput {
 export interface CloudStore {
   // Tasks
   listTasks(orgId: string): Promise<TaskRecord[]> | TaskRecord[];
+  countTasks(orgId: string): Promise<number> | number;
   getTask(orgId: string, taskId: string): Promise<TaskRecord> | TaskRecord;
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> | TaskRecord;
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> | TaskRecord;

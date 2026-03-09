@@ -1,6 +1,7 @@
 import {
   type AuditEventListInput,
   type AuditEventRecord,
+  getTaskLimitForTier,
   PLAN_LIMITS,
   type ApiKeyCreateInput,
   type ApiKeyRecord,
@@ -44,6 +45,10 @@ interface InternalTaskRecord extends TaskRecord {
 
 interface InternalSecretRecord extends SecretRecord {
   encryptedValue: string;
+}
+
+function formatPlanLabel(tier: PlanTier): string {
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
 export class InMemoryCloudStore implements CloudStore {
@@ -130,6 +135,10 @@ export class InMemoryCloudStore implements CloudStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  countTasks(orgId: string): number {
+    return Array.from(this.tasks.values()).filter((task) => task.orgId === orgId).length;
+  }
+
   getTask(orgId: string, taskId: string): TaskRecord {
     const task = this.tasks.get(taskId);
     if (!task || task.orgId !== orgId) {
@@ -140,6 +149,7 @@ export class InMemoryCloudStore implements CloudStore {
 
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): TaskRecord {
     this.assertWritable(orgId);
+    this.assertWithinTaskLimit(orgId);
 
     const now = nowIso();
     const scheduleConfig = input.schedule;
@@ -178,6 +188,25 @@ export class InMemoryCloudStore implements CloudStore {
 
     this.tasks.set(task.id, task);
     return task;
+  }
+
+  private assertWithinTaskLimit(orgId: string): void {
+    const entitlement = this.getEntitlement(orgId);
+    const currentCount = this.countTasks(orgId);
+    const limit = getTaskLimitForTier(entitlement.tier);
+
+    if (currentCount >= limit) {
+      throw new AppError(
+        403,
+        ERROR_CODES.TASK_LIMIT_EXCEEDED,
+        `Task limit reached (${limit} tasks on ${formatPlanLabel(entitlement.tier)} plan).`,
+        {
+          currentCount,
+          limit,
+          tier: entitlement.tier,
+        }
+      );
+    }
   }
 
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): TaskRecord {

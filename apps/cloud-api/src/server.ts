@@ -5,6 +5,7 @@ import fastifyRawBody from "fastify-raw-body";
 import { InMemoryCloudStore } from "./lib/store.js";
 import { PrismaCloudStore } from "./lib/prisma-store.js";
 import { registerAuthPlugin } from "./plugins/auth.js";
+import { registerRateLimitPlugin } from "./plugins/rate-limit.js";
 import { registerIdempotencyPlugin } from "./plugins/idempotency.js";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerRunRoutes } from "./routes/runs.js";
@@ -80,6 +81,7 @@ export async function buildServer() {
   }
 
   await registerAuthPlugin(app);
+  await registerRateLimitPlugin(app);
   await registerIdempotencyPlugin(app);
 
   app.get("/health", async () => ({ ok: true, service: "cloud-api" }));
