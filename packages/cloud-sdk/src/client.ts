@@ -11,6 +11,17 @@ import type {
   CreatedBy,
 } from "@cronlet/shared";
 import { resolveSchedule, ScheduleParseError } from "@cronlet/shared";
+import type {
+  SummarizeAllOptions,
+  TaskSummary,
+  TaskSummaryOverview,
+  TaskSummaryOptions,
+} from "./summaries.js";
+import {
+  normalizeTaskSummaryOptions,
+  summarizeTask,
+  summarizeTasksOverview,
+} from "./summaries.js";
 
 const DEFAULT_BASE_URL = "https://api.cronlet.dev";
 
@@ -229,6 +240,36 @@ export class CloudClient {
         method: "PATCH",
         body: JSON.stringify({ active: true }),
       }),
+
+    /**
+     * Summarize recent runs for a task in an agent-readable format
+     */
+    summarize: async (taskId: string, options?: TaskSummaryOptions): Promise<TaskSummary> => {
+      const resolvedOptions = normalizeTaskSummaryOptions(options);
+      const [task, runs] = await Promise.all([
+        this.request<TaskRecord>(`/v1/tasks/${taskId}`),
+        this.runs.list(taskId, resolvedOptions.limit),
+      ]);
+
+      return summarizeTask(task, runs, resolvedOptions);
+    },
+
+    /**
+     * Summarize recent runs across tasks in an agent-readable format
+     */
+    summarizeAll: async (options?: SummarizeAllOptions): Promise<TaskSummaryOverview> => {
+      const resolvedOptions = normalizeTaskSummaryOptions(options);
+      const tasks = await this.tasks.list();
+      const filteredTasks = options?.taskIds
+        ? tasks.filter((task) => options.taskIds?.includes(task.id))
+        : tasks;
+
+      const taskRuns = await Promise.all(
+        filteredTasks.map(async (task) => [task.id, await this.runs.list(task.id, resolvedOptions.limit)] as const)
+      );
+
+      return summarizeTasksOverview(filteredTasks, new Map(taskRuns), resolvedOptions);
+    },
   };
 
   /**

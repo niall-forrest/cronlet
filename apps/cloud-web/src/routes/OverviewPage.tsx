@@ -310,9 +310,6 @@ export function OverviewPage() {
                   <p className="text-sm text-foreground">
                     Keep exploring the other two paths as you onboard more use cases.
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    You already have tasks running, so this stays out of the way unless you want it.
-                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <CollapsibleTrigger asChild>
