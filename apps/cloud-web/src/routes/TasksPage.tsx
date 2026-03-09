@@ -352,7 +352,7 @@ function TaskCard({
 
   return (
     <Card variant="interactive" className={cn("p-0", !task.active && "opacity-60")}>
-      <CardHeader className="border-b border-border/30">
+      <CardHeader className="border-b border-border/30 px-5 py-4">
         <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="group/link flex min-w-0 items-center gap-2.5">
           <StatusDot status={taskStatus} />
           <h2 className="truncate font-display text-base font-semibold text-foreground transition-colors group-hover/link:text-primary">

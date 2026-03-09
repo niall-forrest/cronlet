@@ -3,8 +3,9 @@ import {
   House,
   ListChecks,
   ClockCounterClockwise,
-  Lightning,
   HeadCircuit,
+  BookOpenText,
+  ArrowSquareOut,
   Gear,
   SquaresFour,
   List,
@@ -17,6 +18,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ElementType;
+  external?: boolean;
   exact?: boolean;
   matchPrefixes?: string[];
   excludePrefixes?: string[];
@@ -38,11 +40,16 @@ const mainNavItems: NavItem[] = [
     matchPrefixes: ["/tasks/create/templates"],
   },
   { to: "/runs", label: "Runs", icon: ClockCounterClockwise },
-  { to: "/activity", label: "Activity", icon: Lightning },
   { to: "/agent-connect", label: "Agent Connect", icon: HeadCircuit },
 ];
 
 const bottomNavItems: NavItem[] = [
+  {
+    to: "https://docs.cronlet.dev",
+    label: "Docs",
+    icon: BookOpenText,
+    external: true,
+  },
   { to: "/settings", label: "Settings", icon: Gear },
 ];
 
@@ -153,18 +160,44 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="border-t border-border/30 pt-3">
             {bottomNavItems.map((item) => {
               const Icon = item.icon;
-              const active = isActive(item);
+              const active = item.external ? false : isActive(item);
+              const itemClasses = cn(
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                active
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              );
+
+              if (item.external) {
+                return (
+                  <a
+                    key={item.to}
+                    href={item.to}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={onClose}
+                    className={itemClasses}
+                  >
+                    <Icon
+                      size={20}
+                      weight="regular"
+                      className="shrink-0 transition-colors text-muted-foreground group-hover:text-foreground"
+                    />
+                    <span>{item.label}</span>
+                    <ArrowSquareOut
+                      size={14}
+                      className="ml-auto text-muted-foreground/80 transition-colors group-hover:text-foreground"
+                    />
+                  </a>
+                );
+              }
+
               return (
                 <Link
                   key={item.to}
                   to={item.to}
                   onClick={onClose}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                    active
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  )}
+                  className={itemClasses}
                 >
                   <Icon
                     size={20}

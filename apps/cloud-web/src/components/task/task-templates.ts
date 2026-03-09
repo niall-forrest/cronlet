@@ -26,6 +26,7 @@ export interface AgentSdkTemplate {
   name: string;
   description: string;
   prompt: string;
+  highlights: string[];
 }
 
 function buildAgentSdkPrompt(input: {
@@ -510,6 +511,7 @@ export const AGENT_SDK_TEMPLATES: AgentSdkTemplate[] = [
     id: "user-report-scheduler",
     name: "User Report Scheduler",
     description: "Let your agent schedule recurring reports for users",
+    highlights: ["SDK service", "Report callback", "Lifecycle controls"],
     prompt: buildAgentSdkPrompt({
       objective:
         "Enable the product's AI agent to create recurring report schedules for users, deliver generated reports back into the product, and let the app manage the full schedule lifecycle.",
@@ -546,6 +548,7 @@ export const AGENT_SDK_TEMPLATES: AgentSdkTemplate[] = [
     id: "smart-follow-up",
     name: "Smart Follow-Up",
     description: "Agent schedules a follow-up based on user activity, stops after conversion",
+    highlights: ["Stop on conversion", "Bounded runs", "State sync"],
     prompt: buildAgentSdkPrompt({
       objective:
         "Implement a smart follow-up system where the product's AI agent schedules repeated follow-up actions for a user or lead, stops automatically after conversion, and keeps the follow-up state synchronized with Cronlet.",
@@ -581,6 +584,7 @@ export const AGENT_SDK_TEMPLATES: AgentSdkTemplate[] = [
     id: "adaptive-monitoring",
     name: "Adaptive Monitoring",
     description: "Agent creates a health check, increases frequency when issues detected",
+    highlights: ["Cadence patching", "Recovery logic", "Incident state"],
     prompt: buildAgentSdkPrompt({
       objective:
         "Enable the product's AI agent to create adaptive health-check schedules for user-owned resources, automatically increase schedule frequency during incidents, and relax frequency again after recovery.",
@@ -616,6 +620,7 @@ export const AGENT_SDK_TEMPLATES: AgentSdkTemplate[] = [
     id: "scheduled-data-export",
     name: "Scheduled Data Export",
     description: "Agent sets up recurring CSV exports on behalf of users",
+    highlights: ["Export callback", "Artifact tracking", "Schedule cleanup"],
     prompt: buildAgentSdkPrompt({
       objective:
         "Implement recurring scheduled data exports so the product's AI agent can create, manage, and stop export schedules for users, with results delivered back into the product.",

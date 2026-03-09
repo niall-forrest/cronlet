@@ -6,7 +6,6 @@ import {
   House,
   ListChecks,
   ClockCounterClockwise,
-  Lightning,
   Gear,
   Plus,
   ArrowRight,
@@ -76,18 +75,6 @@ export function CommandPalette() {
         keywords: ["history", "executions", "logs"],
         action: () => {
           navigate({ to: "/runs" });
-          setOpen(false);
-        },
-      },
-      {
-        id: "nav-activity",
-        type: "navigation",
-        icon: <Lightning size={16} weight="duotone" />,
-        title: "Go to Activity",
-        description: "Event feed",
-        keywords: ["events", "audit", "feed"],
-        action: () => {
-          navigate({ to: "/activity" });
           setOpen(false);
         },
       },

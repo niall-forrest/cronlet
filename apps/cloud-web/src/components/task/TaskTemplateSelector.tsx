@@ -20,7 +20,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { AgentSdkTemplate, TaskTemplate } from "./task-templates";
-import { AGENT_SDK_TEMPLATES, getTemplatesByCategory } from "./task-templates";
+import {
+  AGENT_SDK_TEMPLATES,
+  getTemplateRequiredFieldLabels,
+  getTemplatesByCategory,
+} from "./task-templates";
 
 interface TaskTemplateSelectorProps {
   onSelectTemplate: (template: TaskTemplate) => void;
@@ -123,12 +127,15 @@ export function TaskTemplateSelector({
                 </div>
               </CardHeader>
               <CardContent className="mt-auto space-y-4">
-                <div className="rounded-xl border border-border/40 bg-background/40 p-3">
-                  <p className="meta-label mb-1">What you’ll copy</p>
-                  <p className="text-xs text-muted-foreground">
-                    Prompt that scaffolds the SDK integration and callback flow
-                    in your app.
-                  </p>
+                <div className="flex flex-wrap gap-2">
+                  {template.highlights.map((highlight) => (
+                    <span
+                      key={highlight}
+                      className="rounded-full border border-border/40 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground"
+                    >
+                      {highlight}
+                    </span>
+                  ))}
                 </div>
                 <Button
                   className="w-full"
@@ -208,13 +215,25 @@ export function TaskTemplateSelector({
                       </div>
                     </CardHeader>
                     <CardContent className="mt-auto space-y-4">
-                      <div className="rounded-xl border border-border/40 bg-card/40 p-3">
-                        <p className="meta-label mb-1">What you’ll customize</p>
-                        <p className="text-xs text-muted-foreground">
-                          {template.requiredFields.length} field
-                          {template.requiredFields.length === 1 ? "" : "s"}{" "}
-                          still need your real values.
-                        </p>
+                      <div className="space-y-2">
+                        <p className="meta-label">Swap in</p>
+                        <div className="flex flex-wrap gap-2">
+                          {getTemplateRequiredFieldLabels(template)
+                            .slice(0, 3)
+                            .map((label) => (
+                              <span
+                                key={label}
+                                className="rounded-full border border-border/40 bg-card/40 px-2.5 py-1 text-[11px] text-muted-foreground"
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          {template.requiredFields.length > 3 ? (
+                            <span className="rounded-full border border-border/40 bg-card/40 px-2.5 py-1 text-[11px] text-muted-foreground">
+                              +{template.requiredFields.length - 3} more
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <Button
                         className="w-full"

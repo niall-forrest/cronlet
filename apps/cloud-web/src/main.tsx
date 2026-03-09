@@ -17,11 +17,9 @@ import { TaskEditPage } from "./routes/TaskEditPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { RunsPage } from "./routes/RunsPage";
 import { RunDetailPage } from "./routes/RunDetailPage";
-import { ActivityPage } from "./routes/ActivityPage";
 import { AgentConnectPage } from "./routes/AgentConnectPage";
 import { SettingsPage } from "./routes/SettingsPage";
 import { AlertsPage } from "./routes/AlertsPage";
-import { AuditEventsPage } from "./routes/AuditEventsPage";
 import { UsagePage } from "./routes/UsagePage";
 import { BillingPage } from "./routes/BillingPage";
 import "./index.css";
@@ -96,13 +94,6 @@ const runDetailRoute = createRoute({
   },
 });
 
-// Activity - event feed
-const activityRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/activity",
-  component: ActivityPage,
-});
-
 // Agent Connect - MCP, SDK, API integration
 const agentConnectRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -122,13 +113,6 @@ const alertsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/alerts",
   component: AlertsPage,
-});
-
-// Audit events
-const auditEventsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/audit-events",
-  component: AuditEventsPage,
 });
 
 // Usage
@@ -154,11 +138,9 @@ const routeTree = rootRoute.addChildren([
   taskDetailRoute,
   runsRoute,
   runDetailRoute,
-  activityRoute,
   agentConnectRoute,
   settingsRoute,
   alertsRoute,
-  auditEventsRoute,
   usageRoute,
   billingRoute,
 ]);

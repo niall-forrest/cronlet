@@ -9,6 +9,7 @@ import {
   ArrowsClockwise,
   Key,
   ArrowRight,
+  ArrowSquareOut,
   Lightning,
 } from "@phosphor-icons/react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -206,7 +207,7 @@ export function AgentConnectPage() {
     <div className="space-y-10">
       {/* Header */}
       <div className="space-y-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold tracking-tight">
               Agent Connect
@@ -215,6 +216,16 @@ export function AgentConnectPage() {
               Connect AI agents to schedule and manage tasks
             </p>
           </div>
+          <Button asChild variant="outline" size="sm">
+            <a
+              href="https://docs.cronlet.dev"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View Docs
+              <ArrowSquareOut size={14} className="ml-2" />
+            </a>
+          </Button>
         </div>
       </div>
 
