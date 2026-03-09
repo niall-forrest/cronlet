@@ -1,141 +1,98 @@
-import { useState, useCallback, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  ScheduleConfig,
-  TaskCreateInput,
-  ToolsHandlerConfig,
-  WebhookHandlerConfig,
-} from "@cronlet/shared";
+import type { TaskRecord } from "@cronlet/shared";
+import type { MetadataEditorMode, MetadataEntry, TaskFormValues } from "@/components/task/task-form";
+import type { TaskTemplate } from "@/components/task/task-templates";
+import { ArrowLeft, ArrowRight, CheckCircle, Copy, Robot, Sparkle, Terminal } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wrench, Globe, Code, ArrowLeft, ArrowRight, Copy, Terminal, Robot, CheckCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { ScheduleBuilder } from "@/components/task/ScheduleBuilder";
-import { ToolStepBuilder } from "@/components/task/ToolStepBuilder";
-import { WebhookBuilder } from "@/components/task/WebhookBuilder";
 import { createTask } from "@/lib/api";
+import { setFirstTaskPending } from "@/lib/onboarding";
+import {
+  TaskDetailsOptionsSection,
+  TaskHandlerEditor,
+  TaskScheduleEditor,
+  TaskTemplateSelector,
+  buildCreateTaskInput,
+  createDefaultTaskFormValues,
+  createFormValuesFromTemplate,
+  getTaskFormErrors,
+  getTaskHandler,
+  getTemplateRequiredFieldLabels,
+  hasBlockingErrors,
+  metadataEntriesFromText,
+  parseMetadataText,
+} from "@/components/task";
 
-type HandlerType = "tools" | "webhook" | "code";
 type Step = "handler" | "schedule" | "details";
 type CodeTab = "curl" | "sdk" | "mcp";
 
 const STEPS: Step[] = ["handler", "schedule", "details"];
+const STEP_LABELS: Record<Step, string> = {
+  handler: "Handler",
+  schedule: "Schedule",
+  details: "Details & Options",
+};
 
-const RETRY_DELAYS = [
-  { value: "1s", label: "1 second" },
-  { value: "5s", label: "5 seconds" },
-  { value: "30s", label: "30 seconds" },
-  { value: "1m", label: "1 minute" },
-  { value: "5m", label: "5 minutes" },
-];
+interface CreateTaskPageProps {
+  showTemplatesInitially?: boolean;
+}
 
-const TIMEOUTS = [
-  { value: "10s", label: "10 seconds" },
-  { value: "30s", label: "30 seconds" },
-  { value: "1m", label: "1 minute" },
-  { value: "5m", label: "5 minutes" },
-  { value: "10m", label: "10 minutes" },
-];
-
-export function CreateTaskPage() {
+export function CreateTaskPage({
+  showTemplatesInitially = false,
+}: CreateTaskPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [step, setStep] = useState<Step>("handler");
+  const [codeTab, setCodeTab] = useState<CodeTab>("mcp");
+  const [copied, setCopied] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<TaskTemplate | null>(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(showTemplatesInitially);
+  const [form, setForm] = useState<TaskFormValues>(() => createDefaultTaskFormValues());
+
+  const existingTasks = (queryClient.getQueryData(["tasks"]) as TaskRecord[] | undefined) ?? [];
+  const isFirstTaskCreate = existingTasks.length === 0;
 
   const createMutation = useMutation({
     mutationFn: createTask,
     onSuccess: () => {
+      if (isFirstTaskCreate) {
+        setFirstTaskPending(true);
+      }
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
       navigate({ to: "/tasks" });
     },
   });
 
-  const [step, setStep] = useState<Step>("handler");
-  const [codeTab, setCodeTab] = useState<CodeTab>("mcp");
-  const [copied, setCopied] = useState(false);
+  const errors = getTaskFormErrors(form);
+  const currentStepIndex = STEPS.indexOf(step);
+  const isFirstStep = currentStepIndex === 0;
+  const isLastStep = currentStepIndex === STEPS.length - 1;
 
-  // Form state
-  const [handlerType, setHandlerType] = useState<HandlerType>("tools");
-  const [toolsConfig, setToolsConfig] = useState<ToolsHandlerConfig>({
-    type: "tools",
-    steps: [{ tool: "http.get", args: { url: "" } }],
-  });
-  const [webhookConfig, setWebhookConfig] = useState<WebhookHandlerConfig>({
-    type: "webhook",
-    url: "",
-    method: "POST",
-  });
-  const [schedule, setSchedule] = useState<ScheduleConfig>({
-    type: "every",
-    interval: "15m",
-  });
-  const [timezone, setTimezone] = useState("UTC");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [retryAttempts, setRetryAttempts] = useState(1);
-  const [retryBackoff, setRetryBackoff] = useState<"linear" | "exponential">("linear");
-  const [retryDelay, setRetryDelay] = useState("1s");
-  const [taskTimeout, setTaskTimeout] = useState("30s");
-  const [callbackUrl, setCallbackUrl] = useState("");
-
-  // Generate natural language schedule description
   const scheduleDescription = useMemo(() => {
-    if (schedule.type === "every") {
-      const interval = schedule.interval;
-      const match = interval.match(/^(\d+)([smhd])$/);
-      if (match) {
-        const [, num, unit] = match;
-        const units: Record<string, string> = { s: "seconds", m: "minutes", h: "hours", d: "days" };
-        return `every ${num} ${units[unit]}`;
-      }
-      return `every ${interval}`;
+    switch (form.schedule.type) {
+      case "every":
+        return `every ${formatIntervalDescription(form.schedule.interval)}`;
+      case "daily":
+        return `daily at ${form.schedule.times.join(", ")}`;
+      case "weekly":
+        return `${form.schedule.days.join(", ")} at ${form.schedule.time}`;
+      case "monthly":
+        return `monthly on ${form.schedule.day} at ${form.schedule.time}`;
+      case "once":
+        return `once at ${new Date(form.schedule.at).toLocaleString()}`;
+      case "cron":
+        return form.schedule.expression;
     }
-    if (schedule.type === "daily") {
-      return `daily at ${schedule.times.join(", ")}`;
-    }
-    if (schedule.type === "weekly") {
-      return `${schedule.days.join(", ")} at ${schedule.time}`;
-    }
-    if (schedule.type === "monthly") {
-      return `monthly on ${schedule.day} at ${schedule.time}`;
-    }
-    if (schedule.type === "cron") {
-      return schedule.expression;
-    }
-    return "once";
-  }, [schedule]);
+  }, [form.schedule]);
 
-  // Generate code snippets for API preview
-  const codeSnippets = useMemo(() => {
-    const handler = handlerType === "tools" ? toolsConfig : webhookConfig;
-
-    // Full payload for REST/SDK (includes all options)
-    const fullPayload: Record<string, unknown> = {
-      name: name || "My Task",
-      description: description || undefined,
-      handler,
-      schedule,
-      timezone,
-      retryAttempts,
-      retryBackoff,
-      retryDelay,
-      timeout: taskTimeout,
-      active: true,
-    };
-    if (callbackUrl) {
-      fullPayload.callbackUrl = callbackUrl;
-    }
+  const currentCode = useMemo(() => {
+    const fullPayload = buildPreviewPayload(form);
     const payloadJson = JSON.stringify(fullPayload, null, 2);
 
     const curl = `curl -X POST https://api.cronlet.dev/v1/tasks \\
@@ -154,22 +111,34 @@ const task = await client.tasks.create(${payloadJson});
 
 console.log("Created task:", task.id);`;
 
-    // Simplified MCP payload - essentials only
     const mcpArgs: Record<string, unknown> = {
-      name: name || "My Task",
-      handler,
+      name: form.name || "My Task",
+      handler: getTaskHandler(form),
       schedule: scheduleDescription,
     };
 
-    // Only include optional fields if they have non-default values
-    if (description) {
-      mcpArgs.description = description;
+    if (form.description.trim()) {
+      mcpArgs.description = form.description.trim();
     }
-    if (timezone !== "UTC") {
-      mcpArgs.timezone = timezone;
+    if (form.timezone !== "UTC") {
+      mcpArgs.timezone = form.timezone;
     }
-    if (callbackUrl) {
-      mcpArgs.callbackUrl = callbackUrl;
+    if (form.callbackUrl.trim()) {
+      mcpArgs.callbackUrl = form.callbackUrl.trim();
+    }
+
+    const metadata = parseMetadataText(form.metadataText);
+    if (metadata.value) {
+      mcpArgs.metadata = metadata.value;
+    }
+    if (form.maxRunsEnabled && form.maxRuns.trim()) {
+      mcpArgs.maxRuns = Number(form.maxRuns.trim());
+    }
+    if (form.expiresAtEnabled && form.expiresAt.trim()) {
+      mcpArgs.expiresAt = new Date(form.expiresAt).toISOString();
+    }
+    if (!form.active) {
+      mcpArgs.active = false;
     }
 
     const mcp = `// MCP Tool: create_task
@@ -178,60 +147,58 @@ console.log("Created task:", task.id);`;
 {
   "tool": "create_task",
   "args": ${JSON.stringify(mcpArgs, null, 4)}
-}
+}`;
 
-// Schedule examples (natural language):
-//   "every 15 minutes"
-//   "daily at 9am"
-//   "weekdays at 5pm"
-//   "mon, wed, fri at 9:00"
-//   "monthly on the 1st at 9am"`;
+    return {
+      curl,
+      sdk,
+      mcp,
+    }[codeTab];
+  }, [codeTab, form, scheduleDescription]);
 
-    return { curl, sdk, mcp };
-  }, [handlerType, toolsConfig, webhookConfig, name, description, schedule, scheduleDescription, timezone, retryAttempts, retryBackoff, retryDelay, taskTimeout, callbackUrl]);
+  const updateForm = (updates: Partial<TaskFormValues>) => {
+    setForm((current) => ({ ...current, ...updates }));
+  };
 
-  const handleCopy = useCallback(async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, []);
+  const handleMetadataTextChange = (value: string) => {
+    updateForm({
+      metadataText: value,
+      metadataEntries: metadataEntriesFromText(value),
+    });
+  };
 
-  const currentStepIndex = STEPS.indexOf(step);
-  const isFirstStep = currentStepIndex === 0;
-  const isLastStep = currentStepIndex === STEPS.length - 1;
+  const handleMetadataEntriesChange = (entries: MetadataEntry[]) => {
+    updateForm({ metadataEntries: entries });
+  };
 
-  const getHandler = useCallback(() => {
-    switch (handlerType) {
-      case "tools":
-        return toolsConfig;
-      case "webhook":
-        return { ...webhookConfig, method: webhookConfig.method ?? "POST" } as const;
-      case "code":
-        return { type: "code" as const, runtime: "javascript" as const, code: "" };
-    }
-  }, [handlerType, toolsConfig, webhookConfig]);
+  const handleMetadataModeChange = (mode: MetadataEditorMode) => {
+    updateForm({
+      metadataMode: mode,
+      metadataEntries: mode === "builder" ? metadataEntriesFromText(form.metadataText) : form.metadataEntries,
+    });
+  };
 
-  const canProceed = useCallback((): boolean => {
-    switch (step) {
-      case "handler": {
-        const handler = getHandler();
-        if (handler.type === "tools") {
-          return handler.steps.length > 0 && handler.steps.every((s) => s.tool);
-        }
-        if (handler.type === "webhook") {
-          return !!handler.url;
-        }
-        return false;
+  const canProceed = () => {
+    if (step === "handler") {
+      if (form.handlerType === "webhook") {
+        return !errors.webhookUrl;
       }
-      case "schedule":
-        return true;
-      case "details":
-        return !!name;
+
+      return form.toolsConfig.steps.length > 0 && form.toolsConfig.steps.every((toolStep) => toolStep.tool);
     }
-  }, [step, getHandler, name]);
+
+    if (step === "schedule") {
+      return true;
+    }
+
+    return !hasBlockingErrors(errors);
+  };
 
   const handleNext = () => {
-    if (!canProceed()) return;
+    if (!canProceed()) {
+      return;
+    }
+
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < STEPS.length) {
       setStep(STEPS[nextIndex]);
@@ -239,344 +206,220 @@ console.log("Created task:", task.id);`;
   };
 
   const handleBack = () => {
-    const prevIndex = currentStepIndex - 1;
-    if (prevIndex >= 0) {
-      setStep(STEPS[prevIndex]);
+    const previousIndex = currentStepIndex - 1;
+    if (previousIndex >= 0) {
+      setStep(STEPS[previousIndex]);
     }
   };
 
-  const handleSubmit = async () => {
-    if (!canProceed()) return;
+  const handleSubmit = () => {
+    if (!canProceed()) {
+      return;
+    }
 
-    const input: TaskCreateInput = {
-      name,
-      description: description || undefined,
-      handler: getHandler(),
-      schedule,
-      timezone,
-      retryAttempts,
-      retryBackoff,
-      retryDelay,
-      timeout: taskTimeout,
-      callbackUrl: callbackUrl || undefined,
-      active: true,
-    };
-    createMutation.mutate(input);
+    createMutation.mutate(buildCreateTaskInput(form));
   };
 
-  const handleScheduleChange = useCallback((config: ScheduleConfig) => {
-    setSchedule(config);
-  }, []);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(currentCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-  const currentCode = codeTab === "curl" ? codeSnippets.curl : codeTab === "sdk" ? codeSnippets.sdk : codeSnippets.mcp;
+  const handleSelectTemplate = (template: TaskTemplate) => {
+    setSelectedTemplate(template);
+    setForm(createFormValuesFromTemplate(template));
+    setStep("handler");
+    setShowTemplateSelector(false);
+  };
+
+  const handleStartFromScratch = () => {
+    setSelectedTemplate(null);
+    setForm(createDefaultTaskFormValues());
+    setStep("handler");
+    setShowTemplateSelector(false);
+  };
+
+  if (showTemplateSelector) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/" })}>
+            <ArrowLeft size={16} className="mr-2" />
+            Back to Overview
+          </Button>
+        </div>
+
+        <TaskTemplateSelector
+          onSelectTemplate={handleSelectTemplate}
+          onStartFromScratch={handleStartFromScratch}
+        />
+      </div>
+    );
+  }
+
+  const templateFieldLabels = selectedTemplate ? getTemplateRequiredFieldLabels(selectedTemplate) : [];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: "/tasks" })}
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/tasks" })}>
           <ArrowLeft size={16} className="mr-2" />
           Back to Tasks
         </Button>
       </div>
 
-      <div>
-        <h1 className="display-title">Create Task</h1>
-        <p className="text-muted-foreground mt-1">
-          Set up a new scheduled task
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="display-title">Create Task</h1>
+          <p className="mt-1 text-muted-foreground">
+            Set up a new scheduled task
+          </p>
+        </div>
+        {showTemplatesInitially ? (
+          <Button variant="outline" onClick={() => setShowTemplateSelector(true)}>
+            <Sparkle size={14} className="mr-2" />
+            Change template
+          </Button>
+        ) : null}
       </div>
 
-      {/* Side-by-side layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Left: Form */}
+      {selectedTemplate ? (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="space-y-4 py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Badge variant={selectedTemplate.handler.type === "tools" ? "tools" : "webhook"}>
+                    {selectedTemplate.handler.type.toUpperCase()}
+                  </Badge>
+                  <span className="meta-label">Template loaded</span>
+                </div>
+                <p className="font-display text-lg text-foreground">{selectedTemplate.name}</p>
+                <p className="text-sm text-muted-foreground">{selectedTemplate.description}</p>
+              </div>
+              {showTemplatesInitially ? (
+                <Button variant="ghost" size="sm" onClick={() => setShowTemplateSelector(true)}>
+                  Browse templates
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="rounded-xl border border-border/40 bg-background/40 p-4">
+              <p className="meta-label mb-2">Replace these before creating</p>
+              <div className="flex flex-wrap gap-2">
+                {templateFieldLabels.map((label) => (
+                  <Badge key={label} variant="outline" className="rounded-full px-2.5 py-1 text-[11px]">
+                    {label}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="space-y-6">
-          {/* Progress Steps */}
-          <div className="flex items-center gap-2">
-            {STEPS.map((s, i) => (
-              <div key={s} className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {STEPS.map((stepId, index) => (
+              <div key={stepId} className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    if (i < currentStepIndex) {
-                      setStep(STEPS[i]);
+                    if (index < currentStepIndex) {
+                      setStep(STEPS[index]);
                     }
                   }}
                   className={cn(
                     "flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all",
-                    i < currentStepIndex && "cursor-pointer hover:bg-primary/5",
-                    i === currentStepIndex && "bg-primary/10",
-                    i > currentStepIndex && "cursor-default opacity-50"
+                    index < currentStepIndex && "cursor-pointer hover:bg-primary/5",
+                    index === currentStepIndex && "bg-primary/10",
+                    index > currentStepIndex && "cursor-default opacity-50"
                   )}
                 >
                   <div
                     className={cn(
                       "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-semibold transition-all",
-                      i < currentStepIndex
+                      index < currentStepIndex
                         ? "bg-primary text-primary-foreground"
-                        : i === currentStepIndex
+                        : index === currentStepIndex
                           ? "bg-primary/20 text-primary ring-1 ring-primary/50"
                           : "bg-muted text-muted-foreground"
                     )}
                   >
-                    {i < currentStepIndex ? <CheckCircle size={14} weight="fill" /> : i + 1}
+                    {index < currentStepIndex ? <CheckCircle size={14} weight="fill" /> : index + 1}
                   </div>
                   <span
                     className={cn(
-                      "text-sm capitalize hidden sm:inline",
-                      i === currentStepIndex ? "text-foreground font-medium" : "text-muted-foreground"
+                      "hidden text-sm sm:inline",
+                      index === currentStepIndex ? "font-medium text-foreground" : "text-muted-foreground"
                     )}
                   >
-                    {s}
+                    {STEP_LABELS[stepId]}
                   </span>
                 </button>
-                {i < STEPS.length - 1 && (
-                  <div className="h-px w-6 bg-border/50" />
-                )}
+                {index < STEPS.length - 1 ? <div className="h-px w-6 bg-border/50" /> : null}
               </div>
             ))}
           </div>
 
-          {/* Step Content */}
           <Card variant="flat">
             <CardContent>
-              {step === "handler" && (
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">What should this task do?</Label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        {
-                          type: "tools" as const,
-                          icon: Wrench,
-                          label: "Tools",
-                          desc: "HTTP, Slack, email",
-                        },
-                        {
-                          type: "webhook" as const,
-                          icon: Globe,
-                          label: "Webhook",
-                          desc: "Call your endpoint",
-                        },
-                        {
-                          type: "code" as const,
-                          icon: Code,
-                          label: "Code",
-                          desc: "Run JavaScript",
-                          disabled: true,
-                        },
-                      ].map((opt) => (
-                        <button
-                          key={opt.type}
-                          type="button"
-                          disabled={opt.disabled}
-                          onClick={() => setHandlerType(opt.type)}
-                          className={cn(
-                            "group flex flex-col items-center gap-2.5 rounded-xl border p-4 transition-all duration-200",
-                            handlerType === opt.type
-                              ? "border-primary/50 bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]"
-                              : "border-border/30 bg-card/30 hover:border-border/50 hover:bg-card/50",
-                            opt.disabled && "opacity-40 cursor-not-allowed"
-                          )}
-                        >
-                          <div className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
-                            handlerType === opt.type ? "bg-primary/15" : "bg-muted/50 group-hover:bg-muted"
-                          )}>
-                            <opt.icon
-                              size={22}
-                              weight={handlerType === opt.type ? "fill" : "regular"}
-                              className={cn(
-                                "transition-colors",
-                                handlerType === opt.type ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                              )}
-                            />
-                          </div>
-                          <span className={cn(
-                            "text-sm font-medium transition-colors",
-                            handlerType === opt.type ? "text-primary" : "text-foreground"
-                          )}>{opt.label}</span>
-                          <span className="text-xs text-muted-foreground text-center">
-                            {opt.desc}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              {step === "handler" ? (
+                <TaskHandlerEditor
+                  handlerType={form.handlerType}
+                  toolsConfig={form.toolsConfig}
+                  webhookConfig={form.webhookConfig}
+                  onHandlerTypeChange={(handlerType) => updateForm({ handlerType })}
+                  onToolsConfigChange={(toolsConfig) => updateForm({ toolsConfig })}
+                  onWebhookConfigChange={(webhookConfig) => updateForm({ webhookConfig })}
+                />
+              ) : null}
 
-                  <div className="space-y-4">
-                    {handlerType === "tools" && toolsConfig.type === "tools" && (
-                      <ToolStepBuilder
-                        value={toolsConfig}
-                        onChange={(config) => setToolsConfig(config)}
-                      />
-                    )}
-                    {handlerType === "webhook" && webhookConfig.type === "webhook" && (
-                      <WebhookBuilder
-                        value={webhookConfig}
-                        onChange={(config) => setWebhookConfig(config)}
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
+              {step === "schedule" ? (
+                <TaskScheduleEditor
+                  schedule={form.schedule}
+                  timezone={form.timezone}
+                  onScheduleChange={(schedule) => updateForm({ schedule })}
+                  onTimezoneChange={(timezone) => updateForm({ timezone })}
+                />
+              ) : null}
 
-              {step === "schedule" && (
-                <div className="space-y-6">
-                  <Label className="text-base font-semibold">When should it run?</Label>
-                  <ScheduleBuilder
-                    value={schedule}
-                    onChange={handleScheduleChange}
-                    timezone={timezone}
-                    onTimezoneChange={setTimezone}
-                  />
-                </div>
-              )}
-
-              {step === "details" && (
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <Label>
-                      Task Name <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Check API and alert Slack"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>
-                      Description <span className="text-muted-foreground text-xs">(optional)</span>
-                    </Label>
-                    <Textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="What does this task do?"
-                      className="min-h-[60px]"
-                    />
-                  </div>
-
-                  {/* Advanced Settings */}
-                  <div className="space-y-3 pt-3 border-t border-border/50">
-                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                      Retry & Timeout
-                    </Label>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Retry Attempts</Label>
-                        <Select
-                          value={String(retryAttempts)}
-                          onValueChange={(v) => setRetryAttempts(Number(v))}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[1, 2, 3, 5, 10].map((n) => (
-                              <SelectItem key={n} value={String(n)}>
-                                {n}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Backoff</Label>
-                        <Select value={retryBackoff} onValueChange={(v: "linear" | "exponential") => setRetryBackoff(v)}>
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="linear">Linear</SelectItem>
-                            <SelectItem value="exponential">Exponential</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Retry Delay</Label>
-                        <Select value={retryDelay} onValueChange={setRetryDelay}>
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {RETRY_DELAYS.map((d) => (
-                              <SelectItem key={d.value} value={d.value}>
-                                {d.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Timeout</Label>
-                        <Select value={taskTimeout} onValueChange={setTaskTimeout}>
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TIMEOUTS.map((t) => (
-                              <SelectItem key={t.value} value={t.value}>
-                                {t.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Callback URL */}
-                  <div className="space-y-3 pt-3 border-t border-border/50">
-                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                      Completion Callback
-                    </Label>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        Callback URL <span className="text-muted-foreground">(optional)</span>
-                      </Label>
-                      <Input
-                        value={callbackUrl}
-                        onChange={(e) => setCallbackUrl(e.target.value)}
-                        placeholder="https://your-api.com/webhook/task-complete"
-                        className="h-9"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        We'll POST the run result to this URL when the task completes. Useful for agent loops.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {step === "details" ? (
+                <TaskDetailsOptionsSection
+                  mode="create"
+                  collapsibleAdvanced
+                  values={form}
+                  errors={errors}
+                  onNameChange={(name) => updateForm({ name })}
+                  onDescriptionChange={(description) => updateForm({ description })}
+                  onActiveChange={(active) => updateForm({ active })}
+                  onRetryAttemptsChange={(retryAttempts) => updateForm({ retryAttempts })}
+                  onRetryBackoffChange={(retryBackoff) => updateForm({ retryBackoff })}
+                  onRetryDelayChange={(retryDelay) => updateForm({ retryDelay })}
+                  onTimeoutChange={(timeout) => updateForm({ timeout })}
+                  onCallbackUrlChange={(callbackUrl) => updateForm({ callbackUrl })}
+                  onMetadataModeChange={handleMetadataModeChange}
+                  onMetadataTextChange={handleMetadataTextChange}
+                  onMetadataEntriesChange={handleMetadataEntriesChange}
+                  onMaxRunsEnabledChange={(maxRunsEnabled) => updateForm({ maxRunsEnabled, maxRuns: maxRunsEnabled ? form.maxRuns : "" })}
+                  onMaxRunsChange={(maxRuns) => updateForm({ maxRuns })}
+                  onExpiresAtEnabledChange={(expiresAtEnabled) => updateForm({ expiresAtEnabled, expiresAt: expiresAtEnabled ? form.expiresAt : "" })}
+                  onExpiresAtChange={(expiresAt) => updateForm({ expiresAt })}
+                />
+              ) : null}
             </CardContent>
           </Card>
 
-          {/* Navigation */}
           <div className="flex items-center justify-between">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleBack}
-              disabled={isFirstStep}
-            >
+            <Button type="button" variant="ghost" onClick={handleBack} disabled={isFirstStep}>
               <ArrowLeft size={16} className="mr-2" />
               Back
             </Button>
 
             {isLastStep ? (
-              <Button
-                onClick={handleSubmit}
-                disabled={!canProceed() || createMutation.isPending}
-              >
+              <Button onClick={handleSubmit} disabled={!canProceed() || createMutation.isPending}>
                 {createMutation.isPending ? "Creating..." : "Create Task"}
               </Button>
             ) : (
@@ -587,38 +430,30 @@ console.log("Created task:", task.id);`;
             )}
           </div>
 
-          {createMutation.error && (
-            <p className="text-sm text-destructive">
-              Failed to create task: {(createMutation.error as Error).message}
-            </p>
-          )}
+          {createMutation.error ? (
+            <p className="text-sm text-destructive">Failed to create task: {(createMutation.error as Error).message}</p>
+          ) : null}
         </div>
 
-        {/* Right: Code Preview */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Tabs value={codeTab} onValueChange={(v) => setCodeTab(v as CodeTab)}>
-              <TabsList className="bg-muted/30 h-9">
-                <TabsTrigger value="mcp" className="gap-1.5 text-xs px-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+            <Tabs value={codeTab} onValueChange={(value) => setCodeTab(value as CodeTab)}>
+              <TabsList className="h-9 bg-muted/30">
+                <TabsTrigger value="mcp" className="gap-1.5 px-3 text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                   <Robot size={14} />
                   MCP
                 </TabsTrigger>
-                <TabsTrigger value="sdk" className="gap-1.5 text-xs px-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-                  <Code size={14} />
+                <TabsTrigger value="sdk" className="gap-1.5 px-3 text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                  <ArrowRight size={14} />
                   SDK
                 </TabsTrigger>
-                <TabsTrigger value="curl" className="gap-1.5 text-xs px-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                <TabsTrigger value="curl" className="gap-1.5 px-3 text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                   <Terminal size={14} />
                   cURL
                 </TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-3"
-              onClick={() => handleCopy(currentCode)}
-            >
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={handleCopy}>
               {copied ? (
                 <>
                   <CheckCircle size={14} weight="fill" className="mr-1.5 text-emerald-400" />
@@ -633,24 +468,68 @@ console.log("Created task:", task.id);`;
             </Button>
           </div>
 
-          <div className="relative">
-            <pre className="bg-zinc-950 border border-border/30 rounded-xl p-5 overflow-auto text-[13px] text-zinc-300 font-mono leading-relaxed min-h-[400px] max-h-[600px]">
-              <code>{currentCode}</code>
-            </pre>
-          </div>
+          <pre className="min-h-[400px] max-h-[600px] overflow-auto rounded-xl border border-border/30 bg-zinc-950 p-5 font-mono text-[13px] leading-relaxed text-zinc-300">
+            <code>{currentCode}</code>
+          </pre>
 
-          {codeTab === "mcp" && (
-            <p className="text-xs text-muted-foreground">
-              AI agents use natural language schedules. Retry and timeout use sensible defaults.
-            </p>
-          )}
-          {codeTab === "sdk" && (
-            <p className="text-xs text-muted-foreground">
-              Install: <code className="bg-zinc-950 border border-border/50 px-2 py-1 rounded-md text-primary">npm install @cronlet/sdk</code>
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            The preview tracks advanced options too, including metadata and lifecycle limits when configured.
+          </p>
         </div>
       </div>
     </div>
   );
+}
+
+function buildPreviewPayload(form: TaskFormValues) {
+  const input = buildCreateTaskInput(form);
+  const payload: Record<string, unknown> = {
+    name: input.name,
+    handler: input.handler,
+    schedule: input.schedule,
+    timezone: input.timezone,
+    retryAttempts: input.retryAttempts,
+    retryBackoff: input.retryBackoff,
+    retryDelay: input.retryDelay,
+    timeout: input.timeout,
+  };
+
+  if (input.description) {
+    payload.description = input.description;
+  }
+  if (input.callbackUrl) {
+    payload.callbackUrl = input.callbackUrl;
+  }
+  if (input.metadata) {
+    payload.metadata = input.metadata;
+  }
+  if (typeof input.maxRuns === "number") {
+    payload.maxRuns = input.maxRuns;
+  }
+  if (input.expiresAt) {
+    payload.expiresAt = input.expiresAt;
+  }
+  if (input.active === false) {
+    payload.active = false;
+  }
+
+  return payload;
+}
+
+function formatIntervalDescription(interval: string): string {
+  const match = interval.match(/^(\d+)([smhd])$/);
+  if (!match) {
+    return interval;
+  }
+
+  const [, amount, unit] = match;
+  const units: Record<string, string> = {
+    s: "second",
+    m: "minute",
+    h: "hour",
+    d: "day",
+  };
+
+  const label = units[unit] ?? unit;
+  return amount === "1" ? `1 ${label}` : `${amount} ${label}s`;
 }

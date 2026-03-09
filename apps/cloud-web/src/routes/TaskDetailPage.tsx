@@ -10,11 +10,8 @@ import {
   triggerTask,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -55,7 +52,6 @@ interface TaskDetailPageProps {
 export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null);
 
@@ -71,7 +67,7 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
   });
 
   const patchMutation = useMutation({
-    mutationFn: (input: { active?: boolean; name?: string; description?: string | null }) =>
+    mutationFn: (input: { active?: boolean }) =>
       patchTask(taskId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
@@ -146,9 +142,11 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                 <Play size={16} className="mr-2" />
                 {triggerMutation.isPending ? "Running..." : "Run Now"}
               </Button>
-              <Button variant="outline" onClick={() => setEditOpen(true)}>
-                <PencilSimple size={16} className="mr-2" />
-                Edit
+              <Button variant="outline" asChild>
+                <Link to="/tasks/$taskId/edit" params={{ taskId }}>
+                  <PencilSimple size={16} className="mr-2" />
+                  Edit
+                </Link>
               </Button>
             </div>
           </div>
@@ -215,6 +213,13 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                   <HandlerIcon type={task.handlerType} />
                   Handler
                 </CardTitle>
+                <CardAction>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/tasks/$taskId/edit" params={{ taskId }}>
+                      Edit
+                    </Link>
+                  </Button>
+                </CardAction>
               </CardHeader>
               <CardContent>
                 <HandlerDisplay config={task.handlerConfig} />
@@ -228,6 +233,13 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                   <Clock size={16} />
                   Schedule
                 </CardTitle>
+                <CardAction>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/tasks/$taskId/edit" params={{ taskId }}>
+                      Edit
+                    </Link>
+                  </Button>
+                </CardAction>
               </CardHeader>
               <CardContent>
                 <ScheduleDisplay config={task.scheduleConfig} timezone={task.timezone} />
@@ -242,6 +254,14 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">State</p>
+                  <p className="font-medium">{task.active ? "Active" : "Paused"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Timezone</p>
+                  <p className="font-medium">{task.timezone}</p>
+                </div>
                 <div>
                   <p className="text-muted-foreground">Timeout</p>
                   <p className="font-medium">{task.timeout}</p>
@@ -273,9 +293,33 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                 {task.callbackUrl && (
                   <div className="col-span-2">
                     <p className="text-muted-foreground">Callback URL</p>
-                    <p className="font-medium truncate">{task.callbackUrl}</p>
+                    <p className="font-medium break-all">{task.callbackUrl}</p>
                   </div>
                 )}
+                <div className="col-span-2">
+                  <p className="text-muted-foreground">Metadata</p>
+                  <p className="font-medium">
+                    {task.metadata ? `${Object.keys(task.metadata).length} field${Object.keys(task.metadata).length === 1 ? "" : "s"}` : "Not set"}
+                  </p>
+                </div>
+              </div>
+
+              {task.metadata ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-muted-foreground text-sm">Metadata Value</p>
+                  <pre className="rounded-xl border border-border/40 bg-zinc-950 p-4 text-xs text-zinc-300 overflow-x-auto">
+                    {JSON.stringify(task.metadata, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/tasks/$taskId/edit" params={{ taskId }}>
+                    <PencilSimple size={14} className="mr-2" />
+                    Edit Configuration
+                  </Link>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -358,19 +402,6 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
               </div>
             </CardContent>
           </Card>
-
-          {/* Edit Dialog */}
-          <EditTaskDialog
-            task={task}
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            onSave={(updates) => {
-              patchMutation.mutate(updates, {
-                onSuccess: () => setEditOpen(false),
-              });
-            }}
-            isSaving={patchMutation.isPending}
-          />
 
           {/* Delete Confirmation Dialog */}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -511,12 +542,29 @@ function HandlerDisplay({ config }: { config: HandlerConfig }) {
         <div className="space-y-2 text-sm">
           <div>
             <span className="text-muted-foreground">URL:</span>{" "}
-            <span className="font-mono text-xs">{config.url}</span>
+            <span className="font-mono text-xs break-all">{config.url}</span>
           </div>
           <div>
             <span className="text-muted-foreground">Method:</span>{" "}
             <Badge variant="outline">{config.method ?? "POST"}</Badge>
           </div>
+          {config.headers && Object.keys(config.headers).length > 0 ? (
+            <div>
+              <span className="text-muted-foreground">Headers:</span>{" "}
+              <span>{Object.keys(config.headers).length} configured</span>
+            </div>
+          ) : null}
+          {config.body ? (
+            <div>
+              <span className="text-muted-foreground">Payload:</span>{" "}
+              <span>Custom body</span>
+            </div>
+          ) : (
+            <div>
+              <span className="text-muted-foreground">Payload:</span>{" "}
+              <span>Default run payload</span>
+            </div>
+          )}
           {config.auth && (
             <div>
               <span className="text-muted-foreground">Auth:</span>{" "}
@@ -580,6 +628,7 @@ function ScheduleDisplay({ config, timezone }: { config: ScheduleConfig; timezon
     <div className="space-y-2 text-sm">
       <p className="font-medium">{description}</p>
       <p className="text-muted-foreground">Timezone: {tz}</p>
+      <p className="text-muted-foreground">Editable from the full task editor.</p>
     </div>
   );
 }
@@ -597,70 +646,6 @@ function formatInterval(interval: string): string {
   };
   const [singular, plural] = units[unit] ?? ["unit", "units"];
   return `${n} ${n === 1 ? singular : plural}`;
-}
-
-interface EditTaskDialogProps {
-  task: TaskRecord;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (updates: { name?: string; description?: string | null }) => void;
-  isSaving: boolean;
-}
-
-function EditTaskDialog({ task, open, onOpenChange, onSave, isSaving }: EditTaskDialogProps) {
-  const [name, setName] = useState(task.name);
-  const [description, setDescription] = useState(task.description ?? "");
-
-  // Reset form when dialog opens
-  const handleOpenChange = (open: boolean) => {
-    if (open) {
-      setName(task.name);
-      setDescription(task.description ?? "");
-    }
-    onOpenChange(open);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Edit Task</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Task name"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description"
-              rows={3}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => onSave({ name, description: description || null })}
-            disabled={isSaving || !name.trim()}
-          >
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 interface RunDetailDialogProps {

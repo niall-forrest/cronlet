@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Highlight, themes } from "prism-react-renderer";
 import {
@@ -187,6 +187,21 @@ const claudeDesktopConfig = `{
 export function AgentConnectPage() {
   const [sdkTab, setSdkTab] = useState<SdkTab>("openai");
 
+  useEffect(() => {
+    if (window.location.hash !== "#sdk") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("sdk")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   return (
     <div className="space-y-10">
       {/* Header */}
@@ -223,7 +238,7 @@ export function AgentConnectPage() {
       </Card>
 
       {/* MCP Server */}
-      <section className="space-y-4">
+      <section id="sdk" className="space-y-4 scroll-mt-24">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
             <Terminal size={20} className="text-primary" />

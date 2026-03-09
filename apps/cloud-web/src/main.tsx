@@ -13,8 +13,10 @@ import { Layout } from "./components/Layout";
 import { OverviewPage } from "./routes/OverviewPage";
 import { TasksPage } from "./routes/TasksPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
+import { TaskEditPage } from "./routes/TaskEditPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { RunsPage } from "./routes/RunsPage";
+import { RunDetailPage } from "./routes/RunDetailPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { AgentConnectPage } from "./routes/AgentConnectPage";
 import { SettingsPage } from "./routes/SettingsPage";
@@ -46,7 +48,17 @@ const tasksRoute = createRoute({
 const createTaskRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks/create",
-  component: CreateTaskPage,
+  component: function CreateTaskWrapper() {
+    return <CreateTaskPage />;
+  },
+});
+
+const createTaskTemplatesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks/create/templates",
+  component: function CreateTaskTemplatesWrapper() {
+    return <CreateTaskPage showTemplatesInitially />;
+  },
 });
 
 // Task detail page
@@ -59,11 +71,29 @@ const taskDetailRoute = createRoute({
   },
 });
 
+const taskEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks/$taskId/edit",
+  component: function TaskEditWrapper() {
+    const { taskId } = taskEditRoute.useParams();
+    return <TaskEditPage taskId={taskId} />;
+  },
+});
+
 // Runs - execution history
 const runsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/runs",
   component: RunsPage,
+});
+
+const runDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/runs/$runId",
+  component: function RunDetailWrapper() {
+    const { runId } = runDetailRoute.useParams();
+    return <RunDetailPage runId={runId} />;
+  },
 });
 
 // Activity - event feed
@@ -118,9 +148,12 @@ const billingRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   overviewRoute,
   tasksRoute,
-  taskDetailRoute,
   createTaskRoute,
+  createTaskTemplatesRoute,
+  taskEditRoute,
+  taskDetailRoute,
   runsRoute,
+  runDetailRoute,
   activityRoute,
   agentConnectRoute,
   settingsRoute,

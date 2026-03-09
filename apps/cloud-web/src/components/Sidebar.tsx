@@ -6,6 +6,7 @@ import {
   Lightning,
   HeadCircuit,
   Gear,
+  SquaresFour,
   List,
   X,
 } from "@phosphor-icons/react";
@@ -17,11 +18,25 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   exact?: boolean;
+  matchPrefixes?: string[];
+  excludePrefixes?: string[];
 }
 
 const mainNavItems: NavItem[] = [
   { to: "/", label: "Overview", icon: House, exact: true },
-  { to: "/tasks", label: "Tasks", icon: ListChecks },
+  {
+    to: "/tasks",
+    label: "Tasks",
+    icon: ListChecks,
+    matchPrefixes: ["/tasks"],
+    excludePrefixes: ["/tasks/create/templates"],
+  },
+  {
+    to: "/tasks/create/templates",
+    label: "Templates",
+    icon: SquaresFour,
+    matchPrefixes: ["/tasks/create/templates"],
+  },
   { to: "/runs", label: "Runs", icon: ClockCounterClockwise },
   { to: "/activity", label: "Activity", icon: Lightning },
   { to: "/agent-connect", label: "Agent Connect", icon: HeadCircuit },
@@ -41,7 +56,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     select: (state) => state.location.pathname,
   });
 
-  const isActive = (to: string, exact?: boolean) => {
+  const isActive = (item: NavItem) => {
+    if (item.excludePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
+      return false;
+    }
+
+    if (item.matchPrefixes?.length) {
+      return item.matchPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    }
+
+    const { to, exact } = item;
     if (exact) return pathname === to;
     return pathname === to || pathname.startsWith(`${to}/`);
   };
@@ -92,7 +116,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="space-y-1">
             {mainNavItems.map((item) => {
               const Icon = item.icon;
-              const active = isActive(item.to, item.exact);
+              const active = isActive(item);
               return (
                 <Link
                   key={item.to}
@@ -129,7 +153,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="border-t border-border/30 pt-3">
             {bottomNavItems.map((item) => {
               const Icon = item.icon;
-              const active = isActive(item.to, item.exact);
+              const active = isActive(item);
               return (
                 <Link
                   key={item.to}
