@@ -37,13 +37,14 @@ const distDir = join(repoRoot, "apps", "docs", "dist");
 
 const requiredPages = [
   "index.html",
-  "getting-started/index.html",
-  "jobs-and-scheduling-model/index.html",
-  "config-reference/index.html",
-  "cli-commands/index.html",
-  "local-dev-and-hot-reload/index.html",
-  "deploy-targets-and-caveats/index.html",
-  "troubleshooting-and-faq/index.html",
+  "cloud-quickstart/index.html",
+  "sdk-overview/index.html",
+  "tasks-handlers-and-schedules/index.html",
+  "callbacks-and-agent-loops/index.html",
+  "agent-tooling/index.html",
+  "sdk-api-reference/index.html",
+  "local-runtime-quickstart/index.html",
+  "local-runtime-reference/index.html",
 ];
 
 for (const page of requiredPages) {
