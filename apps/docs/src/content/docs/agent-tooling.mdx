@@ -6,7 +6,7 @@ sidebar:
   label: Agent Tooling
 ---
 
-`@cronlet/sdk` includes tool definitions and a handler layer so LLMs can create and manage schedules directly.
+Give your product's AI agent the ability to schedule tasks. Add a few lines of code and your agent can create monitoring, reports, follow-ups — anything on a schedule — on behalf of your users.
 
 Exports:
 
@@ -16,13 +16,13 @@ Exports:
 - `langchainTools`
 - `createToolHandler()`
 
-## Important caveat about schedules
+## Schedule handling caveat
 
 The tool definitions describe `schedule` as either an object or a natural-language string, but the current SDK tool handler passes that value directly into `client.tasks.create()`.
 
 In practice, you should have your model emit a **schedule object**, not a string.
 
-Recommended:
+Use:
 
 ```json
 {
@@ -32,13 +32,13 @@ Recommended:
 }
 ```
 
-Avoid relying on:
+Do not rely on:
 
 ```json
 "daily at 9am"
 ```
 
-unless you add a parser in your own application before calling the SDK.
+unless your application parses the string before calling the SDK.
 
 ## OpenAI
 
@@ -169,9 +169,9 @@ const result = await handler.execute("cronlet_create_task", {
 - `cronlet_list_runs`
 - `cronlet_get_run`
 
-## Recommended system-prompt guidance
+## System prompt guidance
 
-Give the model explicit constraints:
+Provide explicit constraints to the model:
 
 - use schedule objects, not natural-language schedules
 - include timezone when user intent implies local time
@@ -187,7 +187,7 @@ When creating a task, include metadata with userId, orgId, and internal record I
 If the user is updating an existing schedule, patch or pause the existing task instead of creating duplicates.
 ```
 
-## Recommended product-side pattern
+## Product-side integration pattern
 
 Do not let the LLM call the raw SDK from a browser or untrusted environment.
 

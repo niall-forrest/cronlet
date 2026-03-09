@@ -6,7 +6,7 @@ sidebar:
   label: Callbacks and Agent Loops
 ---
 
-Callbacks are what turn Cronlet from "hosted scheduler" into "useful part of your product".
+When a task completes, Cronlet sends the result — with your original context — back to your app. Your agent receives it, decides what to do next, and the cycle continues. Tasks that monitor, adapt, and respond on their own.
 
 Use a `callbackUrl` whenever your app needs to:
 
@@ -204,7 +204,7 @@ If downstream work is heavy:
 
 - persist the callback event
 - enqueue internal processing
-- acknowledge quickly
+- return the response after persistence or queueing
 
 Do not make the callback handler itself do expensive fan-out work if you can avoid it.
 

@@ -6,9 +6,9 @@ sidebar:
   label: Cloud Quickstart
 ---
 
-This guide is the fastest path to a real Cronlet Cloud integration.
+This guide covers a minimal Cronlet Cloud integration.
 
-By the end you will:
+This guide shows how to:
 
 - install `@cronlet/sdk`
 - create a hosted task
@@ -103,7 +103,7 @@ console.log({
 
 ## Create a tools-based task
 
-Use `tools` handlers when you want hosted multi-step logic without exposing your own endpoint as the handler:
+Use `tools` handlers when you need hosted multi-step execution without exposing your own endpoint as the handler:
 
 ```ts
 const task = await cronlet.tasks.create({
@@ -144,7 +144,7 @@ const task = await cronlet.tasks.create({
 
 ## Production checklist
 
-Before you wire this into your app or agent:
+Before using this in an application or agent workflow:
 
 - keep the API key server-side only
 - store `task.id` in your database

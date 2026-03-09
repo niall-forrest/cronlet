@@ -11,7 +11,6 @@ Cronlet has two developer-facing surfaces:
 1. `Cronlet Cloud` for hosted scheduled tasks, run history, callbacks, and agent-triggered automation.
 2. `cronlet` local runtime + CLI for file-based jobs inside your own Node.js app.
 
-This docs site now leads with the Cloud SDK path because that is the integration surface used by the web product, agent tooling, and the `@cronlet/sdk` package.
 
 ## Use Cronlet Cloud when
 
@@ -53,6 +52,6 @@ This docs site now leads with the Cloud SDK path because that is the integration
 
 - The current SDK `tasks.create()` API expects a **schedule object**, not a natural-language schedule string.
 - The SDK tool definitions currently describe `schedule` as object-or-string for LLM use, but the tool handler passes the value straight through. In practice, generate schedule **objects** unless you add your own parser.
-- Cloud callbacks are real and useful, but the current payload does **not** include a populated `task.name`, and `stats.expiresAt` is currently `null` in worker callbacks. Build your callback handlers around `task.id`, `task.metadata`, and `run.id`.
+- Cloud callbacks do **not** currently include a populated `task.name`, and `stats.expiresAt` is currently `null` in worker callbacks. Build callback handlers around `task.id`, `task.metadata`, and `run.id`.
 
 If you are integrating Cronlet into a product, treat `task.metadata` + your own database records as the source of truth for ownership and lifecycle.

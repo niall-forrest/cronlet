@@ -122,13 +122,13 @@ export async function createUserReportSchedule(input: {
 }
 ```
 
-## Why wrap the SDK instead of calling it everywhere
+## Why wrap the SDK
 
 - centralizes task naming and metadata conventions
 - prevents API key leakage
 - keeps Cronlet-specific logic out of UI code
 - makes callback handling and task lifecycle changes testable
-- lets your agent layer call product-specific functions instead of raw task primitives
+- allows the agent layer to call product-specific functions instead of raw task primitives
 
 ## Error handling
 
@@ -155,7 +155,7 @@ try {
 - it does **not** manage persistence of Cronlet task IDs in your app
 - it does **not** reconcile callbacks into your domain model
 
-You need to build those product-side pieces yourself.
+Implement those product-side pieces in your application.
 
 ## Next steps
 
