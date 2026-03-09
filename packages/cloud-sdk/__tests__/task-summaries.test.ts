@@ -33,6 +33,7 @@ function makeTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
     retryDelay: "1s",
     timeout: "30s",
     active: true,
+    source: "sdk",
     createdBy: null,
     callbackUrl: null,
     metadata: null,

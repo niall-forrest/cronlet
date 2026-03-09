@@ -92,7 +92,14 @@ function formatTimeAgo(date: string): string {
 }
 
 export function RunsPage() {
-  const [taskFilter, setTaskFilter] = useState<string>("all");
+  const [taskFilter, setTaskFilter] = useState<string>(() => {
+    if (typeof window === "undefined") {
+      return "all";
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return params.get("taskId") ?? "all";
+  });
   const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null);
 
   const runsQuery = useQuery({

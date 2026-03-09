@@ -38,6 +38,11 @@ interface CloudClientOptions {
 
 Creates a task.
 
+`source` is not a caller-managed field in normal SDK usage:
+
+- direct SDK calls are sent with `source: "sdk"`
+- calls made through the agent/MCP path with `createdBy.type === "agent"` are sent with `source: "mcp"`
+
 ```ts
 const task = await cronlet.tasks.create(
   {
@@ -64,6 +69,27 @@ const task = await cronlet.tasks.create(
     name: "support-agent",
   }
 );
+```
+
+Input shape:
+
+```ts
+interface TaskCreateRequest {
+  name: string;
+  description?: string;
+  handler: HandlerConfigInput;
+  schedule: ScheduleConfigInput | string;
+  timezone?: string;
+  retryAttempts?: number;
+  retryBackoff?: "linear" | "exponential";
+  retryDelay?: string;
+  timeout?: string;
+  active?: boolean;
+  callbackUrl?: string;
+  metadata?: Record<string, unknown>;
+  maxRuns?: number;
+  expiresAt?: string;
+}
 ```
 
 ### `tasks.list()`
@@ -180,20 +206,66 @@ await cronlet.audit.record({
 Notable fields:
 
 - `id`
+- `orgId`
 - `name`
 - `description`
+- `source`
 - `handlerType`
 - `handlerConfig`
 - `scheduleType`
 - `scheduleConfig`
 - `timezone`
 - `nextRunAt`
+- `retryAttempts`
+- `retryBackoff`
+- `retryDelay`
+- `timeout`
 - `active`
+- `createdBy`
 - `callbackUrl`
 - `metadata`
 - `maxRuns`
 - `expiresAt`
 - `runCount`
+- `createdAt`
+- `updatedAt`
+
+`source` is one of:
+
+- `"dashboard"`
+- `"mcp"`
+- `"sdk"`
+
+Reference shape:
+
+```ts
+interface TaskRecord {
+  id: string;
+  orgId: string;
+  name: string;
+  description: string | null;
+  source: "dashboard" | "mcp" | "sdk";
+  handlerType: HandlerType;
+  handlerConfig: HandlerConfig;
+  scheduleType: ScheduleType;
+  scheduleConfig: ScheduleConfig;
+  timezone: string;
+  nextRunAt: string | null;
+  retryAttempts: number;
+  retryBackoff: "linear" | "exponential";
+  retryDelay: string;
+  timeout: string;
+  active: boolean;
+  createdBy: CreatedBy | null;
+  callbackUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  maxRuns: number | null;
+  expiresAt: string | null;
+  runCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+```
 
 ### `RunRecord`
 
@@ -258,6 +330,24 @@ try {
 
 - `CloudClient` assumes JSON API responses and throws `CronletError` on non-OK payloads.
 - `tasks.create()` and `tasks.patch()` accept schedule objects and supported schedule strings.
+
+## REST reference
+
+### `GET /v1/org-status`
+
+Returns a viewer-readable org setup snapshot used by the dashboard.
+
+Response shape:
+
+```ts
+interface OrgStatusSnapshot {
+  hasApiKeys: boolean;
+}
+```
+
+Current fields:
+
+- `hasApiKeys`: `true` if the organization has at least one API key configured
 - string schedules are parsed client-side into `ScheduleConfig` objects before request serialization.
 - naive `once` datetime strings are interpreted as UTC unless the string includes timezone information.
 - Use the SDK from server-side code only.

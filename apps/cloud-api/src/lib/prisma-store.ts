@@ -68,6 +68,7 @@ function toTaskRecord(value: {
   retryDelay: string;
   timeout: string;
   active: boolean;
+  source: string;
   createdBy: unknown;
   callbackUrl: string | null;
   metadata: unknown;
@@ -93,6 +94,7 @@ function toTaskRecord(value: {
     retryDelay: value.retryDelay,
     timeout: value.timeout,
     active: value.active,
+    source: value.source as TaskRecord["source"],
     createdBy: value.createdBy as CreatedBy | null,
     callbackUrl: value.callbackUrl,
     metadata: value.metadata as Record<string, unknown> | null,
@@ -417,6 +419,7 @@ export class PrismaCloudStore implements CloudStore {
         retryDelay: input.retryDelay ?? "1s",
         timeout: input.timeout ?? "30s",
         active,
+        source: input.source ?? "dashboard",
         createdBy: createdBy ? (createdBy as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
     });
@@ -747,6 +750,13 @@ export class PrismaCloudStore implements CloudStore {
       orderBy: { createdAt: "desc" },
     });
     return keys.map(toApiKeyRecord);
+  }
+
+  async hasApiKeys(orgId: string): Promise<boolean> {
+    const count = await this.prisma.apiKey.count({
+      where: { organizationId: orgId },
+    });
+    return count > 0;
   }
 
   async createApiKey(orgId: string, input: ApiKeyCreateInput): Promise<ApiKeyWithToken> {

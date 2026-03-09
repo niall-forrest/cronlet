@@ -4,6 +4,7 @@ import type {
   ApiKeyRecord,
   ApiKeyWithToken,
   ApiResponse,
+  OrgStatusSnapshot,
   RunRecord,
   TaskRecord,
   SecretRecord,
@@ -126,6 +127,10 @@ export function triggerTask(taskId: string): Promise<RunRecord> {
   return request<RunRecord>(`/v1/tasks/${taskId}/trigger`, {
     method: "POST",
   });
+}
+
+export function getOrgStatus(): Promise<OrgStatusSnapshot> {
+  return request<OrgStatusSnapshot>("/v1/org-status");
 }
 
 // ============================================

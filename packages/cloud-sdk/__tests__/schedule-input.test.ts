@@ -51,6 +51,7 @@ describe("sdk string schedule support", () => {
       days: ["fri"],
       time: "09:00",
     });
+    expect(body.source).toBe("sdk");
   });
 
   it("normalizes string schedules for task patching", async () => {
@@ -92,6 +93,37 @@ describe("sdk string schedule support", () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(String(init.body));
     expect(body.schedule).toEqual({ type: "every", interval: "5m" });
+  });
+
+  it("marks agent-created tasks as mcp", async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ id: "task_123" }));
+    const client = new CloudClient({ apiKey: "test-key" });
+
+    await client.tasks.create(
+      {
+        name: "Agent task",
+        handler: {
+          type: "webhook",
+          url: "https://example.com/agent",
+          method: "POST",
+        },
+        schedule: { type: "every", interval: "5m" },
+        timezone: "UTC",
+        retryAttempts: 1,
+        retryBackoff: "linear",
+        retryDelay: "1s",
+        timeout: "30s",
+        active: true,
+      },
+      {
+        type: "agent",
+        id: "agent_123",
+      }
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body.source).toBe("mcp");
   });
 
   it("throws ScheduleParseError before issuing a request", async () => {
@@ -140,5 +172,6 @@ describe("sdk string schedule support", () => {
       type: "daily",
       times: ["09:00"],
     });
+    expect(body.source).toBe("sdk");
   });
 });

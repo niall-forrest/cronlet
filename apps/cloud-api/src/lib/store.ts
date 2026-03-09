@@ -165,6 +165,7 @@ export class InMemoryCloudStore implements CloudStore {
       retryDelay: input.retryDelay ?? "1s",
       timeout: input.timeout ?? "30s",
       active: input.active !== false,
+      source: input.source ?? "dashboard",
       createdBy: createdBy ?? null,
       callbackUrl: input.callbackUrl ?? null,
       metadata: input.metadata ?? null,
@@ -453,6 +454,10 @@ export class InMemoryCloudStore implements CloudStore {
       .filter((item) => item.orgId === orgId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(({ keyHash: _keyHash, ...key }) => key);
+  }
+
+  hasApiKeys(orgId: string): boolean {
+    return Array.from(this.apiKeys.values()).some((item) => item.orgId === orgId);
   }
 
   createApiKey(orgId: string, input: ApiKeyCreateInput): ApiKeyWithToken {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { TaskRecord, RunRecord, HandlerConfig, ScheduleConfig } from "@cronlet/shared";
@@ -65,6 +65,8 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
     queryFn: () => listRuns(taskId, 50),
     refetchInterval: 3000,
   });
+
+  const recentRuns = useMemo(() => runs.slice(0, 5), [runs]);
 
   const patchMutation = useMutation({
     mutationFn: (input: { active?: boolean }) =>
@@ -324,10 +326,15 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
             </CardContent>
           </Card>
 
-          {/* Run History */}
+          {/* Recent Runs */}
           <Card className="border-border/50 bg-card/60">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Run History</CardTitle>
+              <div className="flex items-center justify-between gap-4">
+                <CardTitle className="text-sm font-medium">Recent Runs</CardTitle>
+                <Button variant="ghost" size="sm" asChild>
+                  <a href={`/runs?taskId=${task.id}`}>View all runs →</a>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loadingRuns ? (
@@ -336,7 +343,7 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                     <Skeleton key={i} className="h-10 w-full" />
                   ))}
                 </div>
-              ) : runs.length === 0 ? (
+              ) : recentRuns.length === 0 ? (
                 <div className="text-center py-8">
                   <Clock size={32} className="mx-auto text-muted-foreground/50 mb-2" />
                   <p className="text-sm text-muted-foreground">No runs yet</p>
@@ -353,7 +360,7 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {runs.map((run) => (
+                    {recentRuns.map((run) => (
                       <TableRow
                         key={run.id}
                         className="cursor-pointer hover:bg-muted/50"
@@ -369,7 +376,14 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                           {formatDuration(run.durationMs)}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {formatTimeAgo(run.createdAt)}
+                          <div className="space-y-1">
+                            <p>{formatTimeAgo(run.createdAt)}</p>
+                            {run.status === "failure" || run.status === "timeout" ? (
+                              <p className="max-w-[22rem] truncate text-xs text-destructive/80">
+                                {run.errorMessage ?? "Execution failed"}
+                              </p>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <CaretRight size={14} className="text-muted-foreground" />

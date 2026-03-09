@@ -20,6 +20,12 @@ A task combines:
 
 ## Task create shape
 
+Cloud task creation accepts a `source` field at the API boundary. In normal product usage this is set for you:
+
+- dashboard task creation writes `source: "dashboard"`
+- SDK task creation writes `source: "sdk"`
+- MCP/agent task creation writes `source: "mcp"`
+
 ```ts
 await cronlet.tasks.create({
   name: "API health check",
@@ -47,6 +53,28 @@ await cronlet.tasks.create({
   maxRuns: 100,
   expiresAt: "2026-12-31T23:59:59.000Z",
 });
+```
+
+API request shape:
+
+```ts
+{
+  name: string;
+  description?: string;
+  handler: HandlerConfig;
+  schedule: ScheduleConfig;
+  timezone?: string;
+  retryAttempts?: number;
+  retryBackoff?: "linear" | "exponential";
+  retryDelay?: string;
+  timeout?: string;
+  active?: boolean;
+  source?: "dashboard" | "mcp" | "sdk";
+  callbackUrl?: string;
+  metadata?: Record<string, unknown>;
+  maxRuns?: number;
+  expiresAt?: string;
+}
 ```
 
 ## Handlers

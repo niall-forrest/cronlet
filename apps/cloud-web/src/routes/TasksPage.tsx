@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { RunRecord, ScheduleConfig, TaskRecord } from "@cronlet/shared";
+import type { OrgStatusSnapshot, RunRecord, ScheduleConfig, TaskRecord } from "@cronlet/shared";
 import {
   CaretDown,
   DotsThree,
@@ -13,8 +13,10 @@ import {
   Trash,
   Clock,
   X,
+  Broadcast,
 } from "@phosphor-icons/react";
 import {
+  getOrgStatus,
   listRuns,
   listTasks,
   patchTask,
@@ -33,6 +35,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -48,10 +57,20 @@ export function TasksPage() {
   const [pendingRunByTask, setPendingRunByTask] = useState<Record<string, string>>({});
   const [resultOpenByTask, setResultOpenByTask] = useState<Record<string, boolean>>({});
   const [celebrationVisible, setCelebrationVisible] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | TaskRecord["source"]>("all");
+  const [highlightedTaskIds, setHighlightedTaskIds] = useState<Record<string, boolean>>({});
+  const hasHydratedTaskIdsRef = useRef(false);
+  const knownTaskIdsRef = useRef<Set<string>>(new Set());
 
   const { data: tasks = [], isLoading: loadingTasks } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => listTasks(),
+    refetchInterval: 5000,
+  });
+
+  const orgStatusQuery = useQuery<OrgStatusSnapshot>({
+    queryKey: ["org-status"],
+    queryFn: () => getOrgStatus(),
   });
 
   const { data: allRuns = [] } = useQuery({
@@ -70,6 +89,46 @@ export function TasksPage() {
     }
     return map;
   }, [allRuns]);
+
+  useEffect(() => {
+    if (loadingTasks) {
+      return;
+    }
+
+    const currentTaskIds = new Set(tasks.map((task) => task.id));
+    if (!hasHydratedTaskIdsRef.current) {
+      knownTaskIdsRef.current = currentTaskIds;
+      hasHydratedTaskIdsRef.current = true;
+      return;
+    }
+
+    const newTaskIds = tasks
+      .map((task) => task.id)
+      .filter((taskId) => !knownTaskIdsRef.current.has(taskId));
+
+    knownTaskIdsRef.current = currentTaskIds;
+
+    if (newTaskIds.length === 0) {
+      return;
+    }
+
+    setHighlightedTaskIds((current) => ({
+      ...current,
+      ...Object.fromEntries(newTaskIds.map((taskId) => [taskId, true])),
+    }));
+
+    const timeout = window.setTimeout(() => {
+      setHighlightedTaskIds((current) => {
+        const next = { ...current };
+        for (const taskId of newTaskIds) {
+          delete next[taskId];
+        }
+        return next;
+      });
+    }, 2000);
+
+    return () => window.clearTimeout(timeout);
+  }, [loadingTasks, tasks]);
 
   useEffect(() => {
     setPendingRunByTask((current) => {
@@ -141,8 +200,12 @@ export function TasksPage() {
     },
   });
 
-  const activeTasks = tasks.filter((task) => task.active);
-  const pausedTasks = tasks.filter((task) => !task.active);
+  const visibleTasks = sourceFilter === "all"
+    ? tasks
+    : tasks.filter((task) => task.source === sourceFilter);
+  const activeVisibleTasks = visibleTasks.filter((task) => task.active);
+  const pausedVisibleTasks = visibleTasks.filter((task) => !task.active);
+  const isListeningState = tasks.length === 0 && orgStatusQuery.data?.hasApiKeys === true;
 
   const handleToggleActive = (task: TaskRecord) => {
     patchMutation.mutate({ id: task.id, input: { active: !task.active } });
@@ -198,6 +261,22 @@ export function TasksPage() {
         </Button>
       </div>
 
+      {tasks.length > 0 ? (
+        <div className="flex justify-end">
+          <Select value={sourceFilter} onValueChange={(value) => setSourceFilter(value as typeof sourceFilter)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sources</SelectItem>
+              <SelectItem value="dashboard">Dashboard</SelectItem>
+              <SelectItem value="mcp">MCP</SelectItem>
+              <SelectItem value="sdk">SDK</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+
       {loadingTasks ? (
         <div className="space-y-6">
           <SectionHeader label="Active Tasks" />
@@ -232,33 +311,48 @@ export function TasksPage() {
       ) : tasks.length === 0 ? (
         <Card variant="flat" className="border-dashed border-border/30">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <Clock size={28} weight="duotone" className="text-primary" />
-            </div>
-            <h3 className="mb-2 text-lg font-semibold">No tasks yet</h3>
-            <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
-              Create your first scheduled task to automate HTTP calls, Slack messages, emails, and more.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button asChild>
-                <Link to="/tasks/create">
-                  <Plus size={16} weight="bold" className="mr-2" />
-                  Create from scratch
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/tasks/create/templates">Browse templates</Link>
-              </Button>
-            </div>
+            {isListeningState ? (
+              <>
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Broadcast size={28} weight="duotone" className="text-primary" />
+                </div>
+                <h3 className="mb-2 text-lg font-semibold">Listening for tasks...</h3>
+                <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
+                  Your agent connection is ready. Ask your agent to create a task and it&apos;ll appear here in real time.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/tasks/create">
+                    Or create a task manually
+                    <span className="ml-2">→</span>
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Clock size={28} weight="duotone" className="text-primary" />
+                </div>
+                <h3 className="mb-2 text-lg font-semibold">No tasks yet</h3>
+                <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
+                  Create your first scheduled task to automate HTTP calls, Slack messages, emails, and more.
+                </p>
+                <Button asChild>
+                  <Link to="/tasks/create">
+                    <Plus size={16} weight="bold" className="mr-2" />
+                    Create your first task
+                  </Link>
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-8">
-          {activeTasks.length > 0 ? (
+          {activeVisibleTasks.length > 0 ? (
             <section className="space-y-4">
               <SectionHeader label="Active Tasks" />
               <div className="grid gap-4 md:grid-cols-2">
-                {activeTasks.map((task) => (
+                {activeVisibleTasks.map((task) => (
                   <TaskCard
                     key={task.id}
                     task={task}
@@ -273,17 +367,18 @@ export function TasksPage() {
                     onTrigger={() => handleTrigger(task.id)}
                     onDelete={() => handleDelete(task)}
                     isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
+                    isNew={!!highlightedTaskIds[task.id]}
                   />
                 ))}
               </div>
             </section>
           ) : null}
 
-          {pausedTasks.length > 0 ? (
+          {pausedVisibleTasks.length > 0 ? (
             <section className="space-y-4">
               <SectionHeader label="Paused Tasks" />
               <div className="grid gap-4 md:grid-cols-2">
-                {pausedTasks.map((task) => (
+                {pausedVisibleTasks.map((task) => (
                   <TaskCard
                     key={task.id}
                     task={task}
@@ -298,10 +393,22 @@ export function TasksPage() {
                     onTrigger={() => handleTrigger(task.id)}
                     onDelete={() => handleDelete(task)}
                     isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
+                    isNew={!!highlightedTaskIds[task.id]}
                   />
                 ))}
               </div>
             </section>
+          ) : null}
+
+          {visibleTasks.length === 0 ? (
+            <Card variant="flat" className="border-dashed border-border/30">
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-base font-medium text-foreground">No tasks match this source.</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Clear the source filter to see all tasks again.
+                </p>
+              </CardContent>
+            </Card>
           ) : null}
         </div>
       )}
@@ -331,6 +438,7 @@ interface TaskCardProps {
   onTrigger: () => void;
   onDelete: () => void;
   isTriggering: boolean;
+  isNew: boolean;
 }
 
 function TaskCard({
@@ -344,6 +452,7 @@ function TaskCard({
   onTrigger,
   onDelete,
   isTriggering,
+  isNew,
 }: TaskCardProps) {
   const isRunning = lastRun?.status === "running" || lastRun?.status === "queued" || (!!pendingRunId && !isTerminalRun(lastRun));
   const taskStatus = getTaskStatus(task, lastRun);
@@ -351,7 +460,14 @@ function TaskCard({
   const canShowInlineResult = !!inlineResult && hasInlineResult && isTerminalRun(lastRun);
 
   return (
-    <Card variant="interactive" className={cn("p-0", !task.active && "opacity-60")}>
+    <Card
+      variant="interactive"
+      className={cn(
+        "p-0 transition-[border-color,box-shadow] duration-700",
+        !task.active && "opacity-60",
+        isNew && "border-emerald-400/40 shadow-[0_0_0_1px_rgba(52,211,153,0.35),0_0_0_8px_rgba(16,185,129,0.08)]"
+      )}
+    >
       <CardHeader className="border-b border-border/30 px-5 py-4">
         <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="group/link flex min-w-0 items-center gap-2.5">
           <StatusDot status={taskStatus} />
@@ -359,7 +475,8 @@ function TaskCard({
             {task.name}
           </h2>
         </Link>
-        <CardAction>
+        <CardAction className="flex items-center gap-2">
+          <SourceBadge source={task.source} />
           <HandlerBadge type={task.handlerType} />
         </CardAction>
       </CardHeader>
@@ -496,6 +613,23 @@ function TaskCard({
         </DropdownMenu>
       </CardFooter>
     </Card>
+  );
+}
+
+function SourceBadge({ source }: { source: TaskRecord["source"] }) {
+  const labelMap: Record<TaskRecord["source"], string> = {
+    dashboard: "Dashboard",
+    mcp: "MCP",
+    sdk: "SDK",
+  };
+
+  return (
+    <Badge
+      variant="outline"
+      className="rounded-full border-border/40 bg-background/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
+    >
+      {labelMap[source]}
+    </Badge>
   );
 }
 

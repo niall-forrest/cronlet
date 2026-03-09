@@ -9,6 +9,7 @@ export type HandlerType = "tools" | "code" | "webhook";
 export type ScheduleType = "every" | "daily" | "weekly" | "monthly" | "once" | "cron";
 
 export type RunStatus = "queued" | "running" | "success" | "failure" | "timeout";
+export type TaskSource = "dashboard" | "mcp" | "sdk";
 
 export type AuditActorType = "user" | "api_key" | "agent" | "internal" | "webhook";
 
@@ -123,6 +124,7 @@ export interface TaskRecord {
   retryDelay: string;
   timeout: string;
   active: boolean;
+  source: TaskSource;
   createdBy: CreatedBy | null;
   // Agent callback - closes the autonomous loop
   callbackUrl: string | null;
@@ -209,6 +211,10 @@ export interface UsageSnapshot {
   retentionDays: number;
   delinquent: boolean;
   graceEndsAt: string | null;
+}
+
+export interface OrgStatusSnapshot {
+  hasApiKeys: boolean;
 }
 
 // ============================================

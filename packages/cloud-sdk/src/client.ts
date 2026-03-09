@@ -9,6 +9,7 @@ import type {
   SecretRecord,
   UsageSnapshot,
   CreatedBy,
+  TaskSource,
 } from "@cronlet/shared";
 import { resolveSchedule, ScheduleParseError } from "@cronlet/shared";
 import type {
@@ -60,7 +61,7 @@ export interface AuditRecordInput {
 
 export type ScheduleInput = ScheduleConfigInput | string;
 
-export type TaskCreateRequest = Omit<TaskCreateInput, "schedule"> & {
+export type TaskCreateRequest = Omit<TaskCreateInput, "schedule" | "source"> & {
   schedule: ScheduleInput;
 };
 
@@ -119,11 +120,16 @@ export class CloudClient {
     return result.config;
   }
 
-  private normalizeTaskCreateInput(input: TaskCreateRequest): TaskCreateInput {
+  private normalizeTaskCreateInput(input: TaskCreateRequest, createdBy?: CreatedBy): TaskCreateInput {
     return {
       ...input,
       schedule: this.normalizeSchedule(input.schedule),
+      source: this.getTaskSource(createdBy),
     };
+  }
+
+  private getTaskSource(createdBy?: CreatedBy): TaskSource {
+    return createdBy?.type === "agent" ? "mcp" : "sdk";
   }
 
   private normalizeTaskPatchInput(input: TaskPatchRequest): TaskPatchInput {
@@ -184,7 +190,7 @@ export class CloudClient {
     create: (input: TaskCreateRequest, createdBy?: CreatedBy): Promise<TaskRecord> =>
       this.request<TaskRecord>("/v1/tasks", {
         method: "POST",
-        body: JSON.stringify({ ...this.normalizeTaskCreateInput(input), createdBy }),
+        body: JSON.stringify({ ...this.normalizeTaskCreateInput(input, createdBy), createdBy }),
       }),
 
     /**

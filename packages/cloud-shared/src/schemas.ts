@@ -7,6 +7,7 @@ import { z } from "zod";
 const durationSchema = z.string().regex(/^\d+(ms|s|m|h|d)$/);
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/); // HH:MM format
 const dayOfWeek = z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
+const taskSourceSchema = z.enum(["dashboard", "mcp", "sdk"]);
 
 // ============================================
 // HANDLER CONFIGS
@@ -121,6 +122,7 @@ export const taskCreateSchema = z.object({
   retryDelay: durationSchema.default("1s"),
   timeout: durationSchema.default("30s"),
   active: z.boolean().default(true),
+  source: taskSourceSchema.default("dashboard"),
   // Agent callback - closes the autonomous loop
   callbackUrl: z.string().url().max(500).optional(),
   metadata: z.record(z.unknown()).optional(),
@@ -230,7 +232,7 @@ export const internalRunStatusSchema = z.object({
 // INFERRED TYPES
 // ============================================
 
-export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
+export type TaskCreateInput = z.input<typeof taskCreateSchema>;
 export type TaskPatchInput = z.infer<typeof taskPatchSchema>;
 export type SecretCreateInput = z.infer<typeof secretCreateSchema>;
 export type SecretPatchInput = z.infer<typeof secretPatchSchema>;

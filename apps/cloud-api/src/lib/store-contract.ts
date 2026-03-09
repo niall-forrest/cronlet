@@ -61,6 +61,7 @@ export interface CloudStore {
 
   // API Keys
   listApiKeys(orgId: string): Promise<ApiKeyRecord[]> | ApiKeyRecord[];
+  hasApiKeys(orgId: string): Promise<boolean> | boolean;
   createApiKey(orgId: string, input: ApiKeyCreateInput): Promise<ApiKeyWithToken> | ApiKeyWithToken;
   rotateApiKey(orgId: string, keyId: string, input: ApiKeyRotateInput): Promise<ApiKeyWithToken> | ApiKeyWithToken;
   revokeApiKey(orgId: string, keyId: string): Promise<void> | void;

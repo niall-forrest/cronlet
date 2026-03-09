@@ -47,6 +47,12 @@ enum RunStatus {
   timeout
 }
 
+enum TaskSource {
+  dashboard
+  mcp
+  sdk
+}
+
 enum AlertChannel {
   email
   webhook
@@ -126,6 +132,7 @@ model Task {
 
   // State
   active         Boolean      @default(true)
+  source         TaskSource   @default(dashboard)
 
   // Tracking
   createdBy      Json?        // { type: "user" | "agent", id, name }

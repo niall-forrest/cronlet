@@ -3,10 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskRecord } from "@cronlet/shared";
 import type { MetadataEditorMode, MetadataEntry, TaskFormValues } from "@/components/task/task-form";
-import type { TaskTemplate } from "@/components/task/task-templates";
-import { ArrowLeft, ArrowRight, CheckCircle, Copy, Robot, Sparkle, Terminal } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CheckCircle, Copy, Robot, Terminal } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -16,13 +14,10 @@ import {
   TaskDetailsOptionsSection,
   TaskHandlerEditor,
   TaskScheduleEditor,
-  TaskTemplateSelector,
   buildCreateTaskInput,
   createDefaultTaskFormValues,
-  createFormValuesFromTemplate,
   getTaskFormErrors,
   getTaskHandler,
-  getTemplateRequiredFieldLabels,
   hasBlockingErrors,
   metadataEntriesFromText,
   parseMetadataText,
@@ -50,8 +45,6 @@ export function CreateTaskPage({
   const [step, setStep] = useState<Step>("handler");
   const [codeTab, setCodeTab] = useState<CodeTab>("mcp");
   const [copied, setCopied] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<TaskTemplate | null>(null);
-  const [showTemplateSelector, setShowTemplateSelector] = useState(showTemplatesInitially);
   const [form, setForm] = useState<TaskFormValues>(() => createDefaultTaskFormValues());
 
   const existingTasks = (queryClient.getQueryData(["tasks"]) as TaskRecord[] | undefined) ?? [];
@@ -217,7 +210,7 @@ console.log("Created task:", task.id);`;
       return;
     }
 
-    createMutation.mutate(buildCreateTaskInput(form));
+    createMutation.mutate(buildCreateTaskInput(form, "dashboard"));
   };
 
   const handleCopy = async () => {
@@ -226,46 +219,16 @@ console.log("Created task:", task.id);`;
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSelectTemplate = (template: TaskTemplate) => {
-    setSelectedTemplate(template);
-    setForm(createFormValuesFromTemplate(template));
-    setStep("handler");
-    setShowTemplateSelector(false);
-  };
-
-  const handleStartFromScratch = () => {
-    setSelectedTemplate(null);
-    setForm(createDefaultTaskFormValues());
-    setStep("handler");
-    setShowTemplateSelector(false);
-  };
-
-  if (showTemplateSelector) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/" })}>
-            <ArrowLeft size={16} className="mr-2" />
-            Back to Overview
-          </Button>
-        </div>
-
-        <TaskTemplateSelector
-          onSelectTemplate={handleSelectTemplate}
-          onStartFromScratch={handleStartFromScratch}
-        />
-      </div>
-    );
-  }
-
-  const templateFieldLabels = selectedTemplate ? getTemplateRequiredFieldLabels(selectedTemplate) : [];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/tasks" })}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate({ to: showTemplatesInitially ? "/tasks/create/templates" : "/tasks" })}
+        >
           <ArrowLeft size={16} className="mr-2" />
-          Back to Tasks
+          {showTemplatesInitially ? "Back to Templates" : "Back to Tasks"}
         </Button>
       </div>
 
@@ -276,48 +239,7 @@ console.log("Created task:", task.id);`;
             Set up a new scheduled task
           </p>
         </div>
-        {showTemplatesInitially ? (
-          <Button variant="outline" onClick={() => setShowTemplateSelector(true)}>
-            <Sparkle size={14} className="mr-2" />
-            Change template
-          </Button>
-        ) : null}
       </div>
-
-      {selectedTemplate ? (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="space-y-4 py-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Badge variant={selectedTemplate.handler.type === "tools" ? "tools" : "webhook"}>
-                    {selectedTemplate.handler.type.toUpperCase()}
-                  </Badge>
-                  <span className="meta-label">Template loaded</span>
-                </div>
-                <p className="font-display text-lg text-foreground">{selectedTemplate.name}</p>
-                <p className="text-sm text-muted-foreground">{selectedTemplate.description}</p>
-              </div>
-              {showTemplatesInitially ? (
-                <Button variant="ghost" size="sm" onClick={() => setShowTemplateSelector(true)}>
-                  Browse templates
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="rounded-xl border border-border/40 bg-background/40 p-4">
-              <p className="meta-label mb-2">Replace these before creating</p>
-              <div className="flex flex-wrap gap-2">
-                {templateFieldLabels.map((label) => (
-                  <Badge key={label} variant="outline" className="rounded-full px-2.5 py-1 text-[11px]">
-                    {label}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="space-y-6">

@@ -132,16 +132,18 @@ export function createTaskFormValuesFromTask(task: TaskRecord): TaskFormValues {
   };
 }
 
-export function getTaskHandler(values: TaskFormValues): TaskCreateInput["handler"] {
+export function getTaskHandler(values: TaskFormValues): NonNullable<TaskPatchInput["handler"]> {
+  const webhookHandler: Extract<NonNullable<TaskPatchInput["handler"]>, { type: "webhook" }> = {
+    type: "webhook",
+    url: values.webhookConfig.url,
+    method: values.webhookConfig.method ?? "POST",
+    headers: values.webhookConfig.headers,
+    body: values.webhookConfig.body,
+    auth: values.webhookConfig.auth,
+  };
+
   return values.handlerType === "webhook"
-    ? {
-        type: "webhook",
-        url: values.webhookConfig.url,
-        method: values.webhookConfig.method ?? "POST",
-        headers: values.webhookConfig.headers,
-        body: values.webhookConfig.body,
-        auth: values.webhookConfig.auth,
-      }
+    ? webhookHandler
     : values.toolsConfig;
 }
 
@@ -260,9 +262,12 @@ export function hasBlockingErrors(errors: TaskFormErrors): boolean {
   return Object.values(errors).some(Boolean);
 }
 
-export function buildCreateTaskInput(values: TaskFormValues): TaskCreateInput {
+export function buildCreateTaskInput(
+  values: TaskFormValues,
+  source?: TaskCreateInput["source"]
+): TaskCreateInput {
   const parsedMetadata = parseMetadataText(values.metadataText);
-  const input: TaskCreateInput = {
+  const input: Omit<TaskCreateInput, "source"> & { source?: TaskCreateInput["source"] } = {
     name: values.name.trim(),
     description: values.description.trim() || undefined,
     handler: getTaskHandler(values),
@@ -275,6 +280,10 @@ export function buildCreateTaskInput(values: TaskFormValues): TaskCreateInput {
     active: values.active,
     callbackUrl: values.callbackUrl.trim() || undefined,
   };
+
+  if (source) {
+    input.source = source;
+  }
 
   if (parsedMetadata.value) {
     input.metadata = parsedMetadata.value;

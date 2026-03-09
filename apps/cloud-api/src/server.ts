@@ -15,6 +15,7 @@ import { registerInternalRoutes } from "./routes/internal.js";
 import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerApiKeyRoutes } from "./routes/api-keys.js";
 import { registerAuditEventRoutes } from "./routes/audit-events.js";
+import { registerOrgStatusRoutes } from "./routes/org-status.js";
 
 const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const CORS_ALLOWED_HEADERS = [
@@ -90,6 +91,7 @@ export async function buildServer() {
   await registerAlertRoutes(app);
   await registerUsageRoutes(app);
   await registerApiKeyRoutes(app);
+  await registerOrgStatusRoutes(app);
   await registerAuditEventRoutes(app);
   await registerInternalRoutes(app);
 

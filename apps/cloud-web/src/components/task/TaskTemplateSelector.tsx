@@ -72,7 +72,6 @@ export function TaskTemplateSelector({
     <div className="space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <p className="meta-label">Templates</p>
           <div>
             <h1 className="display-title">Start from a template</h1>
             <p className="mt-1 text-sm text-muted-foreground">
