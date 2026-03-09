@@ -11,7 +11,7 @@ npm install @cronlet/sdk
 ## Quick Start
 
 ```typescript
-import { CloudClient } from '@cronlet/sdk';
+import { CloudClient } from "@cronlet/sdk";
 
 const cronlet = new CloudClient({
   apiKey: process.env.CRONLET_API_KEY!,
@@ -19,14 +19,14 @@ const cronlet = new CloudClient({
 
 // Create a scheduled task
 const task = await cronlet.tasks.create({
-  name: 'Daily Report',
+  name: "Daily Report",
   handler: {
-    type: 'webhook',
-    url: 'https://api.example.com/report',
-    method: 'POST',
+    type: "webhook",
+    url: "https://api.example.com/report",
+    method: "POST",
   },
-  schedule: 'daily at 9am',
-  timezone: 'America/New_York',
+  schedule: "daily at 9am",
+  timezone: "America/New_York",
 });
 
 // List all tasks
@@ -50,16 +50,16 @@ The SDK includes pre-formatted tool definitions for OpenAI, Anthropic, and LangC
 ### OpenAI
 
 ```typescript
-import OpenAI from 'openai';
-import { CloudClient, cronletTools, createToolHandler } from '@cronlet/sdk';
+import OpenAI from "openai";
+import { CloudClient, cronletTools, createToolHandler } from "@cronlet/sdk";
 
 const openai = new OpenAI();
 const cronlet = new CloudClient({ apiKey: process.env.CRONLET_API_KEY! });
 const handler = createToolHandler(cronlet);
 
 const response = await openai.chat.completions.create({
-  model: 'gpt-4',
-  messages: [{ role: 'user', content: 'Schedule a daily report at 9am' }],
+  model: "gpt-4",
+  messages: [{ role: "user", content: "Schedule a daily report at 9am" }],
   tools: cronletTools.openai,
 });
 
@@ -73,17 +73,17 @@ for (const toolCall of response.choices[0].message.tool_calls ?? []) {
 ### Anthropic
 
 ```typescript
-import Anthropic from '@anthropic-ai/sdk';
-import { CloudClient, cronletTools, createToolHandler } from '@cronlet/sdk';
+import Anthropic from "@anthropic-ai/sdk";
+import { CloudClient, cronletTools, createToolHandler } from "@cronlet/sdk";
 
 const anthropic = new Anthropic();
 const cronlet = new CloudClient({ apiKey: process.env.CRONLET_API_KEY! });
 const handler = createToolHandler(cronlet);
 
 const response = await anthropic.messages.create({
-  model: 'claude-3-opus-20240229',
+  model: "claude-3-opus-20240229",
   max_tokens: 1024,
-  messages: [{ role: 'user', content: 'Schedule a weekly digest every Monday' }],
+  messages: [{ role: "user", content: "Schedule a weekly digest every Monday" }],
   tools: cronletTools.anthropic,
 });
 
@@ -99,8 +99,8 @@ for (const block of response.content) {
 ### LangChain
 
 ```typescript
-import { DynamicStructuredTool } from '@langchain/core/tools';
-import { CloudClient, langchainTools, createToolHandler } from '@cronlet/sdk';
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { CloudClient, langchainTools, createToolHandler } from "@cronlet/sdk";
 
 const cronlet = new CloudClient({ apiKey: process.env.CRONLET_API_KEY! });
 const handler = createToolHandler(cronlet);
@@ -166,7 +166,7 @@ cronlet.runs.get(runId)
 cronlet.secrets.list()
 
 // Create a secret
-cronlet.secrets.create({ name: 'SLACK_TOKEN', value: 'xoxb-...' })
+cronlet.secrets.create({ name: "SLACK_TOKEN", value: "xoxb-..." })
 
 // Delete a secret
 cronlet.secrets.delete(name)
@@ -179,43 +179,43 @@ cronlet.secrets.delete(name)
 cronlet.usage.get()
 ```
 
-## Schedule Formats
+## Supported String Schedule Grammar
 
-Cronlet supports natural language schedules:
+The SDK accepts schedule strings using a constrained grammar:
 
 ```typescript
-// Interval
-'every 15 minutes'
-'every 2 hours'
-
-// Daily
-'daily at 9am'
-'daily at 09:00, 17:00'
-
-// Weekly
-'every monday at 9am'
-'weekdays at 9am'
-
-// Monthly
-'monthly on the 1st at 9am'
-'monthly on the last day at midnight'
-
-// Cron (if you prefer)
-'0 9 * * 1-5'  // Weekdays at 9am
+"every 15 minutes"
+"daily at 9am"
+"weekdays at 5pm"
+"every friday at 9am"
+"monthly on the 1st at 9am"
+"monthly on the last friday at 9am"
+"once at 2026-03-15 09:00"
 ```
+
+Rules:
+
+- unsupported phrasing throws `ScheduleParseError`
+- naive `once` datetimes are interpreted as UTC
+- timezone-aware `once` datetimes are preserved and normalized to ISO
+- object schedules remain supported
 
 ## Error Handling
 
 ```typescript
-import { CronletError } from '@cronlet/sdk';
+import { CronletError, ScheduleParseError } from "@cronlet/sdk";
 
 try {
-  await cronlet.tasks.get('nonexistent');
+  await cronlet.tasks.get("nonexistent");
 } catch (error) {
   if (error instanceof CronletError) {
     console.log(error.message); // "Task not found"
     console.log(error.code);    // "NOT_FOUND"
     console.log(error.status);  // 404
+  }
+  if (error instanceof ScheduleParseError) {
+    console.log(error.message);
+    console.log(error.examples);
   }
 }
 ```

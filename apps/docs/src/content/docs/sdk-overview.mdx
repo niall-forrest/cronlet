@@ -30,6 +30,7 @@ npm install @cronlet/sdk
 import {
   CloudClient,
   CronletError,
+  ScheduleParseError,
   cronletTools,
   createToolHandler,
   openaiTools,
@@ -102,10 +103,7 @@ export async function createUserReportSchedule(input: {
       url: "https://app.example.com/internal/reports/run",
       method: "POST",
     },
-    schedule: {
-      type: "daily",
-      times: ["09:00"],
-    },
+    schedule: "daily at 9am",
     timezone: input.timezone,
     retryAttempts: 1,
     retryBackoff: "linear",
@@ -150,7 +148,6 @@ try {
 
 ## What the SDK does not currently do for you
 
-- it does **not** parse natural-language schedules into schedule objects
 - it does **not** verify callback signatures
 - it does **not** manage persistence of Cronlet task IDs in your app
 - it does **not** reconcile callbacks into your domain model

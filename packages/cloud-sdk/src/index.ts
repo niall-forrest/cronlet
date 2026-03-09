@@ -1,4 +1,22 @@
-export { CloudClient, CronletError, type CloudClientOptions, type AuditRecordInput } from "./client.js";
+export {
+  CloudClient,
+  CronletError,
+  ScheduleParseError,
+  type CloudClientOptions,
+  type AuditRecordInput,
+  type ScheduleInput,
+  type TaskCreateRequest,
+  type TaskPatchRequest,
+} from "./client.js";
+export {
+  parseSchedule,
+  resolveSchedule,
+  SUPPORTED_SCHEDULE_EXAMPLES,
+  type ScheduleParseResult,
+  type ScheduleParseSuccess,
+  type ScheduleParseFailure,
+  type ScheduleParseErrorCode,
+} from "@cronlet/shared";
 export {
   cronletTools,
   createToolHandler,

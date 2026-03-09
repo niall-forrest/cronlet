@@ -49,7 +49,7 @@ export const cronlet = new CloudClient({
 
 ## Create your first task
 
-`tasks.create()` expects a schedule object. Use a webhook handler for the simplest first integration:
+`tasks.create()` accepts either a schedule object or a supported schedule string. Use a webhook handler for the simplest first integration:
 
 ```ts
 import { cronlet } from "./cronlet";
@@ -62,10 +62,7 @@ const task = await cronlet.tasks.create({
     url: "https://api.example.com/health",
     method: "GET",
   },
-  schedule: {
-    type: "every",
-    interval: "5m",
-  },
+  schedule: "every 5 minutes",
   timezone: "UTC",
   retryAttempts: 2,
   retryBackoff: "linear",
@@ -153,20 +150,22 @@ Before using this in an application or agent workflow:
 - use `maxRuns` or `expiresAt` when the schedule should self-terminate
 - name tasks clearly so the Cronlet dashboard remains understandable
 
-## Common mistake: natural-language schedules
+## Supported string schedules
 
-The current Cloud SDK client uses typed schedule objects. Do **not** pass strings like `"daily at 9am"` to `tasks.create()` unless you have your own parser in front of the SDK.
-
-Correct:
-
-```ts
-schedule: { type: "daily", times: ["09:00"] }
-```
-
-Not currently safe in the SDK client:
+The SDK accepts a constrained schedule grammar. Supported examples include:
 
 ```ts
 schedule: "daily at 9am"
+schedule: "weekdays at 5pm"
+schedule: "every friday at 9am"
+schedule: "monthly on the last friday at 9am"
+schedule: "once at 2026-03-15 09:00"
+```
+
+You can still pass structured objects:
+
+```ts
+schedule: { type: "daily", times: ["09:00"] }
 ```
 
 ## Next steps

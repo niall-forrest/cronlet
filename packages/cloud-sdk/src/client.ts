@@ -2,6 +2,7 @@ import type {
   ApiResponse,
   TaskCreateInput,
   TaskPatchInput,
+  ScheduleConfigInput,
   SecretCreateInput,
   TaskRecord,
   RunRecord,
@@ -9,6 +10,7 @@ import type {
   UsageSnapshot,
   CreatedBy,
 } from "@cronlet/shared";
+import { resolveSchedule, ScheduleParseError } from "@cronlet/shared";
 
 const DEFAULT_BASE_URL = "https://api.cronlet.dev";
 
@@ -45,12 +47,22 @@ export interface AuditRecordInput {
   metadata?: Record<string, unknown>;
 }
 
+export type ScheduleInput = ScheduleConfigInput | string;
+
+export type TaskCreateRequest = Omit<TaskCreateInput, "schedule"> & {
+  schedule: ScheduleInput;
+};
+
+export type TaskPatchRequest = Omit<TaskPatchInput, "schedule"> & {
+  schedule?: ScheduleInput;
+};
+
 /**
  * Cronlet Cloud API client.
  *
  * @example
  * ```typescript
- * import { CloudClient } from '@cronlet/cloud';
+ * import { CloudClient } from '@cronlet/sdk';
  *
  * const cronlet = new CloudClient({
  *   apiKey: process.env.CRONLET_API_KEY!,
@@ -86,6 +98,34 @@ export class CloudClient {
     this.orgId = options.orgId;
     this.userId = options.userId;
     this.role = options.role;
+  }
+
+  private normalizeSchedule(schedule: ScheduleInput): ScheduleConfigInput {
+    const result = resolveSchedule(schedule);
+    if (!result.success) {
+      throw new ScheduleParseError(schedule, result.error, result.code);
+    }
+    return result.config;
+  }
+
+  private normalizeTaskCreateInput(input: TaskCreateRequest): TaskCreateInput {
+    return {
+      ...input,
+      schedule: this.normalizeSchedule(input.schedule),
+    };
+  }
+
+  private normalizeTaskPatchInput(input: TaskPatchRequest): TaskPatchInput {
+    const { schedule, ...rest } = input;
+
+    if (schedule === undefined) {
+      return rest;
+    }
+
+    return {
+      ...rest,
+      schedule: this.normalizeSchedule(schedule),
+    };
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -130,10 +170,10 @@ export class CloudClient {
     /**
      * Create a new scheduled task
      */
-    create: (input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> =>
+    create: (input: TaskCreateRequest, createdBy?: CreatedBy): Promise<TaskRecord> =>
       this.request<TaskRecord>("/v1/tasks", {
         method: "POST",
-        body: JSON.stringify({ ...input, createdBy }),
+        body: JSON.stringify({ ...this.normalizeTaskCreateInput(input), createdBy }),
       }),
 
     /**
@@ -150,10 +190,10 @@ export class CloudClient {
     /**
      * Update a task
      */
-    patch: (taskId: string, input: TaskPatchInput): Promise<TaskRecord> =>
+    patch: (taskId: string, input: TaskPatchRequest): Promise<TaskRecord> =>
       this.request<TaskRecord>(`/v1/tasks/${taskId}`, {
         method: "PATCH",
-        body: JSON.stringify(input),
+        body: JSON.stringify(this.normalizeTaskPatchInput(input)),
       }),
 
     /**
@@ -278,3 +318,5 @@ export class CronletError extends Error {
     this.name = "CronletError";
   }
 }
+
+export { ScheduleParseError };

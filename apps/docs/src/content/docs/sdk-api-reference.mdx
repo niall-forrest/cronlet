@@ -257,8 +257,9 @@ try {
 ## Current behavioral notes
 
 - `CloudClient` assumes JSON API responses and throws `CronletError` on non-OK payloads.
-- `tasks.create()` and `tasks.patch()` use typed object schedules.
-- Tool definitions mention string schedules, but the handler does not currently parse them.
+- `tasks.create()` and `tasks.patch()` accept schedule objects and supported schedule strings.
+- string schedules are parsed client-side into `ScheduleConfig` objects before request serialization.
+- naive `once` datetime strings are interpreted as UTC unless the string includes timezone information.
 - Use the SDK from server-side code only.
 
 ## Reference types

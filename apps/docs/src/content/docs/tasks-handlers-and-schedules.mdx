@@ -129,7 +129,7 @@ The shared schemas include a `code` handler type, but the hosted worker currentl
 
 ## Schedules
 
-The SDK currently expects schedule **objects**.
+The SDK accepts schedule objects and a constrained schedule string grammar. The API still receives structured `ScheduleConfig` objects.
 
 ### Every
 
@@ -148,6 +148,12 @@ Supported duration format:
 - `1h`
 - `1d`
 
+String form:
+
+```ts
+schedule: "every 15 minutes"
+```
+
 ### Daily
 
 ```ts
@@ -155,6 +161,12 @@ schedule: {
   type: "daily",
   times: ["09:00", "17:00"],
 }
+```
+
+String form:
+
+```ts
+schedule: "daily at 9am"
 ```
 
 ### Weekly
@@ -167,6 +179,13 @@ schedule: {
 }
 ```
 
+String forms:
+
+```ts
+schedule: "weekdays at 5pm"
+schedule: "every friday at 9am"
+```
+
 ### Monthly
 
 ```ts
@@ -175,6 +194,13 @@ schedule: {
   day: "last-fri",
   time: "17:00",
 }
+```
+
+String forms:
+
+```ts
+schedule: "monthly on the 1st at 9am"
+schedule: "monthly on the last friday at 9am"
 ```
 
 Supported `day` values:
@@ -196,6 +222,12 @@ schedule: {
   type: "once",
   at: "2026-03-15T09:00:00.000Z",
 }
+```
+
+String form:
+
+```ts
+schedule: "once at 2026-03-15 09:00"
 ```
 
 ### Cron

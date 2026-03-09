@@ -1,5 +1,6 @@
 import type { CloudClient } from "./client.js";
-import type { HandlerConfigInput, ScheduleConfigInput } from "@cronlet/shared";
+import type { HandlerConfigInput } from "@cronlet/shared";
+import type { ScheduleInput } from "./client.js";
 
 // =============================================================================
 // Tool Definitions - Compatible with OpenAI, Anthropic, and LangChain
@@ -57,7 +58,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         schedule: {
           type: ["object", "string"],
           description:
-            "Schedule as object { type: 'daily', times: ['09:00'] } or natural language 'every 15 minutes', 'daily at 9am'",
+            "Schedule as object { type: 'daily', times: ['09:00'] } or supported string like 'every 15 minutes', 'daily at 9am', or 'once at 2026-03-15 09:00'",
         },
         timezone: {
           type: "string",
@@ -295,7 +296,7 @@ export function createToolHandler(client: CloudClient) {
         name: args.name as string,
         description: args.description as string | undefined,
         handler: args.handler as HandlerConfigInput,
-        schedule: args.schedule as ScheduleConfigInput,
+        schedule: args.schedule as ScheduleInput,
         timezone: (args.timezone as string) ?? "UTC",
         callbackUrl: args.callbackUrl as string | undefined,
         metadata: args.metadata as Record<string, unknown> | undefined,

@@ -3,7 +3,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { CloudClient } from "@cronlet/sdk";
 import { handlerConfigSchema } from "@cronlet/shared";
 import { MCP_TOOLS, type McpToolName } from "./lib/tools.js";
-import { resolveSchedule, parseSchedule } from "./lib/schedule-parser.js";
+import { resolveSchedule, parseSchedule } from "@cronlet/shared";
 
 // Validate required environment variables in production
 const isProduction = process.env.NODE_ENV === "production";
@@ -338,7 +338,7 @@ async function executeTool(
 
       // Resolve schedule from string or config
       const scheduleResult = resolveSchedule(scheduleInput);
-      if (!scheduleResult.success || !scheduleResult.config) {
+      if (!scheduleResult.success) {
         throw new Error(scheduleResult.error ?? "Invalid schedule");
       }
 
