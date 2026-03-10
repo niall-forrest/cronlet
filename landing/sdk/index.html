@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cronlet SDK — Add Scheduling to Your Product</title>
+  <meta name="description" content="Embed Cronlet in your product so your agents can create tasks, receive callbacks, and manage schedules with the official SDK.">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Cronlet">
+  <link rel="canonical" href="https://cronlet.dev/sdk/">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#06d6a0">
+  <meta property="og:title" content="Cronlet SDK — Add Scheduling to Your Product">
+  <meta property="og:description" content="Use the official Cronlet SDK to let product-side agents create tasks, receive callbacks, and manage schedules.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cronlet.dev/sdk/">
+  <meta property="og:image" content="https://cronlet.dev/cronlet.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Cronlet">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Cronlet SDK — Add Scheduling to Your Product">
+  <meta name="twitter:description" content="Embed scheduling, callbacks, and agent task management with the Cronlet SDK.">
+  <meta name="twitter:image" content="https://cronlet.dev/cronlet.png">
+  <meta name="twitter:site" content="@cronletdev">
+  <meta name="keywords" content="scheduling SDK, AI agent SDK, cron API, task scheduling, OpenAI tools, Anthropic tools, LangChain scheduling, webhook callbacks, Cronlet SDK">
+  <meta name="msapplication-TileColor" content="#050810">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to add scheduling to your AI agent with the Cronlet SDK",
+    "description": "Install the Cronlet SDK and give your AI agents the ability to create, manage, and monitor scheduled tasks with structured callbacks.",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "name": "Install the SDK",
+        "text": "Run npm install @cronlet/sdk to add the Cronlet SDK to your project."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Initialize the client",
+        "text": "Create a new CloudClient instance with your API key: new CloudClient({ apiKey: process.env.CRONLET_API_KEY })."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Add tools to your agent",
+        "text": "Pass cronletTools.openai, cronletTools.anthropic, or langchainTools to your LLM call to give your agent scheduling capabilities."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Handle callbacks",
+        "text": "Set up a callback endpoint to receive structured results after every task run, so your app can react and create follow-up tasks."
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://cronlet.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "SDK", "item": "https://cronlet.dev/sdk/" }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-shell">
+  <nav>
+    <div class="container nav-inner">
+      <a href="/" class="logo"><div class="logo-icon"></div><span class="logo-text">cronlet</span></a>
+      <ul class="nav-links">
+        <li><a href="/sdk/">SDK</a></li>
+        <li><a href="/mcp/">MCP</a></li>
+        <li><a href="/pricing/">Pricing</a></li>
+        <li><a href="https://docs.cronlet.dev">Docs</a></li>
+      </ul>
+      <div class="nav-cta"><a class="btn btn-primary" href="https://app.cronlet.dev">Get Started Free</a></div>
+    </div>
+  </nav>
+
+  <main class="page-main">
+    <div class="container">
+      <section class="page-hero">
+        <span class="page-eyebrow">SDK</span>
+        <h1>Add scheduling to your product's agents.</h1>
+        <p>Use Cronlet as the execution and scheduling layer behind your own product. Your agents create tasks
+          - through the SDK, receive structured callbacks, and manage schedules.</p>
+        <div class="page-actions">
+          <a class="btn btn-primary btn-large" href="https://app.cronlet.dev">Get Started Free</a>
+          <a class="btn btn-outline btn-large" href="https://docs.cronlet.dev/sdk-overview/">Read SDK Docs</a>
+        </div>
+      </section>
+
+      <section class="page-grid page-grid-2">
+        <article class="page-card">
+          <h2>Built for product teams</h2>
+          <div class="page-capabilities">
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              </div>
+              <div>
+                <h4>Works with any LLM</h4>
+                <p>Pre-built tool definitions for OpenAI, Anthropic, and LangChain. Your agent gets scheduling tools in one line of code.</p>
+              </div>
+            </div>
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              </div>
+              <div>
+                <h4>Close the loop</h4>
+                <p>Get results back after every run with your original context. Your app decides what happens next.</p>
+              </div>
+            </div>
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </div>
+              <div>
+                <h4>No cron, ever</h4>
+                <p>Natural language schedules in the SDK. Your agents write "every friday at 9am", not cron expressions.</p>
+              </div>
+            </div>
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </div>
+              <div>
+                <h4>Full dashboard visibility</h4>
+                <p>Every task your agents create is tracked by source and visible alongside manual tasks. One place to see everything.</p>
+              </div>
+            </div>
+          </div>
+          <div class="page-links">
+            <a href="/pricing/">Pricing</a>
+            <a href="/mcp/">Need agent-side MCP instead?</a>
+          </div>
+        </article>
+
+        <article class="page-card page-callout">
+          <h2>Install</h2>
+          <div class="page-code">
+            <div class="page-code-header"><span class="page-code-title">Install</span><span class="page-code-dots"><span></span><span></span><span></span></span></div>
+            <pre><code><span class="code-function">npm</span> <span class="code-property">install</span> <span class="code-string">@cronlet/sdk</span></code></pre>
+          </div>
+          <div class="page-code" style="margin-top: 16px;">
+            <div class="page-code-header"><span class="page-code-title">Client</span><span class="page-code-dots"><span></span><span></span><span></span></span></div>
+            <pre><code><span class="code-keyword">const</span> <span class="code-property">cronlet</span> <span class="code-operator">=</span> <span class="code-keyword">new</span> <span class="code-function">CloudClient</span><span class="code-punctuation">({</span>
+  <span class="code-property">apiKey</span><span class="code-punctuation">:</span> process<span class="code-punctuation">.</span>env<span class="code-punctuation">.</span><span class="code-property">CRONLET_API_KEY</span><span class="code-punctuation">,</span>
+  <span class="code-property">baseUrl</span><span class="code-punctuation">:</span> process<span class="code-punctuation">.</span>env<span class="code-punctuation">.</span><span class="code-property">CRONLET_BASE_URL</span><span class="code-punctuation">,</span>
+<span class="code-punctuation">});</span></code></pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="page-grid" style="margin-top: 24px;">
+        <article class="page-card">
+          <h2>Works with any model provider</h2>
+          <div class="page-code">
+            <div class="page-code-header"><span class="page-code-title">TypeScript</span><span class="page-code-dots"><span></span><span></span><span></span></span></div>
+            <pre><code><span class="code-keyword">import</span> <span class="code-property">OpenAI</span> <span class="code-keyword">from</span> <span class="code-string">"openai"</span><span class="code-punctuation">;</span>
+<span class="code-keyword">import</span> <span class="code-punctuation">{</span> <span class="code-property">CloudClient</span><span class="code-punctuation">,</span> <span class="code-property">cronletTools</span><span class="code-punctuation">,</span> <span class="code-property">createToolHandler</span> <span class="code-punctuation">}</span> <span class="code-keyword">from</span> <span class="code-string">"@cronlet/sdk"</span><span class="code-punctuation">;</span>
+
+<span class="code-keyword">const</span> <span class="code-property">openai</span> <span class="code-operator">=</span> <span class="code-keyword">new</span> <span class="code-function">OpenAI</span><span class="code-punctuation">();</span>
+<span class="code-keyword">const</span> <span class="code-property">cronlet</span> <span class="code-operator">=</span> <span class="code-keyword">new</span> <span class="code-function">CloudClient</span><span class="code-punctuation">({</span> <span class="code-property">apiKey</span><span class="code-punctuation">:</span> process<span class="code-punctuation">.</span>env<span class="code-punctuation">.</span><span class="code-property">CRONLET_API_KEY</span> <span class="code-punctuation">});</span>
+<span class="code-keyword">const</span> <span class="code-property">handler</span> <span class="code-operator">=</span> <span class="code-function">createToolHandler</span><span class="code-punctuation">(</span><span class="code-property">cronlet</span><span class="code-punctuation">);</span>
+
+<span class="code-keyword">const</span> <span class="code-property">response</span> <span class="code-operator">=</span> <span class="code-keyword">await</span> openai<span class="code-punctuation">.</span>chat<span class="code-punctuation">.</span>completions<span class="code-punctuation">.</span><span class="code-function">create</span><span class="code-punctuation">({</span>
+  <span class="code-property">model</span><span class="code-punctuation">:</span> <span class="code-string">"gpt-4o"</span><span class="code-punctuation">,</span>
+  <span class="code-property">messages</span><span class="code-punctuation">:</span> <span class="code-punctuation">[{</span> <span class="code-property">role</span><span class="code-punctuation">:</span> <span class="code-string">"user"</span><span class="code-punctuation">,</span> <span class="code-property">content</span><span class="code-punctuation">:</span> <span class="code-string">"Create a task that pings my API every hour"</span> <span class="code-punctuation">}],</span>
+  <span class="code-property">tools</span><span class="code-punctuation">:</span> <span class="code-property">cronletTools</span><span class="code-punctuation">.</span><span class="code-property">openai</span><span class="code-punctuation">,</span>
+<span class="code-punctuation">});</span>
+
+<span class="code-keyword">for</span> <span class="code-punctuation">(</span><span class="code-keyword">const</span> <span class="code-property">toolCall</span> <span class="code-keyword">of</span> response<span class="code-punctuation">.</span>choices<span class="code-punctuation">[</span><span class="code-value">0</span><span class="code-punctuation">].</span>message<span class="code-punctuation">.</span>tool_calls <span class="code-operator">??</span> <span class="code-punctuation">[])</span> <span class="code-punctuation">{</span>
+  <span class="code-keyword">const</span> <span class="code-property">result</span> <span class="code-operator">=</span> <span class="code-keyword">await</span> handler<span class="code-punctuation">.</span><span class="code-function">handleOpenAI</span><span class="code-punctuation">(</span><span class="code-property">toolCall</span><span class="code-punctuation">);</span>
+  console<span class="code-punctuation">.</span><span class="code-function">log</span><span class="code-punctuation">(</span><span class="code-property">result</span><span class="code-punctuation">);</span>
+<span class="code-punctuation">}</span></code></pre>
+          </div>
+        </article>
+
+        <article class="page-card">
+          <h2>Callback loop</h2>
+          <div class="page-code">
+            <div class="page-code-header"><span class="page-code-title">Callback Handler</span><span class="page-code-dots"><span></span><span></span><span></span></span></div>
+            <pre><code><span class="code-function">app</span><span class="code-punctuation">.</span><span class="code-function">post</span><span class="code-punctuation">(</span><span class="code-string">"/cronlet/callbacks"</span><span class="code-punctuation">,</span> <span class="code-keyword">async</span> <span class="code-punctuation">(</span><span class="code-property">request</span><span class="code-punctuation">,</span> <span class="code-property">reply</span><span class="code-punctuation">)</span> <span class="code-operator">=&gt;</span> <span class="code-punctuation">{</span>
+  <span class="code-keyword">const</span> <span class="code-property">payload</span> <span class="code-operator">=</span> request<span class="code-punctuation">.</span><span class="code-property">body</span><span class="code-punctuation">;</span>
+
+  <span class="code-keyword">if</span> <span class="code-punctuation">(</span>payload<span class="code-punctuation">.</span><span class="code-property">event</span> <span class="code-operator">===</span> <span class="code-string">"task.run.completed"</span><span class="code-punctuation">)</span> <span class="code-punctuation">{</span>
+    <span class="code-keyword">await</span> <span class="code-function">reconcileRun</span><span class="code-punctuation">(</span>payload<span class="code-punctuation">.</span>task<span class="code-punctuation">.</span><span class="code-property">id</span><span class="code-punctuation">,</span> payload<span class="code-punctuation">.</span>run<span class="code-punctuation">.</span><span class="code-property">id</span><span class="code-punctuation">,</span> payload<span class="code-punctuation">.</span>run<span class="code-punctuation">.</span><span class="code-property">output</span><span class="code-punctuation">,</span> payload<span class="code-punctuation">.</span>task<span class="code-punctuation">.</span><span class="code-property">metadata</span><span class="code-punctuation">);</span>
+  <span class="code-punctuation">}</span>
+
+  <span class="code-keyword">if</span> <span class="code-punctuation">(</span>payload<span class="code-punctuation">.</span><span class="code-property">event</span> <span class="code-operator">===</span> <span class="code-string">"task.run.failed"</span><span class="code-punctuation">)</span> <span class="code-punctuation">{</span>
+    <span class="code-keyword">await</span> <span class="code-function">flagScheduleForReview</span><span class="code-punctuation">(</span>payload<span class="code-punctuation">.</span>task<span class="code-punctuation">.</span><span class="code-property">id</span><span class="code-punctuation">,</span> payload<span class="code-punctuation">.</span>run<span class="code-punctuation">.</span><span class="code-property">errorMessage</span><span class="code-punctuation">);</span>
+  <span class="code-punctuation">}</span>
+
+  reply<span class="code-punctuation">.</span><span class="code-function">send</span><span class="code-punctuation">({</span> <span class="code-property">ok</span><span class="code-punctuation">:</span> <span class="code-value">true</span> <span class="code-punctuation">});</span>
+<span class="code-punctuation">});</span></code></pre>
+          </div>
+          <p style="margin-top: 16px;">Your app creates the schedule. Cronlet executes it. Your callback decides what happens next.</p>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <a href="/" class="footer-logo"><div class="logo-icon"></div><span class="logo-text">cronlet</span></a>
+      <ul class="footer-links">
+        <li><a href="https://docs.cronlet.dev">Docs</a></li>
+        <li><a href="/mcp/">MCP</a></li>
+        <li><a href="/pricing/">Pricing</a></li>
+        <li><a href="https://github.com/cronlet/cronlet">GitHub</a></li>
+      </ul>
+      <p class="footer-copy">© 2025 Cronlet. All rights reserved.</p>
+    </div>
+  </footer>
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.page-card, .page-capability').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(20px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  </script>
+</body>
+</html>

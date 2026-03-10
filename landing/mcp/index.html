@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cronlet MCP — Let Agents Schedule Their Own Tasks</title>
+  <meta name="description" content="Connect Cronlet through MCP so Claude and other MCP-compatible agents can create, manage, and summarize schedules autonomously.">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Cronlet">
+  <link rel="canonical" href="https://cronlet.dev/mcp/">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#06d6a0">
+  <meta property="og:title" content="Cronlet MCP — Let Agents Schedule Their Own Tasks">
+  <meta property="og:description" content="Connect AI agents to Cronlet via MCP and let them create and manage real schedules with natural-language prompts.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cronlet.dev/mcp/">
+  <meta property="og:image" content="https://cronlet.dev/cronlet.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Cronlet">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Cronlet MCP — Let Agents Schedule Their Own Tasks">
+  <meta name="twitter:description" content="Connect Cronlet through MCP so agents can create, patch, and summarize schedules autonomously.">
+  <meta name="twitter:image" content="https://cronlet.dev/cronlet.png">
+  <meta name="twitter:site" content="@cronletdev">
+  <meta name="keywords" content="MCP server, Model Context Protocol, AI agent scheduling, Claude Desktop MCP, agent tools, task automation, natural language cron, Cronlet MCP">
+  <meta name="msapplication-TileColor" content="#050810">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to connect Cronlet to Claude Desktop via MCP",
+    "description": "Add Cronlet as an MCP server in Claude Desktop so your agent can create, manage, and monitor scheduled tasks autonomously.",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "name": "Get your API key",
+        "text": "Sign up at app.cronlet.dev and copy your CRONLET_API_KEY from the dashboard settings."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Add the MCP server config",
+        "text": "Add the cronlet MCP server to your Claude Desktop config with command npx, args [\"-y\", \"@cronlet/mcp\"], and your API key in the env block."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Start using scheduling tools",
+        "text": "Ask Claude to create tasks with natural language schedules like 'every 5 minutes' or 'weekdays at 9am'. The agent can also pause, resume, trigger, and delete tasks."
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://cronlet.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "MCP", "item": "https://cronlet.dev/mcp/" }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-shell">
+  <nav>
+    <div class="container nav-inner">
+      <a href="/" class="logo"><div class="logo-icon"></div><span class="logo-text">cronlet</span></a>
+      <ul class="nav-links">
+        <li><a href="/sdk/">SDK</a></li>
+        <li><a href="/mcp/">MCP</a></li>
+        <li><a href="/pricing/">Pricing</a></li>
+        <li><a href="https://docs.cronlet.dev">Docs</a></li>
+      </ul>
+      <div class="nav-cta"><a class="btn btn-primary" href="https://app.cronlet.dev">Get Started Free</a></div>
+    </div>
+  </nav>
+
+  <main class="page-main">
+    <div class="container">
+      <section class="page-hero">
+        <span class="page-eyebrow">MCP</span>
+        <h1>Your agent schedules. Cronlet executes.</h1>
+        <p>One MCP connection gives Claude Desktop and compatible clients full scheduling superpowers. Create tasks, manage them, and react to results — all inside the conversation.</p>
+        <div class="page-actions">
+          <a class="btn btn-primary btn-large" href="https://app.cronlet.dev/agent-connect">Connect Agent</a>
+          <a class="btn btn-outline btn-large" href="https://docs.cronlet.dev/agent-tooling/">Read MCP Docs</a>
+        </div>
+      </section>
+
+      <section class="page-grid page-grid-2">
+        <article class="page-card page-callout">
+          <h2>Claude Desktop config</h2>
+          <div class="page-code">
+            <div class="page-code-header"><span class="page-code-title">JSON</span><span class="page-code-dots"><span></span><span></span><span></span></span></div>
+            <pre><code><span class="code-punctuation">{</span>
+  <span class="code-property">"mcpServers"</span><span class="code-punctuation">:</span> <span class="code-punctuation">{</span>
+    <span class="code-property">"cronlet"</span><span class="code-punctuation">:</span> <span class="code-punctuation">{</span>
+      <span class="code-property">"command"</span><span class="code-punctuation">:</span> <span class="code-string">"npx"</span><span class="code-punctuation">,</span>
+      <span class="code-property">"args"</span><span class="code-punctuation">:</span> <span class="code-punctuation">[</span><span class="code-string">"-y"</span><span class="code-punctuation">,</span> <span class="code-string">"@cronlet/mcp"</span><span class="code-punctuation">],</span>
+      <span class="code-property">"env"</span><span class="code-punctuation">:</span> <span class="code-punctuation">{</span>
+        <span class="code-property">"CRONLET_API_KEY"</span><span class="code-punctuation">:</span> <span class="code-string">"your-api-key"</span><span class="code-punctuation">,</span>
+        <span class="code-property">"CLOUD_API_BASE_URL"</span><span class="code-punctuation">:</span> <span class="code-string">"https://api.cronlet.dev"</span>
+      <span class="code-punctuation">}</span>
+    <span class="code-punctuation">}</span>
+  <span class="code-punctuation">}</span>
+<span class="code-punctuation">}</span></code></pre>
+          </div>
+        </article>
+
+        <article class="page-card">
+          <h2>What agents can do</h2>
+          <div class="page-capabilities">
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </div>
+              <div>
+                <h4>Natural-language schedules</h4>
+                <p>"every 15 minutes", "weekdays at 9am" — no cron syntax needed.</p>
+              </div>
+            </div>
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+              <div>
+                <h4>Full task control</h4>
+                <p>Create, pause, resume, trigger, and delete — all through tool calls.</p>
+              </div>
+            </div>
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </div>
+              <div>
+                <h4>Health at a glance</h4>
+                <p>Summarize run history and task health without reading raw logs.</p>
+              </div>
+            </div>
+            <div class="page-capability">
+              <div class="page-capability-icon">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              </div>
+              <div>
+                <h4>Autonomous loops</h4>
+                <p>Callbacks feed results back so agents can react and create follow-up tasks.</p>
+              </div>
+            </div>
+          </div>
+          <div class="page-links">
+            <a href="/sdk/">Prefer embedding in your app?</a>
+            <a href="https://docs.cronlet.dev/callbacks-and-agent-loops/">Callback docs</a>
+          </div>
+        </article>
+      </section>
+
+      <section class="page-grid" style="margin-top: 24px;">
+        <article class="page-card">
+          <h2>Try these prompts</h2>
+          <div class="page-code">
+            <div class="page-code-header"><span class="page-code-title">Prompt ideas</span><span class="page-code-dots"><span></span><span></span><span></span></span></div>
+            <pre><code><span class="code-comment"># Health monitoring</span>
+<span class="code-string">Create a task that checks https://demo.cronlet.dev/health every 5 minutes and reports back if it fails.</span>
+
+<span class="code-comment"># Weekly digests</span>
+<span class="code-string">Create a weekly digest task for every Monday at 9am that posts to Slack and store the context in metadata.</span>
+
+<span class="code-comment"># Agent triage</span>
+<span class="code-string">Summarize all my Cronlet tasks and tell me which ones need attention.</span></code></pre>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <a href="/" class="footer-logo"><div class="logo-icon"></div><span class="logo-text">cronlet</span></a>
+      <ul class="footer-links">
+        <li><a href="https://docs.cronlet.dev">Docs</a></li>
+        <li><a href="/sdk/">SDK</a></li>
+        <li><a href="/pricing/">Pricing</a></li>
+        <li><a href="https://github.com/cronlet/cronlet">GitHub</a></li>
+      </ul>
+      <p class="footer-copy">© 2025 Cronlet. All rights reserved.</p>
+    </div>
+  </footer>
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.page-card, .page-capability').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(20px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  </script>
+</body>
+</html>
