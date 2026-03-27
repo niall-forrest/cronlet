@@ -51,8 +51,20 @@ describe("DispatchQueueRuntime callback delivery", () => {
 
   it("signs callbacks and includes task name and expiresAt", async () => {
     const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime;
+    const sendCallback = Reflect.get(runtime as object, "sendCallback") as (
+      instruction: DispatchInstruction,
+      event: string,
+      runInfo: {
+        status: "success" | "failure" | "timeout";
+        output: Record<string, unknown> | null;
+        errorMessage: string | null;
+        durationMs: number;
+        attempt: number;
+      },
+    ) => Promise<void>;
 
-    await (runtime as { sendCallback: Function }).sendCallback(
+    await sendCallback.call(
+      runtime,
       instruction(),
       "task.run.completed",
       {
@@ -78,16 +90,19 @@ describe("DispatchQueueRuntime callback delivery", () => {
   });
 
   it("emits task.expired for expiresAt-based expiration", async () => {
-    const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime & {
-      sendCallback: ReturnType<typeof vi.fn>;
-    };
-    runtime.sendCallback = vi.fn().mockResolvedValue(undefined);
+    const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime;
+    const sendCallback = vi.fn().mockResolvedValue(undefined);
+    Reflect.set(runtime as object, "sendCallback", sendCallback);
+    const checkTaskExpiration = Reflect.get(runtime as object, "checkTaskExpiration") as (
+      instruction: DispatchInstruction,
+    ) => Promise<void>;
 
-    await (runtime as { checkTaskExpiration: Function }).checkTaskExpiration(
+    await checkTaskExpiration.call(
+      runtime,
       instruction({ maxRuns: null })
     );
 
-    expect(runtime.sendCallback).toHaveBeenCalledWith(
+    expect(sendCallback).toHaveBeenCalledWith(
       expect.any(Object),
       "task.expired",
       undefined,
