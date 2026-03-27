@@ -607,7 +607,11 @@ export class PrismaCloudStore implements CloudStore {
         timeout: input.timeout ?? existing.timeout,
         callbackUrl: input.callbackUrl === undefined ? existing.callbackUrl : input.callbackUrl,
         metadata: input.metadata === undefined
-          ? existing.metadata
+          ? (
+            existing.metadata === null
+              ? Prisma.JsonNull
+              : (existing.metadata as Prisma.InputJsonValue)
+          )
           : input.metadata
             ? (input.metadata as Prisma.InputJsonValue)
             : Prisma.JsonNull,
