@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import {
   type AuditEventListInput,
   type AuditEventRecord,
+  type CallbackSigningSecretRecord,
   getTaskLimitForTier,
   PLAN_LIMITS,
   type PlanTier,
@@ -25,11 +26,13 @@ import {
   type SecretPatchInput,
   type SecretRecord,
   type TaskCreateInput,
+  type TaskDispatchInput,
   type TaskPatchInput,
   type TaskRecord,
   type UsageSnapshot,
 } from "@cronlet/shared";
 import { ERROR_CODES } from "@cronlet/shared";
+import { randomBytes } from "node:crypto";
 import { AppError } from "./errors.js";
 import { computeNextRun } from "./clock.js";
 import type { CloudStore, EntitlementUpdateInput, OrganizationUpsertInput } from "./store-contract.js";
@@ -56,6 +59,22 @@ function orgSlug(orgId: string, preferredSlug?: string): string {
 
 function formatPlanLabel(tier: PlanTier): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
+function generateCallbackSigningSecret(): string {
+  return `crsig_${randomBytes(32).toString("hex")}`;
+}
+
+function isExpiredAt(expiresAt: string | null, nowMs = Date.now()): boolean {
+  if (!expiresAt) {
+    return false;
+  }
+
+  return new Date(expiresAt).getTime() <= nowMs;
+}
+
+function isMaxRunsReached(runCount: number, maxRuns: number | null): boolean {
+  return maxRuns !== null && runCount >= maxRuns;
 }
 
 function toTaskRecord(value: {
@@ -276,12 +295,14 @@ export class PrismaCloudStore implements CloudStore {
       where: { id: orgId },
       update: {
         ...(name ? { name } : {}),
+        ...(slug ? { slug: orgSlug(orgId, slug) } : {}),
       },
       create: {
         id: orgId,
         clerkOrgId: orgId,
         name: name ?? `Organization ${orgId}`,
         slug: orgSlug(orgId, slug),
+        callbackSigningSecret: generateCallbackSigningSecret(),
       },
     });
   }
@@ -389,6 +410,66 @@ export class PrismaCloudStore implements CloudStore {
     });
   }
 
+  private async getOrCreateCallbackSigningSecret(orgId: string): Promise<string> {
+    await this.ensureOrganization(orgId);
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { callbackSigningSecret: true },
+    });
+
+    if (organization?.callbackSigningSecret) {
+      return organization.callbackSigningSecret;
+    }
+
+    const secret = generateCallbackSigningSecret();
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        callbackSigningSecret: secret,
+      },
+    });
+    return secret;
+  }
+
+  private async enqueueRun(task: {
+    id: string;
+    organizationId: string;
+    name: string;
+    handlerType: string;
+    handlerConfig: unknown;
+    timeout: string;
+    retryAttempts: number;
+    retryBackoff: string;
+    retryDelay: string;
+    callbackUrl: string | null;
+    metadata: unknown;
+    maxRuns: number | null;
+    expiresAt: Date | null;
+    runCount: number;
+  }, run: { id: string }): Promise<void> {
+    this.dispatchQueue.push({
+      runId: run.id,
+      orgId: task.organizationId,
+      taskId: task.id,
+      taskName: task.name,
+      handlerType: task.handlerType as HandlerType,
+      handlerConfig: task.handlerConfig as HandlerConfig,
+      timeoutMs: parseDuration(task.timeout),
+      retryAttempts: task.retryAttempts,
+      retryBackoff: task.retryBackoff as "linear" | "exponential",
+      retryDelay: task.retryDelay,
+      callbackUrl: task.callbackUrl,
+      callbackSigningSecret: task.callbackUrl
+        ? await this.getOrCreateCallbackSigningSecret(task.organizationId)
+        : null,
+      metadata: task.metadata as Record<string, unknown> | null,
+      maxRuns: task.maxRuns,
+      expiresAt: isoNullable(task.expiresAt),
+      runCount: task.runCount,
+    });
+  }
+
   // ============================================
   // TASKS
   // ============================================
@@ -397,6 +478,7 @@ export class PrismaCloudStore implements CloudStore {
     const tasks = await this.prisma.task.findMany({
       where: {
         organizationId: orgId,
+        kind: "scheduled",
       },
       orderBy: { createdAt: "desc" },
     });
@@ -407,6 +489,7 @@ export class PrismaCloudStore implements CloudStore {
     return this.prisma.task.count({
       where: {
         organizationId: orgId,
+        kind: "scheduled",
       },
     });
   }
@@ -416,6 +499,7 @@ export class PrismaCloudStore implements CloudStore {
       where: {
         id: taskId,
         organizationId: orgId,
+        kind: "scheduled",
       },
     });
     if (!task) {
@@ -431,7 +515,11 @@ export class PrismaCloudStore implements CloudStore {
 
     const scheduleConfig = input.schedule;
     const handlerConfig = input.handler;
-    const active = input.active !== false;
+    const maxRuns = input.maxRuns ?? null;
+    const expiresAt = input.expiresAt ?? null;
+    const active = input.active !== false
+      && !isMaxRunsReached(0, maxRuns)
+      && !isExpiredAt(expiresAt);
 
     const nextRunAt = active
       ? computeNextRun(scheduleConfig, input.timezone ?? "UTC")
@@ -440,6 +528,7 @@ export class PrismaCloudStore implements CloudStore {
     const created = await this.prisma.task.create({
       data: {
         organizationId: orgId,
+        kind: "scheduled",
         name: input.name,
         description: input.description ?? null,
         handlerType: handlerConfig.type,
@@ -455,6 +544,10 @@ export class PrismaCloudStore implements CloudStore {
         active,
         source: input.source ?? "dashboard",
         createdBy: createdBy ? (createdBy as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+        callbackUrl: input.callbackUrl ?? null,
+        metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+        maxRuns,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
       },
     });
 
@@ -468,6 +561,7 @@ export class PrismaCloudStore implements CloudStore {
       where: {
         id: taskId,
         organizationId: orgId,
+        kind: "scheduled",
       },
     });
     if (!existing) {
@@ -477,13 +571,20 @@ export class PrismaCloudStore implements CloudStore {
     const scheduleConfig = input.schedule ?? (existing.scheduleConfig as unknown as ScheduleConfig);
     const handlerConfig = input.handler ?? (existing.handlerConfig as unknown as HandlerConfig);
     const timezone = input.timezone ?? existing.timezone;
-    const active = input.active ?? existing.active;
+    const maxRuns = input.maxRuns === undefined ? existing.maxRuns : input.maxRuns;
+    const expiresAt = input.expiresAt === undefined ? isoNullable(existing.expiresAt) : input.expiresAt;
+    const requestedActive = input.active ?? existing.active;
+    const active = requestedActive
+      && !isMaxRunsReached(existing.runCount, maxRuns)
+      && !isExpiredAt(expiresAt);
 
     // Recompute nextRunAt if schedule, timezone, or active status changed
     const needsNextRunUpdate =
       input.schedule !== undefined ||
       input.timezone !== undefined ||
-      input.active !== undefined;
+      input.active !== undefined ||
+      input.maxRuns !== undefined ||
+      input.expiresAt !== undefined;
 
     const nextRunAt = needsNextRunUpdate
       ? (active ? computeNextRun(scheduleConfig, timezone) : null)
@@ -504,6 +605,14 @@ export class PrismaCloudStore implements CloudStore {
         retryBackoff: input.retryBackoff ?? existing.retryBackoff,
         retryDelay: input.retryDelay ?? existing.retryDelay,
         timeout: input.timeout ?? existing.timeout,
+        callbackUrl: input.callbackUrl === undefined ? existing.callbackUrl : input.callbackUrl,
+        metadata: input.metadata === undefined
+          ? existing.metadata
+          : input.metadata
+            ? (input.metadata as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+        maxRuns,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
         active,
       },
     });
@@ -516,6 +625,7 @@ export class PrismaCloudStore implements CloudStore {
       where: {
         id: taskId,
         organizationId: orgId,
+        kind: "scheduled",
       },
       select: { id: true },
     });
@@ -536,10 +646,33 @@ export class PrismaCloudStore implements CloudStore {
       where: {
         id: taskId,
         organizationId: orgId,
+        kind: "scheduled",
       },
     });
     if (!task) {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+    }
+
+    if (isMaxRunsReached(task.runCount, task.maxRuns)) {
+      await this.prisma.task.update({
+        where: { id: task.id },
+        data: {
+          active: false,
+          nextRunAt: null,
+        },
+      });
+      throw new AppError(400, ERROR_CODES.VALIDATION_ERROR, "Task has reached its max run limit");
+    }
+
+    if (isExpiredAt(isoNullable(task.expiresAt))) {
+      await this.prisma.task.update({
+        where: { id: task.id },
+        data: {
+          active: false,
+          nextRunAt: null,
+        },
+      });
+      throw new AppError(400, ERROR_CODES.VALIDATION_ERROR, "Task has expired");
     }
 
     await this.incrementUsage(orgId);
@@ -554,24 +687,64 @@ export class PrismaCloudStore implements CloudStore {
       },
     });
 
-    const timeoutMs = parseDuration(task.timeout);
+    await this.enqueueRun(task, run);
 
-    this.dispatchQueue.push({
-      runId: run.id,
-      orgId,
-      taskId: task.id,
-      handlerType: task.handlerType as HandlerType,
-      handlerConfig: task.handlerConfig as unknown as HandlerConfig,
-      timeoutMs,
-      retryAttempts: task.retryAttempts,
-      retryBackoff: task.retryBackoff as "linear" | "exponential",
-      retryDelay: task.retryDelay,
-      callbackUrl: task.callbackUrl,
-      metadata: task.metadata as Record<string, unknown> | null,
-      maxRuns: task.maxRuns,
-      runCount: task.runCount,
+    return toRunRecord(run);
+  }
+
+  async dispatchTask(
+    orgId: string,
+    input: TaskDispatchInput,
+    createdBy?: CreatedBy,
+    trigger: "manual" | "api" = "api"
+  ): Promise<RunRecord> {
+    await this.assertWritable(orgId);
+    await this.assertWithinRunLimit(orgId);
+    await this.ensureOrganization(orgId);
+
+    const now = new Date();
+    const task = await this.prisma.task.create({
+      data: {
+        organizationId: orgId,
+        kind: "dispatch",
+        name: input.name ?? "On-demand dispatch",
+        description: null,
+        handlerType: input.handler.type,
+        handlerConfig: input.handler as unknown as Prisma.InputJsonValue,
+        scheduleType: "once",
+        scheduleConfig: {
+          type: "once",
+          at: now.toISOString(),
+        } as unknown as Prisma.InputJsonValue,
+        timezone: "UTC",
+        nextRunAt: null,
+        retryAttempts: input.retryAttempts ?? 1,
+        retryBackoff: input.retryBackoff ?? "linear",
+        retryDelay: input.retryDelay ?? "1s",
+        timeout: input.timeout ?? "30s",
+        active: false,
+        source: createdBy?.type === "agent" ? "mcp" : "sdk",
+        createdBy: createdBy ? (createdBy as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+        callbackUrl: input.callbackUrl ?? null,
+        metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+        maxRuns: null,
+        expiresAt: null,
+      },
     });
 
+    await this.incrementUsage(orgId);
+
+    const run = await this.prisma.run.create({
+      data: {
+        organizationId: orgId,
+        taskId: task.id,
+        status: "queued",
+        trigger,
+        attempt: 1,
+      },
+    });
+
+    await this.enqueueRun(task, run);
     return toRunRecord(run);
   }
 
@@ -622,18 +795,52 @@ export class PrismaCloudStore implements CloudStore {
 
     const isTerminal = input.status === "success" || input.status === "failure" || input.status === "timeout";
 
-    const updated = await this.prisma.run.update({
-      where: { id: runId },
-      data: {
-        status: input.status,
-        attempt: input.attempt,
-        startedAt: input.status === "running" && !existing.startedAt ? new Date() : undefined,
-        completedAt: isTerminal ? new Date() : undefined,
-        durationMs: input.durationMs ?? undefined,
-        output: input.output ? (input.output as Prisma.InputJsonValue) : undefined,
-        logs: input.logs ?? undefined,
-        errorMessage: input.errorMessage ?? (input.status === "success" ? null : undefined),
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const run = await tx.run.update({
+        where: { id: runId },
+        data: {
+          status: input.status,
+          attempt: input.attempt,
+          startedAt: input.status === "running" && !existing.startedAt ? new Date() : undefined,
+          completedAt: isTerminal ? new Date() : undefined,
+          durationMs: input.durationMs ?? undefined,
+          output: input.output ? (input.output as Prisma.InputJsonValue) : undefined,
+          logs: input.logs ?? undefined,
+          errorMessage: input.errorMessage ?? (input.status === "success" ? null : undefined),
+        },
+      });
+
+      if (isTerminal) {
+        const task = await tx.task.findUnique({
+          where: { id: existing.taskId },
+          select: {
+            id: true,
+            kind: true,
+            runCount: true,
+            maxRuns: true,
+            expiresAt: true,
+            active: true,
+            nextRunAt: true,
+          },
+        });
+
+        if (task) {
+          const nextRunCount = task.runCount + 1;
+          const shouldPause = task.kind === "scheduled"
+            && (isMaxRunsReached(nextRunCount, task.maxRuns) || isExpiredAt(isoNullable(task.expiresAt)));
+
+          await tx.task.update({
+            where: { id: task.id },
+            data: {
+              runCount: nextRunCount,
+              active: shouldPause ? false : task.active,
+              nextRunAt: shouldPause ? null : task.nextRunAt,
+            },
+          });
+        }
+      }
+
+      return run;
     });
 
     return toRunRecord(updated);
@@ -966,6 +1173,12 @@ export class PrismaCloudStore implements CloudStore {
     });
   }
 
+  async getCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> {
+    return {
+      secret: await this.getOrCreateCallbackSigningSecret(orgId),
+    };
+  }
+
   // ============================================
   // WORKER DISPATCH
   // ============================================
@@ -980,6 +1193,7 @@ export class PrismaCloudStore implements CloudStore {
       const now = new Date();
       const dueTasks = await this.prisma.task.findMany({
         where: {
+          kind: "scheduled",
           active: true,
           nextRunAt: { lte: now },
         },
@@ -988,6 +1202,17 @@ export class PrismaCloudStore implements CloudStore {
       });
 
       for (const task of dueTasks) {
+        if (isMaxRunsReached(task.runCount, task.maxRuns) || isExpiredAt(isoNullable(task.expiresAt), now.getTime())) {
+          await this.prisma.task.update({
+            where: { id: task.id },
+            data: {
+              active: false,
+              nextRunAt: null,
+            },
+          });
+          continue;
+        }
+
         const entitlement = await this.getBillingState(task.organizationId);
         if (entitlement.delinquent && !this.isGracePeriodActive(entitlement.graceEndsAt, now)) {
           continue;
@@ -1069,23 +1294,7 @@ export class PrismaCloudStore implements CloudStore {
           continue;
         }
 
-        const timeoutMs = parseDuration(task.timeout);
-
-        this.dispatchQueue.push({
-          runId: run.id,
-          orgId: task.organizationId,
-          taskId: task.id,
-          handlerType: task.handlerType as HandlerType,
-          handlerConfig: task.handlerConfig as unknown as HandlerConfig,
-          timeoutMs,
-          retryAttempts: task.retryAttempts,
-          retryBackoff: task.retryBackoff as "linear" | "exponential",
-          retryDelay: task.retryDelay,
-          callbackUrl: task.callbackUrl,
-          metadata: task.metadata as Record<string, unknown> | null,
-          maxRuns: task.maxRuns,
-          runCount: task.runCount,
-        });
+        await this.enqueueRun(task, run);
       }
 
       return this.dispatchQueue.splice(0, limit);

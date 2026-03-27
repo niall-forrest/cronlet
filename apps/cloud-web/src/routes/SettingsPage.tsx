@@ -4,6 +4,7 @@ import {
   listSecrets,
   createSecret,
   deleteSecret,
+  getCallbackSigningSecret,
   listApiKeys,
   createApiKey,
   rotateApiKey,
@@ -55,13 +56,77 @@ export function SettingsPage() {
       <div>
         <h1 className="display-title">Settings</h1>
         <p className="text-muted-foreground mt-1">
-          Manage secrets and API keys for your organization
+          Manage secrets, callback signing, and API keys for your organization
         </p>
       </div>
 
+      <CallbackSigningSection />
       <SecretsSection />
       <ApiKeysSection />
     </div>
+  );
+}
+
+function CallbackSigningSection() {
+  const [showSecret, setShowSecret] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ["callback-signing-secret"],
+    queryFn: getCallbackSigningSecret,
+  });
+
+  const handleCopy = async () => {
+    if (!data?.secret) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(data.secret);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader label="Callback Signing" />
+      <Card variant="flat">
+        <CardContent className="space-y-4 p-6">
+          <div>
+            <h3 className="text-base font-semibold">Webhook verification secret</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this secret with the `x-cronlet-timestamp` and `x-cronlet-signature` headers to verify Cronlet callback requests.
+            </p>
+          </div>
+
+          {isLoading ? (
+            <Skeleton className="h-10 w-full rounded-lg" />
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Input
+                  readOnly
+                  type={showSecret ? "text" : "password"}
+                  value={data?.secret ?? ""}
+                  className="pr-10 font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1 h-7 w-7 p-0"
+                  onClick={() => setShowSecret((current) => !current)}
+                >
+                  {showSecret ? <EyeSlash size={14} /> : <Eye size={14} />}
+                </Button>
+              </div>
+              <Button variant="outline" onClick={() => void handleCopy()}>
+                {copied ? <CheckCircle size={14} weight="fill" className="mr-2" /> : <Copy size={14} className="mr-2" />}
+                {copied ? "Copied" : "Copy secret"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 

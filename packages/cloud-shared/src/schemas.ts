@@ -161,6 +161,17 @@ export const taskPatchSchema = z.object({
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
+export const taskDispatchSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  handler: handlerConfigSchema,
+  retryAttempts: z.number().int().min(1).max(10).default(1),
+  retryBackoff: z.enum(["linear", "exponential"]).default("linear"),
+  retryDelay: durationSchema.default("1s"),
+  timeout: durationSchema.default("30s"),
+  callbackUrl: z.string().url().max(500).optional(),
+  metadata: metadataSchema.optional(),
+});
+
 // ============================================
 // SECRET
 // ============================================
@@ -245,6 +256,7 @@ export const internalRunStatusSchema = z.object({
 
 export type TaskCreateInput = z.input<typeof taskCreateSchema>;
 export type TaskPatchInput = z.infer<typeof taskPatchSchema>;
+export type TaskDispatchInput = z.input<typeof taskDispatchSchema>;
 export type SecretCreateInput = z.infer<typeof secretCreateSchema>;
 export type SecretPatchInput = z.infer<typeof secretPatchSchema>;
 export type AlertCreateInput = z.infer<typeof alertCreateSchema>;

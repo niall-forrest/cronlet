@@ -145,7 +145,7 @@ export function RunsPage() {
         <div>
           <h1 className="display-title">Runs</h1>
           <p className="text-muted-foreground mt-1">
-            Execution history for your scheduled tasks
+            Execution history for your scheduled tasks and on-demand dispatches
           </p>
         </div>
 

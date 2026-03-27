@@ -17,6 +17,7 @@ import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerApiKeyRoutes } from "./routes/api-keys.js";
 import { registerAuditEventRoutes } from "./routes/audit-events.js";
 import { registerOrgStatusRoutes } from "./routes/org-status.js";
+import { registerCallbackSigningRoutes } from "./routes/callback-signing.js";
 
 const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const CORS_ALLOWED_HEADERS = [
@@ -90,6 +91,7 @@ export async function buildServer() {
   await registerTaskRoutes(app);
   await registerRunRoutes(app);
   await registerSecretRoutes(app);
+  await registerCallbackSigningRoutes(app);
   await registerAlertRoutes(app);
   await registerUsageRoutes(app);
   await registerApiKeyRoutes(app);

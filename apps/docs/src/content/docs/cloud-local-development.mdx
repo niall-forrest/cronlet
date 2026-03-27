@@ -1,0 +1,97 @@
+---
+title: Cloud Local Development
+description: Test Cronlet Cloud callbacks locally with a tunnel, signed callback verification, and on-demand runs.
+sidebar:
+  order: 6
+  label: Cloud Local Development
+---
+
+Cronlet Cloud does not share the Local Runtime's `cronlet dev` dashboard. For Cloud integrations, the local development loop is:
+
+1. expose a local callback endpoint with `cloudflared` or `ngrok`
+2. verify the signed callback request
+3. trigger the flow with `tasks.trigger()` or `dispatch()`
+4. inspect the resulting run in Cronlet Cloud
+
+## Use a tunnel
+
+Point your local app at a public URL:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:3000
+```
+
+or:
+
+```bash
+ngrok http 3000
+```
+
+Then use the generated HTTPS URL as your `callbackUrl`.
+
+## Verify the callback
+
+Get your organization callback signing secret from Settings, then verify the raw body and headers:
+
+```ts
+import { verifyCallbackSignature } from "@cronlet/sdk";
+
+export async function POST(request: Request) {
+  const rawBody = await request.text();
+  const verification = verifyCallbackSignature({
+    rawBody,
+    headers: request.headers,
+    secret: process.env.CRONLET_CALLBACK_SECRET!,
+  });
+
+  if (!verification.ok) {
+    return new Response(verification.error ?? "Invalid signature", { status: 401 });
+  }
+
+  const payload = JSON.parse(rawBody);
+  return new Response(JSON.stringify({ ok: true, event: payload.event }));
+}
+```
+
+Cronlet callback requests include:
+
+- `x-cronlet-event`
+- `x-cronlet-timestamp`
+- `x-cronlet-signature`
+
+## Trigger the flow
+
+Use a scheduled task when you are testing an existing task:
+
+```ts
+await cronlet.tasks.trigger(taskId);
+```
+
+Use `dispatch()` when you want a one-off run without creating a visible scheduled task:
+
+```ts
+await cronlet.dispatch({
+  name: "Prospect enrichment",
+  handler: {
+    type: "webhook",
+    url: "https://api.example.com/enrich",
+    method: "POST",
+  },
+  callbackUrl: "https://your-tunnel-url.trycloudflare.com/api/cronlet/callback",
+  metadata: {
+    prospectId: "prospect_123",
+  },
+});
+```
+
+## What to inspect
+
+- the local callback request and verification result
+- the Cronlet run status and output in the Cloud dashboard
+- your product-side persisted records keyed by `task.id` and `run.id`
+
+## Not in this tranche
+
+- no Cloud emulator
+- no local Cloud dashboard
+- no durable workflow replay UI

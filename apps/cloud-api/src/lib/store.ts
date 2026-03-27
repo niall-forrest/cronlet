@@ -1,6 +1,7 @@
 import {
   type AuditEventListInput,
   type AuditEventRecord,
+  type CallbackSigningSecretRecord,
   getTaskLimitForTier,
   PLAN_LIMITS,
   type ApiKeyCreateInput,
@@ -21,6 +22,7 @@ import {
   type SecretPatchInput,
   type SecretRecord,
   type TaskCreateInput,
+  type TaskDispatchInput,
   type TaskPatchInput,
   type TaskRecord,
   type UsageSnapshot,
@@ -28,6 +30,7 @@ import {
 } from "@cronlet/shared";
 import { ERROR_CODES } from "@cronlet/shared";
 import { nanoid } from "nanoid";
+import { randomBytes } from "node:crypto";
 import { AppError } from "./errors.js";
 import { computeNextRun, nowIso } from "./clock.js";
 import type { CloudStore, EntitlementUpdateInput, OrganizationUpsertInput } from "./store-contract.js";
@@ -40,18 +43,44 @@ interface OrgEntitlement {
 }
 
 interface InternalTaskRecord extends TaskRecord {
-  // Internal fields not exposed via API
+  kind: "scheduled" | "dispatch";
 }
 
 interface InternalSecretRecord extends SecretRecord {
   encryptedValue: string;
 }
 
+interface InternalOrganizationRecord {
+  orgId: string;
+  name?: string;
+  slug?: string;
+  callbackSigningSecret: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 function formatPlanLabel(tier: PlanTier): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
+function generateCallbackSigningSecret(): string {
+  return `crsig_${randomBytes(32).toString("hex")}`;
+}
+
+function isExpiredAt(expiresAt: string | null, nowMs = Date.now()): boolean {
+  if (!expiresAt) {
+    return false;
+  }
+
+  return new Date(expiresAt).getTime() <= nowMs;
+}
+
+function isMaxRunsReached(runCount: number, maxRuns: number | null): boolean {
+  return maxRuns !== null && runCount >= maxRuns;
+}
+
 export class InMemoryCloudStore implements CloudStore {
+  private readonly organizations = new Map<string, InternalOrganizationRecord>();
   private readonly tasks = new Map<string, InternalTaskRecord>();
   private readonly runs = new Map<string, RunRecord>();
   private readonly secrets = new Map<string, InternalSecretRecord>();
@@ -125,43 +154,89 @@ export class InMemoryCloudStore implements CloudStore {
     this.usage.set(key, current + 1);
   }
 
-  // ============================================
-  // TASKS
-  // ============================================
-
-  listTasks(orgId: string): TaskRecord[] {
-    return Array.from(this.tasks.values())
-      .filter((task) => task.orgId === orgId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
-
-  countTasks(orgId: string): number {
-    return Array.from(this.tasks.values()).filter((task) => task.orgId === orgId).length;
-  }
-
-  getTask(orgId: string, taskId: string): TaskRecord {
-    const task = this.tasks.get(taskId);
-    if (!task || task.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+  private ensureOrganization(orgId: string, input?: { name?: string; slug?: string }): InternalOrganizationRecord {
+    const existing = this.organizations.get(orgId);
+    if (existing) {
+      const updated: InternalOrganizationRecord = {
+        ...existing,
+        name: input?.name ?? existing.name,
+        slug: input?.slug ?? existing.slug,
+        callbackSigningSecret: existing.callbackSigningSecret || generateCallbackSigningSecret(),
+        updatedAt: nowIso(),
+      };
+      this.organizations.set(orgId, updated);
+      return updated;
     }
+
+    const now = nowIso();
+    const created: InternalOrganizationRecord = {
+      orgId,
+      name: input?.name,
+      slug: input?.slug,
+      callbackSigningSecret: generateCallbackSigningSecret(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.organizations.set(orgId, created);
+    return created;
+  }
+
+  private getCallbackSigningSecretValue(orgId: string): string {
+    return this.ensureOrganization(orgId).callbackSigningSecret;
+  }
+
+  private toPublicTask(task: InternalTaskRecord): TaskRecord {
+    const { kind: _kind, ...publicTask } = task;
+    return publicTask;
+  }
+
+  private pauseTask(task: InternalTaskRecord): InternalTaskRecord {
+    if (!task.active && task.nextRunAt === null) {
+      return task;
+    }
+
+    const updated: InternalTaskRecord = {
+      ...task,
+      active: false,
+      nextRunAt: null,
+      updatedAt: nowIso(),
+    };
+    this.tasks.set(task.id, updated);
+    return updated;
+  }
+
+  private normalizeScheduledTask(task: InternalTaskRecord, nowMs = Date.now()): InternalTaskRecord {
+    if (task.kind !== "scheduled") {
+      return task;
+    }
+
+    if (isMaxRunsReached(task.runCount, task.maxRuns) || isExpiredAt(task.expiresAt, nowMs)) {
+      return this.pauseTask(task);
+    }
+
     return task;
   }
 
-  createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): TaskRecord {
-    this.assertWritable(orgId);
-    this.assertWithinTaskLimit(orgId);
+  private buildScheduledTask(
+    orgId: string,
+    input: TaskCreateInput,
+    createdBy?: CreatedBy
+  ): InternalTaskRecord {
+    this.ensureOrganization(orgId);
 
     const now = nowIso();
     const scheduleConfig = input.schedule;
     const handlerConfig = input.handler;
+    const maxRuns = input.maxRuns ?? null;
+    const expiresAt = input.expiresAt ?? null;
+    const shouldStartActive = input.active !== false
+      && !isMaxRunsReached(0, maxRuns)
+      && !isExpiredAt(expiresAt);
 
-    const nextRunAt = input.active !== false
-      ? computeNextRun(scheduleConfig, input.timezone ?? "UTC")
-      : null;
-
-    const task: InternalTaskRecord = {
+    return {
       id: nanoid(),
       orgId,
+      kind: "scheduled",
       name: input.name,
       description: input.description ?? null,
       handlerType: handlerConfig.type as HandlerType,
@@ -169,25 +244,103 @@ export class InMemoryCloudStore implements CloudStore {
       scheduleType: scheduleConfig.type as ScheduleType,
       scheduleConfig,
       timezone: input.timezone ?? "UTC",
-      nextRunAt,
+      nextRunAt: shouldStartActive
+        ? computeNextRun(scheduleConfig, input.timezone ?? "UTC")
+        : null,
       retryAttempts: input.retryAttempts ?? 1,
       retryBackoff: input.retryBackoff ?? "linear",
       retryDelay: input.retryDelay ?? "1s",
       timeout: input.timeout ?? "30s",
-      active: input.active !== false,
+      active: shouldStartActive,
       source: input.source ?? "dashboard",
       createdBy: createdBy ?? null,
       callbackUrl: input.callbackUrl ?? null,
       metadata: input.metadata ?? null,
-      maxRuns: input.maxRuns ?? null,
-      expiresAt: input.expiresAt ?? null,
+      maxRuns,
+      expiresAt,
       runCount: 0,
       createdAt: now,
       updatedAt: now,
     };
+  }
 
+  private assertTaskAccessible(task: InternalTaskRecord | undefined, orgId: string): InternalTaskRecord {
+    if (!task || task.orgId !== orgId || task.kind !== "scheduled") {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+    }
+
+    return this.normalizeScheduledTask(task);
+  }
+
+  private assertTaskRunnable(task: InternalTaskRecord): InternalTaskRecord {
+    const normalized = this.normalizeScheduledTask(task);
+    if (normalized.kind !== "scheduled") {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+    }
+
+    if (isMaxRunsReached(normalized.runCount, normalized.maxRuns)) {
+      throw new AppError(400, ERROR_CODES.VALIDATION_ERROR, "Task has reached its max run limit");
+    }
+
+    if (isExpiredAt(normalized.expiresAt)) {
+      throw new AppError(400, ERROR_CODES.VALIDATION_ERROR, "Task has expired");
+    }
+
+    return normalized;
+  }
+
+  private enqueueRun(task: InternalTaskRecord, run: RunRecord): void {
+    const timeoutMs = parseDuration(task.timeout);
+
+    this.dispatchQueue.push({
+      runId: run.id,
+      orgId: task.orgId,
+      taskId: task.id,
+      taskName: task.name,
+      handlerType: task.handlerType,
+      handlerConfig: task.handlerConfig,
+      timeoutMs,
+      retryAttempts: task.retryAttempts,
+      retryBackoff: task.retryBackoff,
+      retryDelay: task.retryDelay,
+      callbackUrl: task.callbackUrl,
+      callbackSigningSecret: task.callbackUrl
+        ? this.getCallbackSigningSecretValue(task.orgId)
+        : null,
+      metadata: task.metadata,
+      maxRuns: task.maxRuns,
+      expiresAt: task.expiresAt,
+      runCount: task.runCount,
+    });
+  }
+
+  // ============================================
+  // TASKS
+  // ============================================
+
+  listTasks(orgId: string): TaskRecord[] {
+    return Array.from(this.tasks.values())
+      .filter((task) => task.orgId === orgId && task.kind === "scheduled")
+      .map((task) => this.normalizeScheduledTask(task))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((task) => this.toPublicTask(task));
+  }
+
+  countTasks(orgId: string): number {
+    return Array.from(this.tasks.values()).filter((task) => task.orgId === orgId && task.kind === "scheduled").length;
+  }
+
+  getTask(orgId: string, taskId: string): TaskRecord {
+    return this.toPublicTask(this.assertTaskAccessible(this.tasks.get(taskId), orgId));
+  }
+
+  createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): TaskRecord {
+    this.assertWritable(orgId);
+    this.assertWithinTaskLimit(orgId);
+
+    const task = this.buildScheduledTask(orgId, input, createdBy);
     this.tasks.set(task.id, task);
-    return task;
+    return this.toPublicTask(task);
   }
 
   private assertWithinTaskLimit(orgId: string): void {
@@ -212,21 +365,25 @@ export class InMemoryCloudStore implements CloudStore {
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): TaskRecord {
     this.assertWritable(orgId);
 
-    const task = this.tasks.get(taskId);
-    if (!task || task.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
-    }
+    const task = this.assertTaskAccessible(this.tasks.get(taskId), orgId);
 
     const scheduleConfig = input.schedule ?? task.scheduleConfig;
     const handlerConfig = input.handler ?? task.handlerConfig;
     const timezone = input.timezone ?? task.timezone;
-    const active = input.active ?? task.active;
+    const maxRuns = input.maxRuns === undefined ? task.maxRuns : input.maxRuns;
+    const expiresAt = input.expiresAt === undefined ? task.expiresAt : input.expiresAt;
+    const requestedActive = input.active ?? task.active;
+    const active = requestedActive
+      && !isMaxRunsReached(task.runCount, maxRuns)
+      && !isExpiredAt(expiresAt);
 
     // Recompute nextRunAt if schedule, timezone, or active status changed
     const needsNextRunUpdate =
       input.schedule !== undefined ||
       input.timezone !== undefined ||
-      input.active !== undefined;
+      input.active !== undefined ||
+      input.maxRuns !== undefined ||
+      input.expiresAt !== undefined;
 
     const nextRunAt = needsNextRunUpdate
       ? (active ? computeNextRun(scheduleConfig, timezone) : null)
@@ -246,19 +403,20 @@ export class InMemoryCloudStore implements CloudStore {
       retryBackoff: input.retryBackoff ?? task.retryBackoff,
       retryDelay: input.retryDelay ?? task.retryDelay,
       timeout: input.timeout ?? task.timeout,
+      callbackUrl: input.callbackUrl === undefined ? task.callbackUrl : input.callbackUrl,
+      metadata: input.metadata === undefined ? task.metadata : input.metadata,
+      maxRuns,
+      expiresAt,
       active,
       updatedAt: nowIso(),
     };
 
     this.tasks.set(taskId, updated);
-    return updated;
+    return this.toPublicTask(updated);
   }
 
   deleteTask(orgId: string, taskId: string): void {
-    const task = this.tasks.get(taskId);
-    if (!task || task.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
-    }
+    this.assertTaskAccessible(this.tasks.get(taskId), orgId);
     this.tasks.delete(taskId);
   }
 
@@ -266,10 +424,7 @@ export class InMemoryCloudStore implements CloudStore {
     this.assertWritable(orgId);
     this.assertWithinRunLimit(orgId);
 
-    const task = this.tasks.get(taskId);
-    if (!task || task.orgId !== orgId) {
-      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
-    }
+    const task = this.assertTaskRunnable(this.assertTaskAccessible(this.tasks.get(taskId), orgId));
 
     const now = nowIso();
     const run: RunRecord = {
@@ -291,25 +446,74 @@ export class InMemoryCloudStore implements CloudStore {
 
     this.runs.set(run.id, run);
     this.incrementUsage(orgId);
+    this.enqueueRun(task, run);
 
-    const timeoutMs = parseDuration(task.timeout);
+    return run;
+  }
 
-    this.dispatchQueue.push({
-      runId: run.id,
+  dispatchTask(
+    orgId: string,
+    input: TaskDispatchInput,
+    createdBy?: CreatedBy,
+    trigger: "manual" | "api" = "api"
+  ): RunRecord {
+    this.assertWritable(orgId);
+    this.assertWithinRunLimit(orgId);
+    this.ensureOrganization(orgId);
+
+    const now = nowIso();
+    const task: InternalTaskRecord = {
+      id: nanoid(),
+      orgId,
+      kind: "dispatch",
+      name: input.name ?? "On-demand dispatch",
+      description: null,
+      handlerType: input.handler.type as HandlerType,
+      handlerConfig: input.handler,
+      scheduleType: "once",
+      scheduleConfig: {
+        type: "once",
+        at: now,
+      },
+      timezone: "UTC",
+      nextRunAt: null,
+      retryAttempts: input.retryAttempts ?? 1,
+      retryBackoff: input.retryBackoff ?? "linear",
+      retryDelay: input.retryDelay ?? "1s",
+      timeout: input.timeout ?? "30s",
+      active: false,
+      source: createdBy?.type === "agent" ? "mcp" : "sdk",
+      createdBy: createdBy ?? null,
+      callbackUrl: input.callbackUrl ?? null,
+      metadata: input.metadata ?? null,
+      maxRuns: null,
+      expiresAt: null,
+      runCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.tasks.set(task.id, task);
+
+    const run: RunRecord = {
+      id: nanoid(),
       orgId,
       taskId: task.id,
-      handlerType: task.handlerType,
-      handlerConfig: task.handlerConfig,
-      timeoutMs,
-      retryAttempts: task.retryAttempts,
-      retryBackoff: task.retryBackoff,
-      retryDelay: task.retryDelay,
-      callbackUrl: task.callbackUrl,
-      metadata: task.metadata,
-      maxRuns: task.maxRuns,
-      runCount: task.runCount,
-    });
+      status: "queued",
+      trigger,
+      attempt: 1,
+      scheduledAt: null,
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      output: null,
+      logs: null,
+      errorMessage: null,
+      createdAt: now,
+    };
 
+    this.runs.set(run.id, run);
+    this.incrementUsage(orgId);
+    this.enqueueRun(task, run);
     return run;
   }
 
@@ -364,6 +568,24 @@ export class InMemoryCloudStore implements CloudStore {
     };
 
     this.runs.set(run.id, updated);
+
+    if (isTerminal) {
+      const task = this.tasks.get(run.taskId);
+      if (task) {
+        const nextRunCount = task.runCount + 1;
+        const shouldPause = task.kind === "scheduled"
+          && (isMaxRunsReached(nextRunCount, task.maxRuns) || isExpiredAt(task.expiresAt));
+
+        this.tasks.set(task.id, {
+          ...task,
+          runCount: nextRunCount,
+          active: shouldPause ? false : task.active,
+          nextRunAt: shouldPause ? null : task.nextRunAt,
+          updatedAt: nowIso(),
+        });
+      }
+    }
+
     return updated;
   }
 
@@ -634,16 +856,26 @@ export class InMemoryCloudStore implements CloudStore {
     };
   }
 
-  upsertOrganization(_input: OrganizationUpsertInput): void {
-    // In-memory mode uses org identifiers directly from request auth context.
+  upsertOrganization(input: OrganizationUpsertInput): void {
+    this.ensureOrganization(input.orgId, {
+      name: input.name,
+      slug: input.slug,
+    });
   }
 
   upsertEntitlementForOrg(orgId: string, input: EntitlementUpdateInput): void {
+    this.ensureOrganization(orgId);
     this.entitlements.set(orgId, {
       tier: input.tier,
       delinquent: input.delinquent,
       graceEndsAt: input.graceEndsAt,
     });
+  }
+
+  getCallbackSigningSecret(orgId: string): CallbackSigningSecretRecord {
+    return {
+      secret: this.getCallbackSigningSecretValue(orgId),
+    };
   }
 
   // ============================================
@@ -654,30 +886,44 @@ export class InMemoryCloudStore implements CloudStore {
     const now = new Date();
 
     for (const task of this.tasks.values()) {
-      if (!task.active || !task.nextRunAt) {
+      if (task.kind !== "scheduled") {
         continue;
       }
 
-      const dueAt = new Date(task.nextRunAt);
+      const normalizedTask = this.normalizeScheduledTask(task, now.getTime());
+      if (!normalizedTask.active || !normalizedTask.nextRunAt) {
+        continue;
+      }
+
+      const dueAt = new Date(normalizedTask.nextRunAt);
       if (dueAt.getTime() > now.getTime()) {
         continue;
       }
 
-      const entitlement = this.getEntitlement(task.orgId);
+      const entitlement = this.getEntitlement(normalizedTask.orgId);
       if (!this.isGracePeriodActive(entitlement, now.getTime())) {
         continue;
+      }
+
+      try {
+        this.assertWithinRunLimit(normalizedTask.orgId);
+      } catch (error) {
+        if (error instanceof AppError && error.code === ERROR_CODES.PLAN_LIMIT_EXCEEDED) {
+          continue;
+        }
+        throw error;
       }
 
       // Create the run
       const runNow = nowIso();
       const run: RunRecord = {
         id: nanoid(),
-        orgId: task.orgId,
-        taskId: task.id,
+        orgId: normalizedTask.orgId,
+        taskId: normalizedTask.id,
         status: "queued",
         trigger: "schedule",
         attempt: 1,
-        scheduledAt: task.nextRunAt,
+        scheduledAt: normalizedTask.nextRunAt,
         startedAt: null,
         completedAt: null,
         durationMs: null,
@@ -687,30 +933,13 @@ export class InMemoryCloudStore implements CloudStore {
         createdAt: runNow,
       };
       this.runs.set(run.id, run);
-      this.incrementUsage(task.orgId);
-
-      const timeoutMs = parseDuration(task.timeout);
-
-      this.dispatchQueue.push({
-        runId: run.id,
-        orgId: task.orgId,
-        taskId: task.id,
-        handlerType: task.handlerType,
-        handlerConfig: task.handlerConfig,
-        timeoutMs,
-        retryAttempts: task.retryAttempts,
-        retryBackoff: task.retryBackoff,
-        retryDelay: task.retryDelay,
-        callbackUrl: task.callbackUrl,
-        metadata: task.metadata,
-        maxRuns: task.maxRuns,
-        runCount: task.runCount,
-      });
+      this.incrementUsage(normalizedTask.orgId);
+      this.enqueueRun(normalizedTask, run);
 
       // Update next run time
-      const nextRunAt = computeNextRun(task.scheduleConfig, task.timezone, now);
-      this.tasks.set(task.id, {
-        ...task,
+      const nextRunAt = computeNextRun(normalizedTask.scheduleConfig, normalizedTask.timezone, now);
+      this.tasks.set(normalizedTask.id, {
+        ...normalizedTask,
         nextRunAt,
         updatedAt: nowIso(),
       });

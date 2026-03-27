@@ -4,6 +4,7 @@ import type {
   ApiKeyRecord,
   ApiKeyWithToken,
   ApiResponse,
+  CallbackSigningSecretRecord,
   OrgStatusSnapshot,
   RunRecord,
   TaskRecord,
@@ -131,6 +132,10 @@ export function triggerTask(taskId: string): Promise<RunRecord> {
 
 export function getOrgStatus(): Promise<OrgStatusSnapshot> {
   return request<OrgStatusSnapshot>("/v1/org-status");
+}
+
+export function getCallbackSigningSecret(): Promise<CallbackSigningSecretRecord> {
+  return request<CallbackSigningSecretRecord>("/v1/callback-signing-secret");
 }
 
 // ============================================

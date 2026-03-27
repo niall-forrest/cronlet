@@ -34,8 +34,9 @@ Cronlet has two developer-facing surfaces:
 2. [SDK Overview](/sdk-overview/)
 3. [Tasks, Handlers, and Schedules](/tasks-handlers-and-schedules/)
 4. [Callbacks and Agent Loops](/callbacks-and-agent-loops/)
-5. [Agent Tooling](/agent-tooling/)
-6. [SDK API Reference](/sdk-api-reference/)
+5. [Cloud Local Development](/cloud-local-development/)
+6. [Agent Tooling](/agent-tooling/)
+7. [SDK API Reference](/sdk-api-reference/)
 
 ### Local runtime + CLI
 
@@ -53,6 +54,6 @@ Cronlet has two developer-facing surfaces:
 - The SDK accepts schedule objects and a constrained set of supported schedule strings.
 - String schedules are parsed client-side into `ScheduleConfig` objects before the request reaches the API.
 - Naive `once` datetime strings are interpreted as UTC unless the string includes timezone information.
-- Cloud callbacks do **not** currently include a populated `task.name`, and `stats.expiresAt` is currently `null` in worker callbacks. Build callback handlers around `task.id`, `task.metadata`, and `run.id`.
+- Cronlet Cloud and the Local Runtime are separate DX surfaces: the Local Runtime has `cronlet dev` and a local dashboard, while Cloud local development relies on tunnels plus callback verification.
 
 If you are integrating Cronlet into a product, treat `task.metadata` + your own database records as the source of truth for ownership and lifecycle.

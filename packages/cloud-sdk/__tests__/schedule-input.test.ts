@@ -126,6 +126,48 @@ describe("sdk string schedule support", () => {
     expect(body.source).toBe("mcp");
   });
 
+  it("dispatches an on-demand run without a schedule", async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ id: "run_123", status: "queued" }));
+    const client = new CloudClient({ apiKey: "test-key" });
+
+    await client.dispatch({
+      name: "Enrich now",
+      handler: {
+        type: "webhook",
+        url: "https://example.com/enrich",
+        method: "POST",
+      },
+      retryAttempts: 2,
+      retryBackoff: "linear",
+      retryDelay: "5s",
+      timeout: "30s",
+      callbackUrl: "https://example.com/callback",
+      metadata: {
+        prospectId: "prospect_123",
+      },
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/v1/dispatch");
+    const body = JSON.parse(String(init.body));
+    expect(body).toEqual({
+      name: "Enrich now",
+      handler: {
+        type: "webhook",
+        url: "https://example.com/enrich",
+        method: "POST",
+      },
+      retryAttempts: 2,
+      retryBackoff: "linear",
+      retryDelay: "5s",
+      timeout: "30s",
+      callbackUrl: "https://example.com/callback",
+      metadata: {
+        prospectId: "prospect_123",
+      },
+    });
+  });
+
   it("throws ScheduleParseError before issuing a request", async () => {
     const client = new CloudClient({ apiKey: "test-key" });
 

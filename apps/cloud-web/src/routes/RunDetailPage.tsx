@@ -67,6 +67,7 @@ export function RunDetailPage({ runId }: RunDetailPageProps) {
   }
 
   const run = runQuery.data;
+  const hasVisibleTask = Boolean(taskName);
 
   return (
     <div className="space-y-6">
@@ -78,15 +79,19 @@ export function RunDetailPage({ runId }: RunDetailPageProps) {
             <StatusBadge status={run.status} />
           </div>
           <p className="text-sm text-muted-foreground">
-            Manual or scheduled execution details, including output and logs.
+            {hasVisibleTask
+              ? "Manual or scheduled execution details, including output and logs."
+              : "On-demand dispatch execution details, including output and logs."}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="outline">
-            <Link to="/tasks/$taskId" params={{ taskId: run.taskId }}>
-              View Task
-            </Link>
-          </Button>
+          {hasVisibleTask ? (
+            <Button asChild variant="outline">
+              <Link to="/tasks/$taskId" params={{ taskId: run.taskId }}>
+                View Task
+              </Link>
+            </Button>
+          ) : null}
           <Button asChild>
             <Link to="/runs">All Runs</Link>
           </Button>

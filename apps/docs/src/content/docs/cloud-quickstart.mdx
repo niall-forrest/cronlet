@@ -13,6 +13,7 @@ This guide shows how to:
 - install `@cronlet/sdk`
 - create a hosted task
 - trigger it manually
+- dispatch a one-off run
 - inspect the resulting run
 - understand the minimum shape needed for production integrations
 
@@ -83,6 +84,23 @@ console.log(task.id);
 ```ts
 const run = await cronlet.tasks.trigger(task.id);
 console.log(run.id, run.status);
+```
+
+## Dispatch a one-off run
+
+```ts
+const run = await cronlet.dispatch({
+  name: "Run this now",
+  handler: {
+    type: "webhook",
+    url: "https://api.example.com/run-now",
+    method: "POST",
+  },
+  callbackUrl: "https://app.example.com/api/cronlet/callback",
+  metadata: {
+    requestId: "req_123",
+  },
+});
 ```
 
 ## Read the run result
@@ -173,3 +191,4 @@ schedule: { type: "daily", times: ["09:00"] }
 - [SDK Overview](/sdk-overview/)
 - [Tasks, Handlers, and Schedules](/tasks-handlers-and-schedules/)
 - [Callbacks and Agent Loops](/callbacks-and-agent-loops/)
+- [Cloud Local Development](/cloud-local-development/)

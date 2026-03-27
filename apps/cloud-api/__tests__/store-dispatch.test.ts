@@ -111,4 +111,29 @@ describe("InMemoryCloudStore dispatch semantics", () => {
     expect(stale.durationMs).toBe(320);
     expect(stale.errorMessage).toBeNull();
   });
+
+  it("increments runCount and pauses tasks that reach maxRuns", () => {
+    const store = new InMemoryCloudStore();
+    const task = store.createTask("org_lifecycle", {
+      name: "Bounded Task",
+      handler: {
+        type: "webhook",
+        url: "https://example.com/cronlet",
+      },
+      schedule: {
+        type: "daily",
+        times: ["09:00"],
+      },
+      timezone: "UTC",
+      maxRuns: 1,
+    });
+
+    const run = store.triggerTask("org_lifecycle", task.id, "manual");
+    store.updateRunStatus(run.id, { status: "success", attempt: 1, durationMs: 50 });
+
+    const updatedTask = store.getTask("org_lifecycle", task.id);
+    expect(updatedTask.runCount).toBe(1);
+    expect(updatedTask.active).toBe(false);
+    expect(updatedTask.nextRunAt).toBeNull();
+  });
 });

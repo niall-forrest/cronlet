@@ -217,6 +217,10 @@ export interface OrgStatusSnapshot {
   hasApiKeys: boolean;
 }
 
+export interface CallbackSigningSecretRecord {
+  secret: string;
+}
+
 // ============================================
 // DISPATCH (Worker)
 // ============================================
@@ -225,6 +229,7 @@ export interface DispatchInstruction {
   runId: string;
   orgId: string;
   taskId: string;
+  taskName: string;
   handlerType: HandlerType;
   handlerConfig: HandlerConfig;
   timeoutMs: number;
@@ -233,8 +238,10 @@ export interface DispatchInstruction {
   retryDelay: string;
   // Callback info for agent loop
   callbackUrl: string | null;
+  callbackSigningSecret: string | null;
   metadata: Record<string, unknown> | null;
   maxRuns: number | null;
+  expiresAt: string | null;
   runCount: number;
 }
 

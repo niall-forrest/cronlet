@@ -1,5 +1,6 @@
 import { Queue, Worker, type Job } from "bullmq";
 import IORedis from "ioredis";
+import { createHmac } from "node:crypto";
 import type {
   DispatchInstruction,
   HandlerConfig,
@@ -20,6 +21,12 @@ interface DispatchJobData {
 interface HandlerResult {
   output: Record<string, unknown> | null;
   logs: string;
+}
+
+function signCallbackPayload(timestamp: string, body: string, secret: string): string {
+  const hmac = createHmac("sha256", secret);
+  hmac.update(`${timestamp}.${body}`);
+  return `v1=${hmac.digest("hex")}`;
 }
 
 export class DispatchQueueRuntime {
@@ -189,13 +196,13 @@ export class DispatchQueueRuntime {
       timestamp: new Date().toISOString(),
       task: {
         id: instruction.taskId,
-        name: "", // We don't have task name in instruction, but taskId is sufficient
+        name: instruction.taskName,
         metadata: instruction.metadata,
       },
       stats: {
         totalRuns: newRunCount,
         remainingRuns,
-        expiresAt: null, // We don't track expiresAt in instruction currently
+        expiresAt: instruction.expiresAt,
       },
     };
 
@@ -215,13 +222,19 @@ export class DispatchQueueRuntime {
     }
 
     try {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const body = JSON.stringify(payload);
       const response = await fetch(instruction.callbackUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-cronlet-event": event,
+          "x-cronlet-timestamp": timestamp,
+          "x-cronlet-signature": instruction.callbackSigningSecret
+            ? signCallbackPayload(timestamp, body, instruction.callbackSigningSecret)
+            : "",
         },
-        body: JSON.stringify(payload),
+        body,
       });
 
       if (!response.ok) {
@@ -234,22 +247,24 @@ export class DispatchQueueRuntime {
   }
 
   private async checkTaskExpiration(instruction: DispatchInstruction): Promise<void> {
-    if (instruction.maxRuns === null) {
-      return;
-    }
-
     const newRunCount = instruction.runCount + 1;
-    if (newRunCount >= instruction.maxRuns) {
-      // Task has reached max runs, send expiration callback
+    if (instruction.maxRuns !== null && newRunCount >= instruction.maxRuns) {
       await this.sendCallback(
         instruction,
         "task.expired",
         undefined,
         "max_runs_reached"
       );
+      return;
+    }
 
-      // Note: The API should handle pausing the task when runCount reaches maxRuns
-      // The worker just sends the callback to notify the agent
+    if (instruction.expiresAt && new Date(instruction.expiresAt).getTime() <= Date.now()) {
+      await this.sendCallback(
+        instruction,
+        "task.expired",
+        undefined,
+        "expired_at_reached"
+      );
     }
   }
 

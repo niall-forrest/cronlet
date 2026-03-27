@@ -1,7 +1,24 @@
-import { taskCreateSchema, taskPatchSchema } from "@cronlet/shared";
+import { taskCreateSchema, taskDispatchSchema, taskPatchSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";
+
+function createdByFromAuth(request: {
+  auth: {
+    actorType?: string;
+    userId: string;
+  };
+}) {
+  if (request.auth.actorType === "agent") {
+    return { type: "agent" as const, id: request.auth.userId, name: undefined };
+  }
+
+  if (request.auth.actorType === "user") {
+    return { type: "user" as const, id: request.auth.userId, name: undefined };
+  }
+
+  return undefined;
+}
 
 export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   // List tasks
@@ -31,14 +48,23 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     try {
       authorize(request.auth, { minimumRole: "admin", requiredScope: "tasks:write" });
       const input = taskCreateSchema.parse(request.body);
-
-      // Build createdBy from auth context
-      const createdBy = request.auth.actorType === "agent"
-        ? { type: "agent" as const, id: request.auth.userId, name: undefined }
-        : { type: "user" as const, id: request.auth.userId, name: undefined };
-
+      const createdBy = createdByFromAuth(request);
       const created = await app.cloudStore.createTask(request.auth.orgId, input, createdBy);
       return ok(reply, created, 201);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  // Dispatch an on-demand run without creating a visible scheduled task
+  app.post("/v1/dispatch", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "member", requiredScope: "runs:write" });
+      const input = taskDispatchSchema.parse(request.body);
+      const createdBy = createdByFromAuth(request);
+      const trigger = request.auth.actorType === "api_key" ? "api" : "manual";
+      const run = await app.cloudStore.dispatchTask(request.auth.orgId, input, createdBy, trigger);
+      return ok(reply, run, 201);
     } catch (error) {
       return handleError(reply, error);
     }

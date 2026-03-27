@@ -8,6 +8,7 @@ import type {
   ApiKeyWithToken,
   AlertCreateInput,
   AlertRecord,
+  CallbackSigningSecretRecord,
   CreatedBy,
   DispatchInstruction,
   InternalRunStatusInput,
@@ -17,6 +18,7 @@ import type {
   SecretPatchInput,
   SecretRecord,
   TaskCreateInput,
+  TaskDispatchInput,
   TaskPatchInput,
   TaskRecord,
   UsageSnapshot,
@@ -43,6 +45,7 @@ export interface CloudStore {
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> | TaskRecord;
   deleteTask(orgId: string, taskId: string): Promise<void> | void;
   triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): Promise<RunRecord> | RunRecord;
+  dispatchTask(orgId: string, input: TaskDispatchInput, createdBy?: CreatedBy, trigger?: "manual" | "api"): Promise<RunRecord> | RunRecord;
 
   // Runs
   listRuns(orgId: string, taskId?: string, limit?: number): Promise<RunRecord[]> | RunRecord[];
@@ -85,6 +88,7 @@ export interface CloudStore {
   getUsage(orgId: string): Promise<UsageSnapshot> | UsageSnapshot;
   upsertOrganization(input: OrganizationUpsertInput): Promise<void> | void;
   upsertEntitlementForOrg(orgId: string, input: EntitlementUpdateInput): Promise<void> | void;
+  getCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> | CallbackSigningSecretRecord;
 
   // Worker dispatch
   claimDueDispatches(limit?: number): Promise<DispatchInstruction[]> | DispatchInstruction[];

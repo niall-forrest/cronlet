@@ -1,6 +1,7 @@
 import type {
   ApiResponse,
   TaskCreateInput,
+  TaskDispatchInput,
   TaskPatchInput,
   ScheduleConfigInput,
   SecretCreateInput,
@@ -75,6 +76,8 @@ export type TaskCreateRequest = Omit<TaskCreateInput, "schedule" | "source"> & {
 export type TaskPatchRequest = Omit<TaskPatchInput, "schedule"> & {
   schedule?: ScheduleInput;
 };
+
+export type TaskDispatchRequest = TaskDispatchInput;
 
 /**
  * Cronlet Cloud API client.
@@ -310,6 +313,15 @@ export class CloudClient {
       return summarizeTasksOverview(filteredTasks, new Map(taskRuns), resolvedOptions);
     },
   };
+
+  /**
+   * Run a handler immediately without creating a visible scheduled task
+   */
+  dispatch = (input: TaskDispatchRequest): Promise<RunRecord> =>
+    this.request<RunRecord>("/v1/dispatch", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
 
   /**
    * Run history methods

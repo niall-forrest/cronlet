@@ -142,6 +142,8 @@ Each tool step supports:
 - `args: Record<string, unknown>`
 - `outputKey?: string`
 
+Tool handlers execute steps linearly within a single run. Retries are currently run-level, so failed runs restart from the beginning rather than resuming from the failed step.
+
 Current tool names visible in the product UI include:
 
 - `http.get`
