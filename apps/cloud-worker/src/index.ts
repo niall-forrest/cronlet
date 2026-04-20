@@ -36,9 +36,10 @@ async function pollLoop(): Promise<void> {
   while (polling) {
     try {
       const due = await apiClient.claimDueTasks(100);
+      await apiClient.reconcileDispatches(100);
       warnedApiUnavailable = false;
       for (const instruction of due) {
-        await runtime.enqueue(instruction);
+        await runtime.processInstruction(instruction);
       }
     } catch (error) {
       if (isConnectionRefused(error)) {

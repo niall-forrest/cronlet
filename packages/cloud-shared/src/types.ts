@@ -8,8 +8,36 @@ export type HandlerType = "tools" | "code" | "webhook";
 
 export type ScheduleType = "every" | "daily" | "weekly" | "monthly" | "once" | "cron";
 
-export type RunStatus = "queued" | "running" | "success" | "failure" | "timeout";
+export type RunStatus =
+  | "queued"
+  | "leased"
+  | "running"
+  | "retry_wait"
+  | "success"
+  | "failure"
+  | "timeout"
+  | "cancelled"
+  | "dead_lettered"
+  | "terminal_client_error"
+  | "retry_window_expired";
 export type TaskSource = "dashboard" | "mcp" | "sdk";
+export type DispatchJobStatus =
+  | "pending"
+  | "leased"
+  | "running"
+  | "retry_wait"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "dead_lettered";
+export type RunAttemptStatus =
+  | "pending"
+  | "running"
+  | "success"
+  | "failure"
+  | "timeout"
+  | "cancelled"
+  | "terminal_client_error";
 
 export type AuditActorType = "user" | "api_key" | "agent" | "internal" | "webhook";
 
@@ -36,6 +64,8 @@ export interface WebhookHandlerConfig {
   method?: "GET" | "POST";
   headers?: Record<string, string>;
   body?: unknown;
+  followRedirects?: boolean;
+  maxRedirects?: number;
   auth?: {
     type: "bearer" | "basic" | "header";
     secretName: string;
@@ -104,6 +134,17 @@ export interface CreatedBy {
   name?: string;
 }
 
+export interface RetryPolicy {
+  maxAttempts: number;
+  backoff: "fixed" | "linear" | "exponential";
+  initialDelay: string;
+  maxDelay: string;
+  jitter: boolean;
+  retryWindow: string;
+  retryOnStatusCodes: number[];
+  terminalStatusCodes: number[];
+}
+
 // ============================================
 // RECORDS
 // ============================================
@@ -113,6 +154,7 @@ export interface TaskRecord {
   orgId: string;
   name: string;
   description: string | null;
+  externalId: string | null;
   handlerType: HandlerType;
   handlerConfig: HandlerConfig;
   scheduleType: ScheduleType;
@@ -122,6 +164,7 @@ export interface TaskRecord {
   retryAttempts: number;
   retryBackoff: "linear" | "exponential";
   retryDelay: string;
+  retryPolicy: RetryPolicy;
   timeout: string;
   active: boolean;
   source: TaskSource;
@@ -152,6 +195,41 @@ export interface RunRecord {
   logs: string | null;
   errorMessage: string | null;
   createdAt: string;
+}
+
+export interface RunAttemptRecord {
+  id: string;
+  orgId: string;
+  runId: string;
+  taskId: string;
+  dispatchJobId: string | null;
+  attemptNumber: number;
+  status: RunAttemptStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationMs: number | null;
+  httpStatus: number | null;
+  errorClass: string | null;
+  errorMessage: string | null;
+  responseBodyPreview: string | null;
+  responseBodyHash: string | null;
+  output: Record<string, unknown> | null;
+  logs: string | null;
+  createdAt: string;
+}
+
+export interface TaskCancelResult {
+  cancelled: true;
+  taskId: string;
+  cancelledDispatchJobs: number;
+  runningAttemptIds: string[];
+  guarantee: "no-new-attempts";
+  alreadyStarted: boolean;
+}
+
+export interface RunReplayResult {
+  run: RunRecord;
+  replayOfRunId: string;
 }
 
 export interface SecretRecord {
@@ -226,16 +304,21 @@ export interface CallbackSigningSecretRecord {
 // ============================================
 
 export interface DispatchInstruction {
+  dispatchJobId: string;
+  attemptId: string;
+  attemptNumber: number;
   runId: string;
   orgId: string;
   taskId: string;
   taskName: string;
+  taskExternalId: string | null;
   handlerType: HandlerType;
   handlerConfig: HandlerConfig;
   timeoutMs: number;
   retryAttempts: number;
   retryBackoff: "linear" | "exponential";
   retryDelay: string;
+  retryPolicy: RetryPolicy;
   // Callback info for agent loop
   callbackUrl: string | null;
   callbackSigningSecret: string | null;
@@ -243,6 +326,27 @@ export interface DispatchInstruction {
   maxRuns: number | null;
   expiresAt: string | null;
   runCount: number;
+}
+
+export interface InternalDispatchStartInput {
+  dispatchJobId: string;
+  attemptId: string;
+  attemptNumber: number;
+}
+
+export interface InternalDispatchCompleteInput {
+  dispatchJobId: string;
+  attemptId: string;
+  attemptNumber: number;
+  status: "success" | "failure" | "timeout" | "terminal_client_error";
+  durationMs: number;
+  output?: Record<string, unknown> | null;
+  logs?: string | null;
+  httpStatus?: number | null;
+  errorClass?: string | null;
+  errorMessage?: string | null;
+  responseBodyPreview?: string | null;
+  responseBodyHash?: string | null;
 }
 
 // ============================================
@@ -260,15 +364,26 @@ export interface TaskCallbackPayload {
   task: {
     id: string;
     name: string;
+    externalId?: string | null;
     metadata: Record<string, unknown> | null;
   };
   run?: {
     id: string;
     status: RunStatus;
+    scheduledAt?: string | null;
     output: Record<string, unknown> | null;
     errorMessage: string | null;
     durationMs: number | null;
     attempt: number;
+  };
+  attempt?: {
+    id: string;
+    number: number;
+    httpStatus?: number | null;
+  };
+  callbackDeliveryId?: string;
+  signature?: {
+    version: "v1";
   };
   stats: {
     totalRuns: number;

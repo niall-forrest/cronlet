@@ -5,6 +5,7 @@ export const DEFAULT_CALLBACK_TOLERANCE_SECONDS = 300;
 export interface CallbackVerificationResult {
   ok: boolean;
   error?: string;
+  deliveryId?: string;
 }
 
 export interface VerifyCallbackSignatureInput {
@@ -42,6 +43,7 @@ function expectedSignature(timestamp: string, rawBody: string | Buffer, secret: 
 export function verifyCallbackSignature(input: VerifyCallbackSignatureInput): CallbackVerificationResult {
   const timestamp = getHeaderValue(input.headers, "x-cronlet-timestamp");
   const signature = getHeaderValue(input.headers, "x-cronlet-signature");
+  const deliveryId = getHeaderValue(input.headers, "x-cronlet-delivery-id");
 
   if (!timestamp) {
     return { ok: false, error: "Missing x-cronlet-timestamp header" };
@@ -76,6 +78,30 @@ export function verifyCallbackSignature(input: VerifyCallbackSignatureInput): Ca
   }
 
   return timingSafeEqual(expectedBuffer, providedBuffer)
-    ? { ok: true }
+    ? { ok: true, deliveryId: deliveryId ?? undefined }
     : { ok: false, error: "Invalid callback signature" };
+}
+
+export async function verifyUniqueCallbackDelivery(
+  input: VerifyCallbackSignatureInput & {
+    hasSeenDeliveryId: (deliveryId: string) => boolean | Promise<boolean>;
+    markDeliveryIdSeen: (deliveryId: string) => void | Promise<void>;
+  },
+): Promise<CallbackVerificationResult> {
+  const verification = verifyCallbackSignature(input);
+  if (!verification.ok) {
+    return verification;
+  }
+
+  const deliveryId = verification.deliveryId ?? getHeaderValue(input.headers, "x-cronlet-delivery-id");
+  if (!deliveryId) {
+    return { ok: false, error: "Missing x-cronlet-delivery-id header" };
+  }
+
+  if (await input.hasSeenDeliveryId(deliveryId)) {
+    return { ok: false, error: "Duplicate callback delivery", deliveryId };
+  }
+
+  await input.markDeliveryIdSeen(deliveryId);
+  return { ok: true, deliveryId };
 }

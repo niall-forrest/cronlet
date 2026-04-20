@@ -7,6 +7,8 @@ import type {
   SecretCreateInput,
   TaskRecord,
   RunRecord,
+  TaskCancelResult,
+  RunReplayResult,
   SecretRecord,
   UsageSnapshot,
   CreatedBy,
@@ -258,6 +260,14 @@ export class CloudClient {
       }),
 
     /**
+     * Cancel a task and prevent new delivery attempts from starting
+     */
+    cancel: (taskId: string): Promise<TaskCancelResult> =>
+      this.request<TaskCancelResult>(`/v1/tasks/${taskId}/cancel`, {
+        method: "POST",
+      }),
+
+    /**
      * Trigger a task to run immediately
      */
     trigger: (taskId: string): Promise<RunRecord> =>
@@ -343,6 +353,14 @@ export class CloudClient {
      */
     get: (runId: string): Promise<RunRecord> =>
       this.request<RunRecord>(`/v1/runs/${runId}`),
+
+    /**
+     * Replay a previous run as a new delivery attempt chain
+     */
+    replay: (runId: string): Promise<RunReplayResult> =>
+      this.request<RunReplayResult>(`/v1/runs/${runId}/replay`, {
+        method: "POST",
+      }),
   };
 
   /**

@@ -486,7 +486,7 @@ function TaskStatusBadge({ task, lastRun }: { task: TaskRecord; lastRun?: RunRec
   if (!lastRun) {
     return <Badge variant="outline">Ready</Badge>;
   }
-  if (lastRun.status === "running" || lastRun.status === "queued") {
+  if (lastRun.status === "running" || lastRun.status === "queued" || lastRun.status === "leased") {
     return <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">Running</Badge>;
   }
   if (lastRun.status === "success") {
@@ -512,6 +512,30 @@ function RunStatusBadge({ status, attempt }: { status: string; attempt: number }
     running: {
       icon: <Clock size={14} className="animate-pulse" />,
       className: "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
+    },
+    leased: {
+      icon: <Clock size={14} className="animate-pulse" />,
+      className: "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
+    },
+    retry_wait: {
+      icon: <Timer size={14} />,
+      className: "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
+    },
+    cancelled: {
+      icon: <Clock size={14} />,
+      className: "bg-muted text-muted-foreground",
+    },
+    dead_lettered: {
+      icon: <XCircle size={14} weight="fill" />,
+      className: "bg-red-500/20 text-red-500 border-red-500/30",
+    },
+    terminal_client_error: {
+      icon: <XCircle size={14} weight="fill" />,
+      className: "bg-red-500/20 text-red-500 border-red-500/30",
+    },
+    retry_window_expired: {
+      icon: <Timer size={14} />,
+      className: "bg-red-500/20 text-red-500 border-red-500/30",
     },
     queued: {
       icon: <Clock size={14} />,

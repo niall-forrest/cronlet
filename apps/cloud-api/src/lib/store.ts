@@ -13,10 +13,17 @@ import {
   type AlertRecord,
   type CreatedBy,
   type DispatchInstruction,
+  type DispatchJobStatus,
+  type InternalDispatchCompleteInput,
+  type InternalDispatchStartInput,
   type HandlerType,
   type InternalRunStatusInput,
   type PlanTier,
   type RunRecord,
+  type RunReplayResult,
+  type RunStatus,
+  type RunAttemptRecord,
+  type RetryPolicy,
   type ScheduleType,
   type SecretCreateInput,
   type SecretPatchInput,
@@ -25,6 +32,7 @@ import {
   type TaskDispatchInput,
   type TaskPatchInput,
   type TaskRecord,
+  type TaskCancelResult,
   type UsageSnapshot,
   parseDuration,
 } from "@cronlet/shared";
@@ -48,6 +56,24 @@ interface InternalTaskRecord extends TaskRecord {
 
 interface InternalSecretRecord extends SecretRecord {
   encryptedValue: string;
+}
+
+interface InternalDispatchJobRecord {
+  id: string;
+  orgId: string;
+  taskId: string;
+  runId: string;
+  status: DispatchJobStatus;
+  availableAt: string;
+  leaseOwner: string | null;
+  leasedUntil: string | null;
+  attemptCount: number;
+  maxAttempts: number;
+  retryWindowEndsAt: string | null;
+  lastError: string | null;
+  destinationKey: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface InternalOrganizationRecord {
@@ -79,17 +105,60 @@ function isMaxRunsReached(runCount: number, maxRuns: number | null): boolean {
   return maxRuns !== null && runCount >= maxRuns;
 }
 
+function isTerminalRunStatus(status: RunStatus): boolean {
+  return [
+    "success",
+    "failure",
+    "timeout",
+    "cancelled",
+    "dead_lettered",
+    "terminal_client_error",
+    "retry_window_expired",
+  ].includes(status);
+}
+
+function retryPolicyForTask(task: {
+  retryAttempts: number;
+  retryBackoff: "linear" | "exponential";
+  retryDelay: string;
+  retryPolicy?: RetryPolicy;
+}): RetryPolicy {
+  return task.retryPolicy ?? {
+    maxAttempts: Math.max(task.retryAttempts, 1),
+    backoff: task.retryBackoff,
+    initialDelay: task.retryDelay,
+    maxDelay: "15m",
+    jitter: true,
+    retryWindow: "24h",
+    retryOnStatusCodes: [],
+    terminalStatusCodes: [],
+  };
+}
+
+function computeRetryDelayMs(policy: RetryPolicy, attemptNumber: number): number {
+  const initial = parseDuration(policy.initialDelay);
+  const max = parseDuration(policy.maxDelay);
+  const base = policy.backoff === "fixed"
+    ? initial
+    : policy.backoff === "linear"
+      ? initial * attemptNumber
+      : initial * Math.pow(2, Math.max(0, attemptNumber - 1));
+  const bounded = Math.min(base, max);
+  return policy.jitter ? Math.max(1000, Math.round(bounded * 0.75)) : bounded;
+}
+
 export class InMemoryCloudStore implements CloudStore {
   private readonly organizations = new Map<string, InternalOrganizationRecord>();
   private readonly tasks = new Map<string, InternalTaskRecord>();
   private readonly runs = new Map<string, RunRecord>();
+  private readonly runAttempts = new Map<string, RunAttemptRecord>();
+  private readonly dispatchJobs = new Map<string, InternalDispatchJobRecord>();
   private readonly secrets = new Map<string, InternalSecretRecord>();
   private readonly alerts = new Map<string, AlertRecord>();
   private readonly apiKeys = new Map<string, ApiKeyRecord & { keyHash: string }>();
   private readonly auditEvents = new Map<string, AuditEventRecord>();
   private readonly usage = new Map<string, number>();
   private readonly entitlements = new Map<string, OrgEntitlement>();
-  private readonly dispatchQueue: DispatchInstruction[] = [];
 
   private usageKey(orgId: string, yearMonth: string): string {
     return `${orgId}:${yearMonth}`;
@@ -239,6 +308,7 @@ export class InMemoryCloudStore implements CloudStore {
       kind: "scheduled",
       name: input.name,
       description: input.description ?? null,
+      externalId: input.externalId ?? null,
       handlerType: handlerConfig.type as HandlerType,
       handlerConfig,
       scheduleType: scheduleConfig.type as ScheduleType,
@@ -250,6 +320,16 @@ export class InMemoryCloudStore implements CloudStore {
       retryAttempts: input.retryAttempts ?? 1,
       retryBackoff: input.retryBackoff ?? "linear",
       retryDelay: input.retryDelay ?? "1s",
+      retryPolicy: {
+        maxAttempts: input.retryMaxAttempts ?? input.retryAttempts ?? 10,
+        backoff: input.retryBackoff ?? "exponential",
+        initialDelay: input.retryInitialDelay ?? "10s",
+        maxDelay: input.retryMaxDelay ?? "15m",
+        jitter: input.retryJitter ?? true,
+        retryWindow: input.retryWindow ?? "24h",
+        retryOnStatusCodes: input.retryOnStatusCodes ?? [],
+        terminalStatusCodes: input.terminalStatusCodes ?? [],
+      },
       timeout: input.timeout ?? "30s",
       active: shouldStartActive,
       source: input.source ?? "dashboard",
@@ -289,20 +369,75 @@ export class InMemoryCloudStore implements CloudStore {
     return normalized;
   }
 
-  private enqueueRun(task: InternalTaskRecord, run: RunRecord): void {
-    const timeoutMs = parseDuration(task.timeout);
+  private createDispatchForRun(task: InternalTaskRecord, run: RunRecord): InternalDispatchJobRecord {
+    const policy = retryPolicyForTask(task);
+    const now = nowIso();
+    const dispatchJob: InternalDispatchJobRecord = {
+      id: nanoid(),
+      orgId: task.orgId,
+      taskId: task.id,
+      runId: run.id,
+      status: "pending",
+      availableAt: now,
+      leaseOwner: null,
+      leasedUntil: null,
+      attemptCount: 0,
+      maxAttempts: policy.maxAttempts,
+      retryWindowEndsAt: new Date(Date.now() + parseDuration(policy.retryWindow)).toISOString(),
+      lastError: null,
+      destinationKey: task.handlerConfig.type === "webhook" ? new URL(task.handlerConfig.url).host : task.handlerType,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.dispatchJobs.set(dispatchJob.id, dispatchJob);
 
-    this.dispatchQueue.push({
+    const attempt: RunAttemptRecord = {
+      id: nanoid(),
+      orgId: task.orgId,
+      runId: run.id,
+      taskId: task.id,
+      dispatchJobId: dispatchJob.id,
+      attemptNumber: 1,
+      status: "pending",
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      httpStatus: null,
+      errorClass: null,
+      errorMessage: null,
+      responseBodyPreview: null,
+      responseBodyHash: null,
+      output: null,
+      logs: null,
+      createdAt: now,
+    };
+    this.runAttempts.set(attempt.id, attempt);
+    return dispatchJob;
+  }
+
+  private instructionForDispatch(
+    task: InternalTaskRecord,
+    run: RunRecord,
+    dispatchJob: InternalDispatchJobRecord,
+    attempt: RunAttemptRecord,
+  ): DispatchInstruction {
+    const timeoutMs = parseDuration(task.timeout);
+    return {
+      dispatchJobId: dispatchJob.id,
+      attemptId: attempt.id,
+      attemptNumber: attempt.attemptNumber,
       runId: run.id,
       orgId: task.orgId,
       taskId: task.id,
       taskName: task.name,
+      taskExternalId: task.externalId,
       handlerType: task.handlerType,
       handlerConfig: task.handlerConfig,
       timeoutMs,
       retryAttempts: task.retryAttempts,
       retryBackoff: task.retryBackoff,
       retryDelay: task.retryDelay,
+      retryPolicy: retryPolicyForTask(task),
       callbackUrl: task.callbackUrl,
       callbackSigningSecret: task.callbackUrl
         ? this.getCallbackSigningSecretValue(task.orgId)
@@ -311,7 +446,7 @@ export class InMemoryCloudStore implements CloudStore {
       maxRuns: task.maxRuns,
       expiresAt: task.expiresAt,
       runCount: task.runCount,
-    });
+    };
   }
 
   // ============================================
@@ -393,6 +528,7 @@ export class InMemoryCloudStore implements CloudStore {
       ...task,
       name: input.name ?? task.name,
       description: input.description === null ? null : (input.description ?? task.description),
+      externalId: input.externalId === undefined ? task.externalId : input.externalId,
       handlerType: handlerConfig.type as HandlerType,
       handlerConfig,
       scheduleType: scheduleConfig.type as ScheduleType,
@@ -402,6 +538,16 @@ export class InMemoryCloudStore implements CloudStore {
       retryAttempts: input.retryAttempts ?? task.retryAttempts,
       retryBackoff: input.retryBackoff ?? task.retryBackoff,
       retryDelay: input.retryDelay ?? task.retryDelay,
+      retryPolicy: {
+        maxAttempts: input.retryMaxAttempts ?? task.retryPolicy.maxAttempts,
+        backoff: input.retryBackoff ?? task.retryPolicy.backoff,
+        initialDelay: input.retryInitialDelay ?? task.retryPolicy.initialDelay,
+        maxDelay: input.retryMaxDelay ?? task.retryPolicy.maxDelay,
+        jitter: input.retryJitter ?? task.retryPolicy.jitter,
+        retryWindow: input.retryWindow ?? task.retryPolicy.retryWindow,
+        retryOnStatusCodes: input.retryOnStatusCodes ?? task.retryPolicy.retryOnStatusCodes,
+        terminalStatusCodes: input.terminalStatusCodes ?? task.retryPolicy.terminalStatusCodes,
+      },
       timeout: input.timeout ?? task.timeout,
       callbackUrl: input.callbackUrl === undefined ? task.callbackUrl : input.callbackUrl,
       metadata: input.metadata === undefined ? task.metadata : input.metadata,
@@ -418,6 +564,45 @@ export class InMemoryCloudStore implements CloudStore {
   deleteTask(orgId: string, taskId: string): void {
     this.assertTaskAccessible(this.tasks.get(taskId), orgId);
     this.tasks.delete(taskId);
+  }
+
+  cancelTask(orgId: string, taskId: string): TaskCancelResult {
+    const task = this.assertTaskAccessible(this.tasks.get(taskId), orgId);
+    const runningAttemptIds = Array.from(this.runAttempts.values())
+      .filter((attempt) => attempt.taskId === taskId && attempt.status === "running")
+      .map((attempt) => attempt.id);
+    let cancelledDispatchJobs = 0;
+
+    for (const [id, job] of this.dispatchJobs.entries()) {
+      if (job.taskId !== taskId || job.orgId !== orgId) {
+        continue;
+      }
+      if (job.status === "pending" || job.status === "retry_wait" || job.status === "leased") {
+        this.dispatchJobs.set(id, {
+          ...job,
+          status: "cancelled",
+          leasedUntil: null,
+          updatedAt: nowIso(),
+        });
+        cancelledDispatchJobs += 1;
+      }
+    }
+
+    this.tasks.set(task.id, {
+      ...task,
+      active: false,
+      nextRunAt: null,
+      updatedAt: nowIso(),
+    });
+
+    return {
+      cancelled: true,
+      taskId,
+      cancelledDispatchJobs,
+      runningAttemptIds,
+      guarantee: "no-new-attempts",
+      alreadyStarted: runningAttemptIds.length > 0,
+    };
   }
 
   triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): RunRecord {
@@ -446,7 +631,7 @@ export class InMemoryCloudStore implements CloudStore {
 
     this.runs.set(run.id, run);
     this.incrementUsage(orgId);
-    this.enqueueRun(task, run);
+    this.createDispatchForRun(task, run);
 
     return run;
   }
@@ -468,6 +653,7 @@ export class InMemoryCloudStore implements CloudStore {
       kind: "dispatch",
       name: input.name ?? "On-demand dispatch",
       description: null,
+      externalId: null,
       handlerType: input.handler.type as HandlerType,
       handlerConfig: input.handler,
       scheduleType: "once",
@@ -480,6 +666,16 @@ export class InMemoryCloudStore implements CloudStore {
       retryAttempts: input.retryAttempts ?? 1,
       retryBackoff: input.retryBackoff ?? "linear",
       retryDelay: input.retryDelay ?? "1s",
+      retryPolicy: {
+        maxAttempts: input.retryMaxAttempts ?? input.retryAttempts ?? 10,
+        backoff: input.retryBackoff ?? "exponential",
+        initialDelay: input.retryInitialDelay ?? "10s",
+        maxDelay: input.retryMaxDelay ?? "15m",
+        jitter: input.retryJitter ?? true,
+        retryWindow: input.retryWindow ?? "24h",
+        retryOnStatusCodes: input.retryOnStatusCodes ?? [],
+        terminalStatusCodes: input.terminalStatusCodes ?? [],
+      },
       timeout: input.timeout ?? "30s",
       active: false,
       source: createdBy?.type === "agent" ? "mcp" : "sdk",
@@ -513,7 +709,7 @@ export class InMemoryCloudStore implements CloudStore {
 
     this.runs.set(run.id, run);
     this.incrementUsage(orgId);
-    this.enqueueRun(task, run);
+    this.createDispatchForRun(task, run);
     return run;
   }
 
@@ -536,6 +732,35 @@ export class InMemoryCloudStore implements CloudStore {
     return run;
   }
 
+  replayRun(orgId: string, runId: string, trigger: "manual" | "api" = "manual"): RunReplayResult {
+    const source = this.getRun(orgId, runId);
+    const task = this.tasks.get(source.taskId);
+    if (!task || task.orgId !== orgId) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+    }
+
+    const now = nowIso();
+    const run: RunRecord = {
+      id: nanoid(),
+      orgId,
+      taskId: task.id,
+      status: "queued",
+      trigger,
+      attempt: 1,
+      scheduledAt: source.scheduledAt,
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      output: null,
+      logs: null,
+      errorMessage: null,
+      createdAt: now,
+    };
+    this.runs.set(run.id, run);
+    this.createDispatchForRun(task, run);
+    return { run, replayOfRunId: runId };
+  }
+
   updateRunStatus(runId: string, input: InternalRunStatusInput): RunRecord {
     const run = this.runs.get(runId);
     if (!run) {
@@ -543,7 +768,7 @@ export class InMemoryCloudStore implements CloudStore {
     }
 
     // Don't update if already in a terminal state
-    if (run.status === "success" || run.status === "failure" || run.status === "timeout") {
+    if (isTerminalRunStatus(run.status)) {
       return run;
     }
 
@@ -553,7 +778,7 @@ export class InMemoryCloudStore implements CloudStore {
     }
 
     const now = nowIso();
-    const isTerminal = input.status === "success" || input.status === "failure" || input.status === "timeout";
+    const isTerminal = isTerminalRunStatus(input.status);
 
     const updated: RunRecord = {
       ...run,
@@ -884,6 +1109,7 @@ export class InMemoryCloudStore implements CloudStore {
 
   claimDueDispatches(limit = 100): DispatchInstruction[] {
     const now = new Date();
+    this.reconcileDispatches(limit);
 
     for (const task of this.tasks.values()) {
       if (task.kind !== "scheduled") {
@@ -934,7 +1160,7 @@ export class InMemoryCloudStore implements CloudStore {
       };
       this.runs.set(run.id, run);
       this.incrementUsage(normalizedTask.orgId);
-      this.enqueueRun(normalizedTask, run);
+      this.createDispatchForRun(normalizedTask, run);
 
       // Update next run time
       const nextRunAt = computeNextRun(normalizedTask.scheduleConfig, normalizedTask.timezone, now);
@@ -945,6 +1171,201 @@ export class InMemoryCloudStore implements CloudStore {
       });
     }
 
-    return this.dispatchQueue.splice(0, limit);
+    const nowMs = Date.now();
+    const instructions: DispatchInstruction[] = [];
+    for (const [id, job] of this.dispatchJobs.entries()) {
+      if (instructions.length >= limit) {
+        break;
+      }
+      if ((job.status !== "pending" && job.status !== "retry_wait") || new Date(job.availableAt).getTime() > nowMs) {
+        continue;
+      }
+      const task = this.tasks.get(job.taskId);
+      const run = this.runs.get(job.runId);
+      if (!task || !run || !task.active && task.kind === "scheduled") {
+        continue;
+      }
+      const attemptNumber = job.attemptCount + 1;
+      const existingAttempt = Array.from(this.runAttempts.values()).find(
+        (candidate) => candidate.dispatchJobId === job.id && candidate.attemptNumber === attemptNumber
+      );
+      const attempt: RunAttemptRecord = existingAttempt ?? {
+        id: nanoid(),
+        orgId: job.orgId,
+        runId: job.runId,
+        taskId: job.taskId,
+        dispatchJobId: job.id,
+        attemptNumber,
+        status: "pending",
+        startedAt: null,
+        completedAt: null,
+        durationMs: null,
+        httpStatus: null,
+        errorClass: null,
+        errorMessage: null,
+        responseBodyPreview: null,
+        responseBodyHash: null,
+        output: null,
+        logs: null,
+        createdAt: nowIso(),
+      };
+      this.runAttempts.set(attempt.id, attempt);
+      this.dispatchJobs.set(id, {
+        ...job,
+        status: "leased",
+        leaseOwner: "memory-worker",
+        leasedUntil: new Date(Date.now() + parseDuration(task.timeout) + 30_000).toISOString(),
+        attemptCount: attemptNumber,
+        updatedAt: nowIso(),
+      });
+      this.runs.set(run.id, {
+        ...run,
+        status: "leased",
+        attempt: attemptNumber,
+      });
+      instructions.push(this.instructionForDispatch(task, run, this.dispatchJobs.get(id) ?? job, attempt));
+    }
+
+    return instructions;
+  }
+
+  startDispatchAttempt(input: InternalDispatchStartInput): void {
+    const job = this.dispatchJobs.get(input.dispatchJobId);
+    const attempt = this.runAttempts.get(input.attemptId);
+    if (!job || !attempt) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Dispatch attempt not found");
+    }
+    const now = nowIso();
+    this.dispatchJobs.set(job.id, {
+      ...job,
+      status: "running",
+      updatedAt: now,
+    });
+    this.runAttempts.set(attempt.id, {
+      ...attempt,
+      status: "running",
+      startedAt: now,
+    });
+    const run = this.runs.get(job.runId);
+    if (run && !isTerminalRunStatus(run.status)) {
+      this.runs.set(run.id, {
+        ...run,
+        status: "running",
+        startedAt: run.startedAt ?? now,
+        attempt: input.attemptNumber,
+      });
+    }
+  }
+
+  completeDispatchAttempt(input: InternalDispatchCompleteInput): void {
+    const job = this.dispatchJobs.get(input.dispatchJobId);
+    const attempt = this.runAttempts.get(input.attemptId);
+    if (!job || !attempt) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Dispatch attempt not found");
+    }
+    const run = this.runs.get(job.runId);
+    const task = this.tasks.get(job.taskId);
+    if (!run || !task) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Run not found");
+    }
+
+    const now = nowIso();
+    const terminalSuccess = input.status === "success";
+    const attemptsExhausted = job.attemptCount >= job.maxAttempts;
+    const retryWindowExpired = job.retryWindowEndsAt !== null && new Date(job.retryWindowEndsAt).getTime() <= Date.now();
+    const shouldRetry = !terminalSuccess && input.status !== "terminal_client_error" && !attemptsExhausted && !retryWindowExpired;
+
+    this.runAttempts.set(attempt.id, {
+      ...attempt,
+      status: input.status,
+      completedAt: now,
+      durationMs: input.durationMs,
+      httpStatus: input.httpStatus ?? null,
+      errorClass: input.errorClass ?? null,
+      errorMessage: input.errorMessage ?? null,
+      responseBodyPreview: input.responseBodyPreview ?? null,
+      responseBodyHash: input.responseBodyHash ?? null,
+      output: input.output ?? null,
+      logs: input.logs ?? null,
+    });
+
+    if (shouldRetry) {
+      const policy = retryPolicyForTask(task);
+      this.dispatchJobs.set(job.id, {
+        ...job,
+        status: "retry_wait",
+        leaseOwner: null,
+        leasedUntil: null,
+        availableAt: new Date(Date.now() + computeRetryDelayMs(policy, job.attemptCount)).toISOString(),
+        lastError: input.errorMessage ?? input.errorClass ?? "delivery failed",
+        updatedAt: now,
+      });
+      this.runs.set(run.id, {
+        ...run,
+        status: "retry_wait",
+        attempt: input.attemptNumber,
+        durationMs: input.durationMs,
+        errorMessage: input.errorMessage ?? run.errorMessage,
+      });
+      return;
+    }
+
+    const finalStatus: RunStatus = terminalSuccess
+      ? "success"
+      : input.status === "timeout"
+        ? "timeout"
+        : input.status === "terminal_client_error"
+          ? "terminal_client_error"
+          : retryWindowExpired
+            ? "retry_window_expired"
+            : "dead_lettered";
+
+    this.dispatchJobs.set(job.id, {
+      ...job,
+      status: terminalSuccess ? "succeeded" : "dead_lettered",
+      leaseOwner: null,
+      leasedUntil: null,
+      lastError: input.errorMessage ?? null,
+      updatedAt: now,
+    });
+    this.updateRunStatus(run.id, {
+      status: finalStatus,
+      attempt: input.attemptNumber,
+      durationMs: input.durationMs,
+      output: input.output ?? null,
+      logs: input.logs ?? null,
+      errorMessage: input.errorMessage ?? undefined,
+    });
+  }
+
+  reconcileDispatches(limit = 100): { repaired: number } {
+    let repaired = 0;
+    const nowMs = Date.now();
+    for (const [id, job] of this.dispatchJobs.entries()) {
+      if (repaired >= limit) {
+        break;
+      }
+      if ((job.status === "leased" || job.status === "running") && job.leasedUntil && new Date(job.leasedUntil).getTime() <= nowMs) {
+        this.dispatchJobs.set(id, {
+          ...job,
+          status: "retry_wait",
+          leaseOwner: null,
+          leasedUntil: null,
+          availableAt: nowIso(),
+          lastError: "lease expired",
+          updatedAt: nowIso(),
+        });
+        const run = this.runs.get(job.runId);
+        if (run && !isTerminalRunStatus(run.status)) {
+          this.runs.set(run.id, {
+            ...run,
+            status: "retry_wait",
+            errorMessage: "Dispatch lease expired; retry scheduled.",
+          });
+        }
+        repaired += 1;
+      }
+    }
+    return { repaired };
   }
 }

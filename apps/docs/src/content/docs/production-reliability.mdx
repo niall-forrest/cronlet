@@ -1,0 +1,96 @@
+---
+title: Production Reliability
+description: Cronlet Cloud delivery guarantees, retry semantics, idempotency requirements, cancellation, and recovery behavior.
+sidebar:
+  order: 8
+  label: Production Reliability
+---
+
+Cronlet Cloud is a managed scheduler and wake-up service. Its production guarantee is:
+
+**At-least-once scheduled delivery attempts.**
+
+Cronlet guarantees that every due schedule creates durable delivery records:
+
+- `Run`
+- `RunAttempt`
+- `DispatchJob`
+
+Dispatch is retried until success, cancellation, timeout, retry-window expiry, or dead-letter.
+
+Cronlet does not guarantee exactly-once callback effects. Your application must dedupe with `run.id`, `attempt.id`, `task.externalId`, `callbackDeliveryId`, or a business key such as `emailSendId`.
+
+## Success semantics
+
+For webhook delivery, Cronlet treats HTTP `2xx` as success.
+
+Default retry behavior:
+
+- `408`, `409`, `425`, `429`, and `5xx` are retryable
+- network errors, DNS errors, connection resets, and timeouts are retryable
+- `400`, `401`, `403`, `404`, `410`, and `422` are terminal client errors
+- `3xx` redirects are not followed unless `followRedirects` is enabled on the webhook handler
+
+Tasks can override this with `retryOnStatusCodes` and `terminalStatusCodes`.
+
+## Retry policy
+
+Cronlet stores retry state in durable dispatch records. Process restarts do not erase retry state.
+
+Default policy:
+
+- max attempts: `10`
+- initial delay: `10s`
+- max delay: `15m`
+- retry window: `24h`
+- backoff: exponential
+- jitter: enabled
+
+When a worker dies mid-delivery, the dispatch lease expires and reconciliation makes the job retryable again.
+
+## Cancellation
+
+`tasks.cancel(taskId)` cancels pending and retry-wait dispatches, clears `nextRunAt`, and prevents new attempts from starting after the API returns.
+
+If an attempt has already started, Cronlet returns the running attempt IDs and reports `guarantee: "no-new-attempts"`.
+
+## One-off schedules
+
+One-off schedules are first-class:
+
+```ts
+await cronlet.tasks.create({
+  name: "Send onboarding step 2",
+  externalId: "emailSend_123",
+  schedule: {
+    type: "once",
+    at: "2026-05-07T09:00:00.000Z",
+  },
+  maxRuns: 1,
+  metadata: {
+    orgId: "org_123",
+    appId: "app_123",
+    contactId: "contact_123",
+    emailSendId: "emailSend_123",
+    emailStepKey: "onboarding.step_2",
+  },
+  handler: {
+    type: "webhook",
+    url: "https://platform.example.com/internal/email/send",
+  },
+});
+```
+
+For customer-facing email or billing workflows, keep canonical state in your application and use Cronlet as the durable wake-up layer. Store the Cronlet task ID and use an overdue-send reconciler in your own system.
+
+## Initial cloud assumptions
+
+Cronlet Cloud starts as a single-primary-region scheduler. Postgres is the authoritative clock and source of truth for due claiming.
+
+Future multi-region workers may execute dispatch regionally, but schedule claiming remains serialized by the primary database or a designated leader.
+
+## Product fit
+
+Cronlet is intentionally not a full durable workflow runtime. Trigger.dev and Inngest are better fits for durable step execution, checkpointing, arbitrary long-running code, and workflow orchestration.
+
+Cronlet is built for products and agents that need reliable scheduled wake-ups, metadata, cancellation, signed callbacks, replay, and reconciliation while keeping business logic in the customer application.

@@ -93,6 +93,17 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  // Cancel task (durably prevents any new attempts from starting)
+  app.post<{ Params: { taskId: string } }>("/v1/tasks/:taskId/cancel", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "admin", requiredScope: "tasks:write" });
+      const result = await app.cloudStore.cancelTask(request.auth.orgId, request.params.taskId);
+      return ok(reply, result);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
   // Trigger task (immediate run)
   app.post<{ Params: { taskId: string } }>("/v1/tasks/:taskId/trigger", async (request, reply) => {
     try {

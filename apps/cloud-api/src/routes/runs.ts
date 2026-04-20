@@ -27,6 +27,17 @@ export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.post<{ Params: { runId: string } }>("/v1/runs/:runId/replay", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "member", requiredScope: "runs:write" });
+      const trigger = request.auth.actorType === "api_key" ? "api" : "manual";
+      const result = await app.cloudStore.replayRun(request.auth.orgId, request.params.runId, trigger);
+      return ok(reply, result, 201);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
   // Internal: Update run status (used by worker)
   app.post<{ Params: { runId: string } }>("/internal/runs/:runId/status", async (request, reply) => {
     try {

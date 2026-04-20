@@ -41,6 +41,8 @@ const webhookHandlerConfigSchema = z.object({
   method: z.enum(["GET", "POST"]).default("POST"),
   headers: z.record(z.string()).optional(),
   body: z.unknown().optional(),
+  followRedirects: z.boolean().default(false).optional(),
+  maxRedirects: z.number().int().min(0).max(10).default(0).optional(),
   auth: z
     .object({
       type: z.enum(["bearer", "basic", "header"]),
@@ -125,12 +127,20 @@ export const scheduleConfigSchema = z.discriminatedUnion("type", [
 export const taskCreateSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional(),
+  externalId: z.string().min(1).max(200).optional(),
   handler: handlerConfigSchema,
   schedule: scheduleConfigSchema,
   timezone: z.string().min(2).max(80).default("UTC"),
   retryAttempts: z.number().int().min(1).max(10).default(1),
   retryBackoff: z.enum(["linear", "exponential"]).default("linear"),
   retryDelay: durationSchema.default("1s"),
+  retryMaxAttempts: z.number().int().min(1).max(100).default(10),
+  retryInitialDelay: durationSchema.default("10s"),
+  retryMaxDelay: durationSchema.default("15m"),
+  retryJitter: z.boolean().default(true),
+  retryWindow: durationSchema.default("24h"),
+  retryOnStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
+  terminalStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
   timeout: durationSchema.default("30s"),
   active: z.boolean().default(true),
   source: taskSourceSchema.default("dashboard"),
@@ -145,12 +155,20 @@ export const taskCreateSchema = z.object({
 export const taskPatchSchema = z.object({
   name: z.string().min(2).max(120).optional(),
   description: z.string().max(500).nullable().optional(),
+  externalId: z.string().min(1).max(200).nullable().optional(),
   handler: handlerConfigSchema.optional(),
   schedule: scheduleConfigSchema.optional(),
   timezone: z.string().min(2).max(80).optional(),
   retryAttempts: z.number().int().min(1).max(10).optional(),
   retryBackoff: z.enum(["linear", "exponential"]).optional(),
   retryDelay: durationSchema.optional(),
+  retryMaxAttempts: z.number().int().min(1).max(100).optional(),
+  retryInitialDelay: durationSchema.optional(),
+  retryMaxDelay: durationSchema.optional(),
+  retryJitter: z.boolean().optional(),
+  retryWindow: durationSchema.optional(),
+  retryOnStatusCodes: z.array(z.number().int().min(100).max(599)).optional(),
+  terminalStatusCodes: z.array(z.number().int().min(100).max(599)).optional(),
   timeout: durationSchema.optional(),
   active: z.boolean().optional(),
   // Agent callback
@@ -167,6 +185,13 @@ export const taskDispatchSchema = z.object({
   retryAttempts: z.number().int().min(1).max(10).default(1),
   retryBackoff: z.enum(["linear", "exponential"]).default("linear"),
   retryDelay: durationSchema.default("1s"),
+  retryMaxAttempts: z.number().int().min(1).max(100).default(10),
+  retryInitialDelay: durationSchema.default("10s"),
+  retryMaxDelay: durationSchema.default("15m"),
+  retryJitter: z.boolean().default(true),
+  retryWindow: durationSchema.default("24h"),
+  retryOnStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
+  terminalStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
   timeout: durationSchema.default("30s"),
   callbackUrl: z.string().url().max(500).optional(),
   metadata: metadataSchema.optional(),
@@ -242,12 +267,49 @@ export const auditEventCreateSchema = z.object({
 // ============================================
 
 export const internalRunStatusSchema = z.object({
-  status: z.enum(["queued", "running", "success", "failure", "timeout"]),
+  status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]),
   attempt: z.number().int().min(1),
   durationMs: z.number().int().min(0).optional(),
   output: z.record(z.unknown()).nullable().optional(),
   logs: z.string().max(100000).nullable().optional(),
   errorMessage: z.string().max(1000).optional(),
+});
+
+export const internalDispatchStartSchema = z.object({
+  dispatchJobId: z.string().min(1),
+  attemptId: z.string().min(1),
+  attemptNumber: z.number().int().min(1),
+});
+
+export const internalDispatchCompleteSchema = z.object({
+  dispatchJobId: z.string().min(1),
+  attemptId: z.string().min(1),
+  attemptNumber: z.number().int().min(1),
+  status: z.enum(["success", "failure", "timeout", "terminal_client_error"]),
+  durationMs: z.number().int().min(0),
+  output: z.record(z.unknown()).nullable().optional(),
+  logs: z.string().max(100000).nullable().optional(),
+  httpStatus: z.number().int().min(100).max(599).nullable().optional(),
+  errorClass: z.string().max(120).nullable().optional(),
+  errorMessage: z.string().max(1000).nullable().optional(),
+  responseBodyPreview: z.string().max(400).nullable().optional(),
+  responseBodyHash: z.string().max(128).nullable().optional(),
+});
+
+export const taskListQuerySchema = z.object({
+  status: z.enum(["active", "paused", "cancelled"]).optional(),
+  scheduleType: z.enum(["every", "daily", "weekly", "monthly", "once", "cron"]).optional(),
+  externalId: z.string().min(1).max(200).optional(),
+  metadata: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  cursor: z.string().optional(),
+});
+
+export const runListQuerySchema = z.object({
+  taskId: z.string().optional(),
+  status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  cursor: z.string().optional(),
 });
 
 // ============================================

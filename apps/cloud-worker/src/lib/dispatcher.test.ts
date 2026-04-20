@@ -4,10 +4,14 @@ import { DispatchQueueRuntime } from "./dispatcher.js";
 
 function instruction(overrides: Partial<DispatchInstruction> = {}): DispatchInstruction {
   return {
+    dispatchJobId: "dispatch_123",
+    attemptId: "attempt_123",
+    attemptNumber: 1,
     runId: "run_123",
     orgId: "org_123",
     taskId: "task_123",
     taskName: "Digest Task",
+    taskExternalId: "external_123",
     handlerType: "webhook",
     handlerConfig: {
       type: "webhook",
@@ -18,6 +22,16 @@ function instruction(overrides: Partial<DispatchInstruction> = {}): DispatchInst
     retryAttempts: 2,
     retryBackoff: "linear",
     retryDelay: "1s",
+    retryPolicy: {
+      maxAttempts: 2,
+      backoff: "linear",
+      initialDelay: "1s",
+      maxDelay: "15m",
+      jitter: true,
+      retryWindow: "24h",
+      retryOnStatusCodes: [],
+      terminalStatusCodes: [],
+    },
     callbackUrl: "https://example.com/callback",
     callbackSigningSecret: "crsig_test_secret",
     metadata: {

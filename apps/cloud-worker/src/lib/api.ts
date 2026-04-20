@@ -1,4 +1,9 @@
-import type { DispatchInstruction, InternalRunStatusInput } from "@cronlet/shared";
+import type {
+  DispatchInstruction,
+  InternalDispatchCompleteInput,
+  InternalDispatchStartInput,
+  InternalRunStatusInput,
+} from "@cronlet/shared";
 
 interface ApiResponse<T> {
   ok: boolean;
@@ -40,6 +45,26 @@ export class CloudApiClient {
     return this.request<void>(`/internal/runs/${runId}/status`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  }
+
+  startDispatchAttempt(input: InternalDispatchStartInput): Promise<void> {
+    return this.request<void>("/internal/dispatch/start", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  completeDispatchAttempt(input: InternalDispatchCompleteInput): Promise<void> {
+    return this.request<void>("/internal/dispatch/complete", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  reconcileDispatches(limit: number): Promise<{ repaired: number }> {
+    return this.request<{ repaired: number }>(`/internal/dispatch/reconcile?limit=${limit}`, {
+      method: "POST",
     });
   }
 

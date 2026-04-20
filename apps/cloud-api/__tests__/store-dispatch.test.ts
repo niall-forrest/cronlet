@@ -45,7 +45,7 @@ describe("InMemoryCloudStore dispatch semantics", () => {
 
     const runs = store.listRuns("org_due");
     expect(runs).toHaveLength(1);
-    expect(runs[0]?.status).toBe("queued");
+    expect(runs[0]?.status).toBe("leased");
     expect(runs[0]?.trigger).toBe("schedule");
   });
 

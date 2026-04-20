@@ -41,10 +41,16 @@ enum ScheduleType {
 
 enum RunStatus {
   queued
+  leased
   running
+  retry_wait
   success
   failure
   timeout
+  cancelled
+  dead_lettered
+  terminal_client_error
+  retry_window_expired
 }
 
 enum TaskSource {
@@ -61,6 +67,27 @@ enum TaskKind {
 enum AlertChannel {
   email
   webhook
+}
+
+enum DispatchJobStatus {
+  pending
+  leased
+  running
+  retry_wait
+  succeeded
+  failed
+  cancelled
+  dead_lettered
+}
+
+enum RunAttemptStatus {
+  pending
+  running
+  success
+  failure
+  timeout
+  cancelled
+  terminal_client_error
 }
 
 // ============================================
@@ -87,6 +114,8 @@ model Organization {
   memberships   OrganizationMember[]
   tasks         Task[]
   runs          Run[]
+  dispatchJobs  DispatchJob[]
+  runAttempts   RunAttempt[]
   secrets       Secret[]
   alerts        Alert[]
   apiKeys       ApiKey[]
@@ -120,6 +149,7 @@ model Task {
   // Identity
   name           String
   description    String?
+  externalId     String?
 
   // Handler: WHAT to do
   handlerType    HandlerType
@@ -135,6 +165,13 @@ model Task {
   retryAttempts  Int          @default(1)
   retryBackoff   String       @default("linear")
   retryDelay     String       @default("1s")
+  retryMaxAttempts Int        @default(10)
+  retryInitialDelay String    @default("10s")
+  retryMaxDelay  String       @default("15m")
+  retryJitter    Boolean      @default(true)
+  retryWindow    String       @default("24h")
+  retryOnStatusCodes Int[]    @default([])
+  terminalStatusCodes Int[]   @default([])
   timeout        String       @default("30s")
 
   // State
@@ -157,10 +194,13 @@ model Task {
   // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   runs         Run[]
+  dispatchJobs DispatchJob[]
+  events       TaskEvent[]
 
   @@index([organizationId, active])
   @@index([active, nextRunAt])
   @@index([organizationId, kind, active])
+  @@unique([organizationId, externalId])
 }
 
 // ============================================
@@ -194,9 +234,123 @@ model Run {
   // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  dispatchJobs DispatchJob[]
+  attempts     RunAttempt[]
+  events       RunEvent[]
 
   @@index([taskId, createdAt])
   @@index([organizationId, createdAt])
+  @@index([organizationId, status, scheduledAt])
+}
+
+model RunAttempt {
+  id                  String           @id @default(cuid())
+  organizationId      String
+  runId               String
+  taskId              String
+  dispatchJobId       String?
+  attemptNumber       Int
+  status              RunAttemptStatus @default(pending)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  durationMs          Int?
+  httpStatus          Int?
+  errorClass          String?
+  errorMessage        String?
+  responseBodyPreview String?
+  responseBodyHash    String?
+  output              Json?
+  logs                String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  run          Run          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  dispatchJob  DispatchJob? @relation(fields: [dispatchJobId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, attemptNumber])
+  @@index([organizationId, status, createdAt])
+  @@index([dispatchJobId])
+}
+
+model DispatchJob {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  taskId             String
+  runId              String
+  status             DispatchJobStatus @default(pending)
+  availableAt        DateTime          @default(now())
+  leaseOwner         String?
+  leasedUntil        DateTime?
+  attemptCount       Int               @default(0)
+  maxAttempts        Int               @default(10)
+  retryWindowEndsAt  DateTime?
+  lastError          String?
+  destinationKey     String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  run          Run          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  attempts     RunAttempt[]
+  events       DispatchEvent[]
+
+  @@index([status, availableAt])
+  @@index([organizationId, status, availableAt])
+  @@index([destinationKey, status, availableAt])
+  @@index([leasedUntil])
+}
+
+model TaskEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  taskId         String
+  action         String
+  previousState  String?
+  nextState      String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([taskId, createdAt])
+}
+
+model RunEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  runId          String
+  action         String
+  previousState  String?
+  nextState      String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([runId, createdAt])
+}
+
+model DispatchEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  dispatchJobId  String
+  action         String
+  previousState  String?
+  nextState      String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  dispatchJob DispatchJob @relation(fields: [dispatchJobId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([dispatchJobId, createdAt])
 }
 
 // ============================================
@@ -298,4 +452,21 @@ model BillingEntitlement {
   updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model IdempotencyKey {
+  id              String   @id @default(cuid())
+  organizationId  String
+  method          String
+  path            String
+  key             String
+  requestHash     String
+  responsePayload Json?
+  statusCode      Int
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, method, path, key])
+  @@index([expiresAt])
 }

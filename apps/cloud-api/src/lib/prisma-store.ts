@@ -18,8 +18,13 @@ import {
   type DispatchInstruction,
   type HandlerConfig,
   type HandlerType,
+  type InternalDispatchCompleteInput,
+  type InternalDispatchStartInput,
   type InternalRunStatusInput,
+  type RetryPolicy,
   type RunRecord,
+  type RunReplayResult,
+  type RunStatus,
   type ScheduleConfig,
   type ScheduleType,
   type SecretCreateInput,
@@ -29,6 +34,7 @@ import {
   type TaskDispatchInput,
   type TaskPatchInput,
   type TaskRecord,
+  type TaskCancelResult,
   type UsageSnapshot,
 } from "@cronlet/shared";
 import { ERROR_CODES } from "@cronlet/shared";
@@ -77,11 +83,60 @@ function isMaxRunsReached(runCount: number, maxRuns: number | null): boolean {
   return maxRuns !== null && runCount >= maxRuns;
 }
 
+function isTerminalRunStatus(status: string): boolean {
+  return [
+    "success",
+    "failure",
+    "timeout",
+    "cancelled",
+    "dead_lettered",
+    "terminal_client_error",
+    "retry_window_expired",
+  ].includes(status);
+}
+
+function retryPolicyForTask(task: {
+  retryAttempts: number;
+  retryBackoff: string;
+  retryDelay: string;
+  retryMaxAttempts?: number;
+  retryInitialDelay?: string;
+  retryMaxDelay?: string;
+  retryJitter?: boolean;
+  retryWindow?: string;
+  retryOnStatusCodes?: number[];
+  terminalStatusCodes?: number[];
+}): RetryPolicy {
+  return {
+    maxAttempts: task.retryMaxAttempts ?? Math.max(task.retryAttempts, 1),
+    backoff: (task.retryBackoff === "linear" || task.retryBackoff === "fixed") ? task.retryBackoff : "exponential",
+    initialDelay: task.retryInitialDelay ?? task.retryDelay,
+    maxDelay: task.retryMaxDelay ?? "15m",
+    jitter: task.retryJitter ?? true,
+    retryWindow: task.retryWindow ?? "24h",
+    retryOnStatusCodes: task.retryOnStatusCodes ?? [],
+    terminalStatusCodes: task.terminalStatusCodes ?? [],
+  };
+}
+
+function computeRetryDelayMs(policy: RetryPolicy, attemptNumber: number): number {
+  const initial = parseDuration(policy.initialDelay);
+  const max = parseDuration(policy.maxDelay);
+  const base = policy.backoff === "fixed"
+    ? initial
+    : policy.backoff === "linear"
+      ? initial * attemptNumber
+      : initial * Math.pow(2, Math.max(0, attemptNumber - 1));
+  const bounded = Math.min(base, max);
+  return policy.jitter ? Math.max(1000, Math.round(bounded * 0.75)) : bounded;
+}
+
 function toTaskRecord(value: {
   id: string;
   organizationId: string;
   name: string;
   description: string | null;
+  externalId?: string | null;
   handlerType: string;
   handlerConfig: unknown;
   scheduleType: string;
@@ -91,6 +146,13 @@ function toTaskRecord(value: {
   retryAttempts: number;
   retryBackoff: string;
   retryDelay: string;
+  retryMaxAttempts?: number;
+  retryInitialDelay?: string;
+  retryMaxDelay?: string;
+  retryJitter?: boolean;
+  retryWindow?: string;
+  retryOnStatusCodes?: number[];
+  terminalStatusCodes?: number[];
   timeout: string;
   active: boolean;
   source: string;
@@ -108,6 +170,7 @@ function toTaskRecord(value: {
     orgId: value.organizationId,
     name: value.name,
     description: value.description,
+    externalId: value.externalId ?? null,
     handlerType: value.handlerType as HandlerType,
     handlerConfig: value.handlerConfig as HandlerConfig,
     scheduleType: value.scheduleType as ScheduleType,
@@ -117,6 +180,7 @@ function toTaskRecord(value: {
     retryAttempts: value.retryAttempts,
     retryBackoff: value.retryBackoff as "linear" | "exponential",
     retryDelay: value.retryDelay,
+    retryPolicy: retryPolicyForTask(value),
     timeout: value.timeout,
     active: value.active,
     source: value.source as TaskRecord["source"],
@@ -265,7 +329,6 @@ interface BillingState {
 }
 
 export class PrismaCloudStore implements CloudStore {
-  private readonly dispatchQueue: DispatchInstruction[] = [];
   private readonly claimLockId = "cronlet_claim_due_tasks";
 
   constructor(private readonly prisma: PrismaClient) {}
@@ -432,42 +495,102 @@ export class PrismaCloudStore implements CloudStore {
     return secret;
   }
 
-  private async enqueueRun(task: {
+  private async createDispatchForRun(task: {
     id: string;
     organizationId: string;
     name: string;
+    externalId?: string | null;
     handlerType: string;
     handlerConfig: unknown;
     timeout: string;
     retryAttempts: number;
     retryBackoff: string;
     retryDelay: string;
+    retryMaxAttempts?: number;
+    retryInitialDelay?: string;
+    retryMaxDelay?: string;
+    retryJitter?: boolean;
+    retryWindow?: string;
+    retryOnStatusCodes?: number[];
+    terminalStatusCodes?: number[];
     callbackUrl: string | null;
     metadata: unknown;
     maxRuns: number | null;
     expiresAt: Date | null;
     runCount: number;
-  }, run: { id: string }): Promise<void> {
-    this.dispatchQueue.push({
-      runId: run.id,
-      orgId: task.organizationId,
-      taskId: task.id,
-      taskName: task.name,
-      handlerType: task.handlerType as HandlerType,
-      handlerConfig: task.handlerConfig as HandlerConfig,
-      timeoutMs: parseDuration(task.timeout),
-      retryAttempts: task.retryAttempts,
-      retryBackoff: task.retryBackoff as "linear" | "exponential",
-      retryDelay: task.retryDelay,
-      callbackUrl: task.callbackUrl,
-      callbackSigningSecret: task.callbackUrl
-        ? await this.getOrCreateCallbackSigningSecret(task.organizationId)
-        : null,
-      metadata: task.metadata as Record<string, unknown> | null,
-      maxRuns: task.maxRuns,
-      expiresAt: isoNullable(task.expiresAt),
-      runCount: task.runCount,
+  }, run: { id: string }, tx: Prisma.TransactionClient | PrismaClient = this.prisma): Promise<void> {
+    const policy = retryPolicyForTask(task);
+    const destinationKey = (task.handlerConfig as HandlerConfig).type === "webhook"
+      ? new URL(((task.handlerConfig as HandlerConfig) as { type: "webhook"; url: string }).url).host
+      : task.handlerType;
+    const dispatchJob = await tx.dispatchJob.create({
+      data: {
+        organizationId: task.organizationId,
+        taskId: task.id,
+        runId: run.id,
+        status: "pending",
+        availableAt: new Date(),
+        maxAttempts: policy.maxAttempts,
+        retryWindowEndsAt: new Date(Date.now() + parseDuration(policy.retryWindow)),
+        destinationKey,
+      },
     });
+    await tx.runAttempt.create({
+      data: {
+        organizationId: task.organizationId,
+        taskId: task.id,
+        runId: run.id,
+        dispatchJobId: dispatchJob.id,
+        attemptNumber: 1,
+        status: "pending",
+      },
+    });
+  }
+
+  private async instructionForDispatch(dispatchJobId: string): Promise<DispatchInstruction | null> {
+    const job = await this.prisma.dispatchJob.findUnique({
+      where: { id: dispatchJobId },
+      include: {
+        task: true,
+        run: true,
+        attempts: {
+          orderBy: { attemptNumber: "desc" },
+          take: 1,
+        },
+      },
+    });
+    if (!job || !job.task || !job.run) {
+      return null;
+    }
+    const attempt = job.attempts[0];
+    if (!attempt) {
+      return null;
+    }
+    return {
+      dispatchJobId: job.id,
+      attemptId: attempt.id,
+      attemptNumber: attempt.attemptNumber,
+      runId: job.runId,
+      orgId: job.organizationId,
+      taskId: job.taskId,
+      taskName: job.task.name,
+      taskExternalId: job.task.externalId,
+      handlerType: job.task.handlerType as HandlerType,
+      handlerConfig: job.task.handlerConfig as unknown as HandlerConfig,
+      timeoutMs: parseDuration(job.task.timeout),
+      retryAttempts: job.task.retryAttempts,
+      retryBackoff: job.task.retryBackoff as "linear" | "exponential",
+      retryDelay: job.task.retryDelay,
+      retryPolicy: retryPolicyForTask(job.task),
+      callbackUrl: job.task.callbackUrl,
+      callbackSigningSecret: job.task.callbackUrl
+        ? await this.getOrCreateCallbackSigningSecret(job.organizationId)
+        : null,
+      metadata: job.task.metadata as Record<string, unknown> | null,
+      maxRuns: job.task.maxRuns,
+      expiresAt: isoNullable(job.task.expiresAt),
+      runCount: job.task.runCount,
+    };
   }
 
   // ============================================
@@ -531,6 +654,7 @@ export class PrismaCloudStore implements CloudStore {
         kind: "scheduled",
         name: input.name,
         description: input.description ?? null,
+        externalId: input.externalId ?? null,
         handlerType: handlerConfig.type,
         handlerConfig: handlerConfig as unknown as Prisma.InputJsonValue,
         scheduleType: scheduleConfig.type,
@@ -540,6 +664,13 @@ export class PrismaCloudStore implements CloudStore {
         retryAttempts: input.retryAttempts ?? 1,
         retryBackoff: input.retryBackoff ?? "linear",
         retryDelay: input.retryDelay ?? "1s",
+        retryMaxAttempts: input.retryMaxAttempts ?? input.retryAttempts ?? 10,
+        retryInitialDelay: input.retryInitialDelay ?? "10s",
+        retryMaxDelay: input.retryMaxDelay ?? "15m",
+        retryJitter: input.retryJitter ?? true,
+        retryWindow: input.retryWindow ?? "24h",
+        retryOnStatusCodes: input.retryOnStatusCodes ?? [],
+        terminalStatusCodes: input.terminalStatusCodes ?? [],
         timeout: input.timeout ?? "30s",
         active,
         source: input.source ?? "dashboard",
@@ -595,6 +726,7 @@ export class PrismaCloudStore implements CloudStore {
       data: {
         name: input.name ?? existing.name,
         description: input.description === null ? null : (input.description ?? existing.description),
+        externalId: input.externalId === undefined ? existing.externalId : input.externalId,
         handlerType: handlerConfig.type,
         handlerConfig: handlerConfig as unknown as Prisma.InputJsonValue,
         scheduleType: scheduleConfig.type,
@@ -604,6 +736,13 @@ export class PrismaCloudStore implements CloudStore {
         retryAttempts: input.retryAttempts ?? existing.retryAttempts,
         retryBackoff: input.retryBackoff ?? existing.retryBackoff,
         retryDelay: input.retryDelay ?? existing.retryDelay,
+        retryMaxAttempts: input.retryMaxAttempts ?? existing.retryMaxAttempts,
+        retryInitialDelay: input.retryInitialDelay ?? existing.retryInitialDelay,
+        retryMaxDelay: input.retryMaxDelay ?? existing.retryMaxDelay,
+        retryJitter: input.retryJitter ?? existing.retryJitter,
+        retryWindow: input.retryWindow ?? existing.retryWindow,
+        retryOnStatusCodes: input.retryOnStatusCodes ?? existing.retryOnStatusCodes,
+        terminalStatusCodes: input.terminalStatusCodes ?? existing.terminalStatusCodes,
         timeout: input.timeout ?? existing.timeout,
         callbackUrl: input.callbackUrl === undefined ? existing.callbackUrl : input.callbackUrl,
         metadata: input.metadata === undefined
@@ -640,6 +779,56 @@ export class PrismaCloudStore implements CloudStore {
     await this.prisma.task.delete({
       where: { id: taskId },
     });
+  }
+
+  async cancelTask(orgId: string, taskId: string): Promise<TaskCancelResult> {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId: orgId, kind: "scheduled" },
+      select: { id: true },
+    });
+    if (!task) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.task.update({
+        where: { id: taskId },
+        data: {
+          active: false,
+          nextRunAt: null,
+        },
+      });
+      const cancelled = await tx.dispatchJob.updateMany({
+        where: {
+          organizationId: orgId,
+          taskId,
+          status: { in: ["pending", "leased", "retry_wait"] },
+        },
+        data: {
+          status: "cancelled",
+          leaseOwner: null,
+          leasedUntil: null,
+        },
+      });
+      const runningAttempts = await tx.runAttempt.findMany({
+        where: {
+          organizationId: orgId,
+          taskId,
+          status: "running",
+        },
+        select: { id: true },
+      });
+      return { cancelledJobs: cancelled.count, runningAttemptIds: runningAttempts.map((attempt) => attempt.id) };
+    });
+
+    return {
+      cancelled: true,
+      taskId,
+      cancelledDispatchJobs: result.cancelledJobs,
+      runningAttemptIds: result.runningAttemptIds,
+      guarantee: "no-new-attempts",
+      alreadyStarted: result.runningAttemptIds.length > 0,
+    };
   }
 
   async triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): Promise<RunRecord> {
@@ -691,7 +880,7 @@ export class PrismaCloudStore implements CloudStore {
       },
     });
 
-    await this.enqueueRun(task, run);
+    await this.createDispatchForRun(task, run);
 
     return toRunRecord(run);
   }
@@ -713,6 +902,7 @@ export class PrismaCloudStore implements CloudStore {
         kind: "dispatch",
         name: input.name ?? "On-demand dispatch",
         description: null,
+        externalId: null,
         handlerType: input.handler.type,
         handlerConfig: input.handler as unknown as Prisma.InputJsonValue,
         scheduleType: "once",
@@ -725,6 +915,13 @@ export class PrismaCloudStore implements CloudStore {
         retryAttempts: input.retryAttempts ?? 1,
         retryBackoff: input.retryBackoff ?? "linear",
         retryDelay: input.retryDelay ?? "1s",
+        retryMaxAttempts: input.retryMaxAttempts ?? input.retryAttempts ?? 10,
+        retryInitialDelay: input.retryInitialDelay ?? "10s",
+        retryMaxDelay: input.retryMaxDelay ?? "15m",
+        retryJitter: input.retryJitter ?? true,
+        retryWindow: input.retryWindow ?? "24h",
+        retryOnStatusCodes: input.retryOnStatusCodes ?? [],
+        terminalStatusCodes: input.terminalStatusCodes ?? [],
         timeout: input.timeout ?? "30s",
         active: false,
         source: createdBy?.type === "agent" ? "mcp" : "sdk",
@@ -748,7 +945,7 @@ export class PrismaCloudStore implements CloudStore {
       },
     });
 
-    await this.enqueueRun(task, run);
+    await this.createDispatchForRun(task, run);
     return toRunRecord(run);
   }
 
@@ -781,6 +978,29 @@ export class PrismaCloudStore implements CloudStore {
     return toRunRecord(run);
   }
 
+  async replayRun(orgId: string, runId: string, trigger: "manual" | "api" = "manual"): Promise<RunReplayResult> {
+    const existing = await this.prisma.run.findFirst({
+      where: { id: runId, organizationId: orgId },
+      include: { task: true },
+    });
+    if (!existing) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, "Run not found");
+    }
+
+    const run = await this.prisma.run.create({
+      data: {
+        organizationId: orgId,
+        taskId: existing.taskId,
+        status: "queued",
+        trigger,
+        attempt: 1,
+        scheduledAt: existing.scheduledAt,
+      },
+    });
+    await this.createDispatchForRun(existing.task, run);
+    return { run: toRunRecord(run), replayOfRunId: runId };
+  }
+
   async updateRunStatus(runId: string, input: InternalRunStatusInput): Promise<RunRecord> {
     const existing = await this.prisma.run.findUnique({ where: { id: runId } });
     if (!existing) {
@@ -788,7 +1008,7 @@ export class PrismaCloudStore implements CloudStore {
     }
 
     // Don't update if already in terminal state
-    if (existing.status === "success" || existing.status === "failure" || existing.status === "timeout") {
+    if (isTerminalRunStatus(existing.status)) {
       return toRunRecord(existing);
     }
 
@@ -797,7 +1017,7 @@ export class PrismaCloudStore implements CloudStore {
       return toRunRecord(existing);
     }
 
-    const isTerminal = input.status === "success" || input.status === "failure" || input.status === "timeout";
+    const isTerminal = isTerminalRunStatus(input.status);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const run = await tx.run.update({
@@ -1194,6 +1414,7 @@ export class PrismaCloudStore implements CloudStore {
     }
 
     try {
+      await this.reconcileDispatches(limit);
       const now = new Date();
       const dueTasks = await this.prisma.task.findMany({
         where: {
@@ -1225,7 +1446,7 @@ export class PrismaCloudStore implements CloudStore {
         const scheduleConfig = task.scheduleConfig as unknown as ScheduleConfig;
         const nextRunAt = computeNextRun(scheduleConfig, task.timezone, now);
 
-        const run = await this.prisma.$transaction(async (tx) => {
+        await this.prisma.$transaction(async (tx) => {
           // Optimistic lock - only update if nextRunAt hasn't changed
           const cas = await tx.task.updateMany({
             where: {
@@ -1238,7 +1459,7 @@ export class PrismaCloudStore implements CloudStore {
             },
           });
           if (cas.count === 0) {
-            return null;
+            return;
           }
 
           // Check usage limit
@@ -1258,7 +1479,7 @@ export class PrismaCloudStore implements CloudStore {
             select: { runAttempts: true },
           });
           if ((usageCounter?.runAttempts ?? 0) >= PLAN_LIMITS[tier].runAttemptsPerMonth) {
-            return null;
+            return;
           }
 
           // Increment usage
@@ -1281,8 +1502,7 @@ export class PrismaCloudStore implements CloudStore {
             },
           });
 
-          // Create run
-          return tx.run.create({
+          const run = await tx.run.create({
             data: {
               organizationId: task.organizationId,
               taskId: task.id,
@@ -1292,18 +1512,270 @@ export class PrismaCloudStore implements CloudStore {
               scheduledAt: task.nextRunAt,
             },
           });
+          await this.createDispatchForRun(task, run, tx);
+          await tx.runEvent.create({
+            data: {
+              organizationId: task.organizationId,
+              runId: run.id,
+              action: "run.queued",
+              nextState: "queued",
+              reason: "schedule_due",
+            },
+          });
+          await tx.taskEvent.create({
+            data: {
+              organizationId: task.organizationId,
+              taskId: task.id,
+              action: "task.dispatched",
+              reason: "schedule_due",
+              metadata: { runId: run.id } as Prisma.InputJsonValue,
+            },
+          });
         });
-
-        if (!run) {
-          continue;
-        }
-
-        await this.enqueueRun(task, run);
       }
 
-      return this.dispatchQueue.splice(0, limit);
+      const jobs = await this.prisma.$transaction(async (tx) => {
+        const candidates = await tx.dispatchJob.findMany({
+          where: {
+            status: { in: ["pending", "retry_wait"] },
+            availableAt: { lte: now },
+          },
+          orderBy: { availableAt: "asc" },
+          take: limit,
+        });
+        const leased: string[] = [];
+        for (const job of candidates) {
+          const attemptNumber = job.attemptCount + 1;
+          let attempt = await tx.runAttempt.findFirst({
+            where: {
+              dispatchJobId: job.id,
+              attemptNumber,
+            },
+          });
+          if (!attempt) {
+            attempt = await tx.runAttempt.create({
+              data: {
+                organizationId: job.organizationId,
+                taskId: job.taskId,
+                runId: job.runId,
+                dispatchJobId: job.id,
+                attemptNumber,
+                status: "pending",
+              },
+            });
+          }
+
+          const update = await tx.dispatchJob.updateMany({
+            where: {
+              id: job.id,
+              status: job.status,
+            },
+            data: {
+              status: "leased",
+              leaseOwner: "cloud-worker",
+              leasedUntil: new Date(Date.now() + 5 * 60 * 1000),
+              attemptCount: attemptNumber,
+            },
+          });
+          if (update.count === 0) {
+            continue;
+          }
+          await tx.run.update({
+            where: { id: job.runId },
+            data: {
+              status: "leased",
+              attempt: attemptNumber,
+            },
+          });
+          await tx.dispatchEvent.create({
+            data: {
+              organizationId: job.organizationId,
+              dispatchJobId: job.id,
+              action: "dispatch.leased",
+              previousState: job.status,
+              nextState: "leased",
+              metadata: { attemptId: attempt.id, attemptNumber } as Prisma.InputJsonValue,
+            },
+          });
+          leased.push(job.id);
+        }
+        return leased;
+      });
+
+      const instructions: DispatchInstruction[] = [];
+      for (const jobId of jobs) {
+        const instruction = await this.instructionForDispatch(jobId);
+        if (instruction) {
+          instructions.push(instruction);
+        }
+      }
+      return instructions;
     } finally {
       await this.releaseDispatchLock();
     }
+  }
+
+  async startDispatchAttempt(input: InternalDispatchStartInput): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const job = await tx.dispatchJob.findUnique({ where: { id: input.dispatchJobId } });
+      if (!job) {
+        throw new AppError(404, ERROR_CODES.NOT_FOUND, "Dispatch job not found");
+      }
+      await tx.dispatchJob.update({
+        where: { id: input.dispatchJobId },
+        data: {
+          status: "running",
+          leasedUntil: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
+      await tx.runAttempt.update({
+        where: { id: input.attemptId },
+        data: {
+          status: "running",
+          startedAt: now,
+        },
+      });
+      await tx.run.update({
+        where: { id: job.runId },
+        data: {
+          status: "running",
+          startedAt: now,
+          attempt: input.attemptNumber,
+        },
+      });
+    });
+  }
+
+  async completeDispatchAttempt(input: InternalDispatchCompleteInput): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const job = await tx.dispatchJob.findUnique({
+        where: { id: input.dispatchJobId },
+        include: { task: true, run: true },
+      });
+      if (!job) {
+        throw new AppError(404, ERROR_CODES.NOT_FOUND, "Dispatch job not found");
+      }
+      const policy = retryPolicyForTask(job.task);
+      const success = input.status === "success";
+      const retryWindowExpired = job.retryWindowEndsAt !== null && job.retryWindowEndsAt.getTime() <= Date.now();
+      const attemptsExhausted = job.attemptCount >= job.maxAttempts;
+      const shouldRetry = !success && input.status !== "terminal_client_error" && !retryWindowExpired && !attemptsExhausted;
+
+      await tx.runAttempt.update({
+        where: { id: input.attemptId },
+        data: {
+          status: input.status,
+          completedAt: now,
+          durationMs: input.durationMs,
+          httpStatus: input.httpStatus ?? null,
+          errorClass: input.errorClass ?? null,
+          errorMessage: input.errorMessage ?? null,
+          responseBodyPreview: input.responseBodyPreview ?? null,
+          responseBodyHash: input.responseBodyHash ?? null,
+          output: input.output ? (input.output as Prisma.InputJsonValue) : Prisma.JsonNull,
+          logs: input.logs ?? null,
+        },
+      });
+
+      if (shouldRetry) {
+        await tx.dispatchJob.update({
+          where: { id: job.id },
+          data: {
+            status: "retry_wait",
+            leaseOwner: null,
+            leasedUntil: null,
+            availableAt: new Date(Date.now() + computeRetryDelayMs(policy, job.attemptCount)),
+            lastError: input.errorMessage ?? input.errorClass ?? "delivery failed",
+          },
+        });
+        await tx.run.update({
+          where: { id: job.runId },
+          data: {
+            status: "retry_wait",
+            attempt: input.attemptNumber,
+            durationMs: input.durationMs,
+            errorMessage: input.errorMessage ?? undefined,
+          },
+        });
+        return;
+      }
+
+      const finalStatus: RunStatus = success
+        ? "success"
+        : input.status === "timeout"
+          ? "timeout"
+          : input.status === "terminal_client_error"
+            ? "terminal_client_error"
+            : retryWindowExpired
+              ? "retry_window_expired"
+              : "dead_lettered";
+
+      await tx.dispatchJob.update({
+        where: { id: job.id },
+        data: {
+          status: success ? "succeeded" : "dead_lettered",
+          leaseOwner: null,
+          leasedUntil: null,
+          lastError: input.errorMessage ?? null,
+        },
+      });
+      await tx.run.update({
+        where: { id: job.runId },
+        data: {
+          status: finalStatus,
+          attempt: input.attemptNumber,
+          completedAt: now,
+          durationMs: input.durationMs,
+          output: input.output ? (input.output as Prisma.InputJsonValue) : undefined,
+          logs: input.logs ?? undefined,
+          errorMessage: input.errorMessage ?? (success ? null : undefined),
+        },
+      });
+      if (isTerminalRunStatus(finalStatus)) {
+        const nextRunCount = job.task.runCount + 1;
+        const shouldPause = job.task.kind === "scheduled"
+          && (isMaxRunsReached(nextRunCount, job.task.maxRuns) || isExpiredAt(isoNullable(job.task.expiresAt)));
+        await tx.task.update({
+          where: { id: job.taskId },
+          data: {
+            runCount: nextRunCount,
+            active: shouldPause ? false : job.task.active,
+            nextRunAt: shouldPause ? null : job.task.nextRunAt,
+          },
+        });
+      }
+    });
+  }
+
+  async reconcileDispatches(limit = 100): Promise<{ repaired: number }> {
+    const expired = await this.prisma.dispatchJob.findMany({
+      where: {
+        status: { in: ["leased", "running"] },
+        leasedUntil: { lt: new Date() },
+      },
+      take: limit,
+    });
+    for (const job of expired) {
+      await this.prisma.dispatchJob.update({
+        where: { id: job.id },
+        data: {
+          status: "retry_wait",
+          leaseOwner: null,
+          leasedUntil: null,
+          availableAt: new Date(),
+          lastError: "lease expired",
+        },
+      });
+      await this.prisma.run.update({
+        where: { id: job.runId },
+        data: {
+          status: "retry_wait",
+          errorMessage: "Dispatch lease expired; retry scheduled.",
+        },
+      });
+    }
+    return { repaired: expired.length };
   }
 }

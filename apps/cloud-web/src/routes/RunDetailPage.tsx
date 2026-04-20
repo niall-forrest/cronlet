@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle, Clock, Spinner, Timer, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, Clock, Prohibit, Spinner, Timer, XCircle } from "@phosphor-icons/react";
 import type { RunRecord } from "@cronlet/shared";
 import { getRun, listTasks } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,9 @@ export function RunDetailPage({ runId }: RunDetailPageProps) {
     queryFn: () => getRun(runId),
     refetchInterval: (query) => {
       const run = query.state.data;
-      return run?.status === "running" || run?.status === "queued" ? 2000 : false;
+      return run?.status === "running" || run?.status === "queued" || run?.status === "leased"
+        ? 2000
+        : false;
     },
   });
 
@@ -164,7 +166,13 @@ function StatusBadge({ status }: { status: RunRecord["status"] }) {
     failure: "error",
     timeout: "error",
     queued: "secondary",
+    leased: "warning",
     running: "warning",
+    retry_wait: "warning",
+    cancelled: "secondary",
+    dead_lettered: "error",
+    terminal_client_error: "error",
+    retry_window_expired: "error",
   };
 
   const icons: Record<RunRecord["status"], React.ReactNode> = {
@@ -172,7 +180,13 @@ function StatusBadge({ status }: { status: RunRecord["status"] }) {
     failure: <XCircle size={12} weight="fill" />,
     timeout: <Timer size={12} weight="fill" />,
     queued: <Clock size={12} />,
+    leased: <Spinner size={12} className="animate-spin" />,
     running: <Spinner size={12} className="animate-spin" />,
+    retry_wait: <Timer size={12} />,
+    cancelled: <Prohibit size={12} />,
+    dead_lettered: <XCircle size={12} weight="fill" />,
+    terminal_client_error: <XCircle size={12} weight="fill" />,
+    retry_window_expired: <Timer size={12} weight="fill" />,
   };
 
   return (

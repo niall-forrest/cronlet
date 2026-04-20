@@ -11,9 +11,12 @@ import type {
   CallbackSigningSecretRecord,
   CreatedBy,
   DispatchInstruction,
+  InternalDispatchCompleteInput,
+  InternalDispatchStartInput,
   InternalRunStatusInput,
   PlanTier,
   RunRecord,
+  RunReplayResult,
   SecretCreateInput,
   SecretPatchInput,
   SecretRecord,
@@ -21,6 +24,7 @@ import type {
   TaskDispatchInput,
   TaskPatchInput,
   TaskRecord,
+  TaskCancelResult,
   UsageSnapshot,
 } from "@cronlet/shared";
 
@@ -44,12 +48,14 @@ export interface CloudStore {
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> | TaskRecord;
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> | TaskRecord;
   deleteTask(orgId: string, taskId: string): Promise<void> | void;
+  cancelTask(orgId: string, taskId: string): Promise<TaskCancelResult> | TaskCancelResult;
   triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): Promise<RunRecord> | RunRecord;
   dispatchTask(orgId: string, input: TaskDispatchInput, createdBy?: CreatedBy, trigger?: "manual" | "api"): Promise<RunRecord> | RunRecord;
 
   // Runs
   listRuns(orgId: string, taskId?: string, limit?: number): Promise<RunRecord[]> | RunRecord[];
   getRun(orgId: string, runId: string): Promise<RunRecord> | RunRecord;
+  replayRun(orgId: string, runId: string, trigger?: "manual" | "api"): Promise<RunReplayResult> | RunReplayResult;
   updateRunStatus(runId: string, input: InternalRunStatusInput): Promise<RunRecord> | RunRecord;
 
   // Secrets
@@ -92,4 +98,7 @@ export interface CloudStore {
 
   // Worker dispatch
   claimDueDispatches(limit?: number): Promise<DispatchInstruction[]> | DispatchInstruction[];
+  startDispatchAttempt(input: InternalDispatchStartInput): Promise<void> | void;
+  completeDispatchAttempt(input: InternalDispatchCompleteInput): Promise<void> | void;
+  reconcileDispatches(limit?: number): Promise<{ repaired: number }> | { repaired: number };
 }

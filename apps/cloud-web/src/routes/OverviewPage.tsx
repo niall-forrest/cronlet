@@ -647,7 +647,7 @@ function QuickReferenceCard({ usage }: { usage: number }) {
 }
 
 function RecentRunRow({ run, taskName }: { run: RunRecord; taskName: string }) {
-  const statusConfig = {
+  const statusConfig: Partial<Record<RunRecord["status"], { dot: string }>> = {
     success: {
       dot: "status-dot-success",
     },
@@ -662,6 +662,24 @@ function RecentRunRow({ run, taskName }: { run: RunRecord; taskName: string }) {
     },
     queued: {
       dot: "status-dot-idle",
+    },
+    leased: {
+      dot: "status-dot-running",
+    },
+    retry_wait: {
+      dot: "status-dot-idle",
+    },
+    cancelled: {
+      dot: "status-dot-idle",
+    },
+    dead_lettered: {
+      dot: "status-dot-failed",
+    },
+    terminal_client_error: {
+      dot: "status-dot-failed",
+    },
+    retry_window_expired: {
+      dot: "status-dot-failed",
     },
   };
 
