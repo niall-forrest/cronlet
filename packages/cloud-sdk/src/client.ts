@@ -478,6 +478,17 @@ export class CloudClient {
         body: JSON.stringify(input),
       }),
 
+    patch: (name: string, value: string): Promise<SecretRecord> =>
+      this.request<SecretRecord>(`/v1/secrets/${encodeURIComponent(name)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ value }),
+      }),
+
+    rotate: (name: string): Promise<SecretRecord> =>
+      this.request<SecretRecord>(`/v1/secrets/${encodeURIComponent(name)}/rotate`, {
+        method: "POST",
+      }),
+
     /**
      * Delete a secret by name
      */

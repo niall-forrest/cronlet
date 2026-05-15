@@ -57,6 +57,7 @@ import { AppError } from "./errors.js";
 import { computeNextRun, nowIso } from "./clock.js";
 import type { CloudStore, EntitlementUpdateInput, OrganizationUpsertInput } from "./store-contract.js";
 import { createApiKeyToken, hashApiKey, keyPreviewFromHash } from "./api-keys.js";
+import { currentSecretKeyVersion, decryptSecretValue, encryptSecretValue } from "./secret-crypto.js";
 
 interface OrgEntitlement {
   tier: PlanTier;
@@ -1479,8 +1480,7 @@ export class InMemoryCloudStore implements CloudStore {
     if (!secret) {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found. Create it in Settings > Secrets.`);
     }
-    // In real implementation, this would decrypt the value
-    return secret.encryptedValue;
+    return decryptSecretValue(secret.encryptedValue, secret.keyVersion).plaintext;
   }
 
   createSecret(orgId: string, input: SecretCreateInput): SecretRecord {
@@ -1494,11 +1494,14 @@ export class InMemoryCloudStore implements CloudStore {
     }
 
     const now = nowIso();
+    const encrypted = encryptSecretValue(input.value, now);
     const secret: InternalSecretRecord = {
       id: nanoid(),
       orgId,
       name: input.name,
-      encryptedValue: input.value, // In real implementation, this would be encrypted
+      encryptedValue: encrypted.encryptedValue,
+      keyVersion: encrypted.keyVersion,
+      lastRotatedAt: encrypted.rotatedAt,
       createdAt: now,
       updatedAt: now,
     };
@@ -1519,14 +1522,49 @@ export class InMemoryCloudStore implements CloudStore {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
     }
 
+    const rotatedAt = nowIso();
+    const encrypted = encryptSecretValue(input.value, rotatedAt);
     const updated: InternalSecretRecord = {
       ...secret,
-      encryptedValue: input.value, // In real implementation, this would be encrypted
-      updatedAt: nowIso(),
+      encryptedValue: encrypted.encryptedValue,
+      keyVersion: encrypted.keyVersion,
+      lastRotatedAt: encrypted.rotatedAt,
+      updatedAt: rotatedAt,
     };
 
     this.secrets.set(secret.id, updated);
 
+    const { encryptedValue: _, ...record } = updated;
+    return record;
+  }
+
+  rotateSecret(orgId: string, name: string): SecretRecord {
+    this.assertWritable(orgId);
+
+    const secret = Array.from(this.secrets.values()).find(
+      (s) => s.orgId === orgId && s.name === name
+    );
+    if (!secret) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
+    }
+
+    const activeVersion = currentSecretKeyVersion();
+    if (secret.keyVersion === activeVersion && secret.encryptedValue.startsWith("enc:")) {
+      return (({ encryptedValue: _, ...record }) => record)(secret);
+    }
+
+    const rotatedAt = nowIso();
+    const plaintext = decryptSecretValue(secret.encryptedValue, secret.keyVersion).plaintext;
+    const encrypted = encryptSecretValue(plaintext, rotatedAt);
+    const updated: InternalSecretRecord = {
+      ...secret,
+      encryptedValue: encrypted.encryptedValue,
+      keyVersion: encrypted.keyVersion,
+      lastRotatedAt: encrypted.rotatedAt,
+      updatedAt: rotatedAt,
+    };
+
+    this.secrets.set(secret.id, updated);
     const { encryptedValue: _, ...record } = updated;
     return record;
   }

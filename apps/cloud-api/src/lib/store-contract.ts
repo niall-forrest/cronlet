@@ -82,6 +82,7 @@ export interface CloudStore {
   getSecretValue(orgId: string, name: string): Promise<string> | string;
   createSecret(orgId: string, input: SecretCreateInput): Promise<SecretRecord> | SecretRecord;
   patchSecret(orgId: string, name: string, input: SecretPatchInput): Promise<SecretRecord> | SecretRecord;
+  rotateSecret(orgId: string, name: string): Promise<SecretRecord> | SecretRecord;
   deleteSecret(orgId: string, name: string): Promise<void> | void;
 
   // Alerts

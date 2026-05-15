@@ -57,6 +57,7 @@ import { AppError } from "./errors.js";
 import { computeNextRun } from "./clock.js";
 import type { CloudStore, EntitlementUpdateInput, OrganizationUpsertInput } from "./store-contract.js";
 import { createApiKeyToken, hashApiKey, keyPreviewFromHash } from "./api-keys.js";
+import { currentSecretKeyVersion, decryptSecretValue, encryptSecretValue } from "./secret-crypto.js";
 
 function iso(value: Date): string {
   return value.toISOString();
@@ -260,6 +261,8 @@ function toSecretRecord(value: {
   id: string;
   organizationId: string;
   name: string;
+  keyVersion: string;
+  lastRotatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }): SecretRecord {
@@ -267,6 +270,8 @@ function toSecretRecord(value: {
     id: value.id,
     orgId: value.organizationId,
     name: value.name,
+    keyVersion: value.keyVersion,
+    lastRotatedAt: isoNullable(value.lastRotatedAt),
     createdAt: iso(value.createdAt),
     updatedAt: iso(value.updatedAt),
   };
@@ -1857,6 +1862,8 @@ export class PrismaCloudStore implements CloudStore {
         id: true,
         organizationId: true,
         name: true,
+        keyVersion: true,
+        lastRotatedAt: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -1870,30 +1877,35 @@ export class PrismaCloudStore implements CloudStore {
         organizationId: orgId,
         name,
       },
-      select: { encryptedValue: true },
+      select: { encryptedValue: true, keyVersion: true },
     });
     if (!secret) {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found. Create it in Settings > Secrets.`);
     }
-    // In real implementation, this would decrypt the value
-    return secret.encryptedValue;
+    return decryptSecretValue(secret.encryptedValue, secret.keyVersion).plaintext;
   }
 
   async createSecret(orgId: string, input: SecretCreateInput): Promise<SecretRecord> {
     await this.assertWritable(orgId);
     await this.ensureOrganization(orgId);
+    const now = new Date();
+    const encrypted = encryptSecretValue(input.value, now.toISOString());
 
     try {
       const created = await this.prisma.secret.create({
         data: {
           organizationId: orgId,
           name: input.name,
-          encryptedValue: input.value, // In real implementation, this would be encrypted
+          encryptedValue: encrypted.encryptedValue,
+          keyVersion: encrypted.keyVersion,
+          lastRotatedAt: now,
         },
         select: {
           id: true,
           organizationId: true,
           name: true,
+          keyVersion: true,
+          lastRotatedAt: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -1917,16 +1929,74 @@ export class PrismaCloudStore implements CloudStore {
     if (!existing) {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
     }
+    const now = new Date();
+    const encrypted = encryptSecretValue(input.value, now.toISOString());
 
     const updated = await this.prisma.secret.update({
       where: { id: existing.id },
       data: {
-        encryptedValue: input.value, // In real implementation, this would be encrypted
+        encryptedValue: encrypted.encryptedValue,
+        keyVersion: encrypted.keyVersion,
+        lastRotatedAt: now,
       },
       select: {
         id: true,
         organizationId: true,
         name: true,
+        keyVersion: true,
+        lastRotatedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return toSecretRecord(updated);
+  }
+
+  async rotateSecret(orgId: string, name: string): Promise<SecretRecord> {
+    await this.assertWritable(orgId);
+
+    const existing = await this.prisma.secret.findFirst({
+      where: {
+        organizationId: orgId,
+        name,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        encryptedValue: true,
+        keyVersion: true,
+        lastRotatedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!existing) {
+      throw new AppError(404, ERROR_CODES.NOT_FOUND, `Secret '${name}' not found`);
+    }
+
+    const activeVersion = currentSecretKeyVersion();
+    if (existing.keyVersion === activeVersion && existing.encryptedValue.startsWith("enc:")) {
+      return toSecretRecord(existing);
+    }
+
+    const rotatedAt = new Date();
+    const plaintext = decryptSecretValue(existing.encryptedValue, existing.keyVersion).plaintext;
+    const encrypted = encryptSecretValue(plaintext, rotatedAt.toISOString());
+    const updated = await this.prisma.secret.update({
+      where: { id: existing.id },
+      data: {
+        encryptedValue: encrypted.encryptedValue,
+        keyVersion: encrypted.keyVersion,
+        lastRotatedAt: rotatedAt,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        keyVersion: true,
+        lastRotatedAt: true,
         createdAt: true,
         updatedAt: true,
       },

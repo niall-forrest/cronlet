@@ -66,6 +66,31 @@ export async function registerSecretRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
+  app.post<{ Params: { name: string } }>("/v1/secrets/:name/rotate", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "admin", requiredScope: "secrets:write" });
+      const rotated = await app.cloudStore.rotateSecret(request.auth.orgId, request.params.name);
+
+      await recordAuditEvent(app, {
+        organizationId: request.auth.orgId,
+        actorType: request.auth.actorType ?? "user",
+        actorId: request.auth.userId,
+        action: "secret.rotated",
+        targetType: "secret",
+        targetId: rotated.name,
+        metadata: {
+          name: rotated.name,
+          keyVersion: rotated.keyVersion,
+          lastRotatedAt: rotated.lastRotatedAt,
+        },
+      });
+
+      return ok(reply, rotated);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
   // Delete secret
   app.delete<{ Params: { name: string } }>("/v1/secrets/:name", async (request, reply) => {
     try {

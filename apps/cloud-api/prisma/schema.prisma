@@ -383,6 +383,8 @@ model Secret {
   organizationId String
   name           String   // e.g., "SLACK_TOKEN"
   encryptedValue String
+  keyVersion     String   @default("legacy")
+  lastRotatedAt  DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

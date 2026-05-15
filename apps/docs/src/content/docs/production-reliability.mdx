@@ -34,6 +34,16 @@ Cronlet validates outbound webhook and callback destinations at delivery time.
 
 If you set `CLOUD_ALLOWED_OUTBOUND_HOSTS`, Cronlet also requires every outbound destination hostname to appear in that allowlist.
 
+## Secret protection
+
+Cronlet stores secret values encrypted at rest and records encryption metadata per secret.
+
+- values are encrypted with authenticated encryption before persistence
+- each secret stores its `keyVersion` and `lastRotatedAt`
+- Cronlet can rotate existing secrets onto the active encryption key without changing the plaintext value
+
+Configure cloud key material with `CLOUD_SECRET_ENCRYPTION_KEYS` using versioned entries such as `v1:<base64-32-byte-key>,v2:<base64-32-byte-key>`.
+
 ## Success semantics
 
 For webhook delivery, Cronlet treats HTTP `2xx` as success.

@@ -319,6 +319,8 @@ export interface SecretRecord {
   id: string;
   orgId: string;
   name: string;
+  keyVersion: string;
+  lastRotatedAt: string | null;
   createdAt: string;
   updatedAt: string;
   // Note: encryptedValue is never exposed via API
