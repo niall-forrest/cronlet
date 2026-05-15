@@ -1,4 +1,4 @@
-import { internalDispatchCompleteSchema, internalDispatchStartSchema } from "@cronlet/shared";
+import { internalDispatchCompleteSchema, internalDispatchStartSchema, retentionCleanupQuerySchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";
@@ -45,6 +45,17 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
       const limit = request.query.limit ? Number.parseInt(request.query.limit, 10) : 100;
       const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(limit, 500)) : 100;
       const result = await app.cloudStore.reconcileDispatches(safeLimit);
+      return ok(reply, result);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  app.post("/internal/retention/cleanup", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "owner", requiredScope: "internal:runs:write" });
+      const query = retentionCleanupQuerySchema.parse(request.query ?? {});
+      const result = await app.cloudStore.cleanupRetention(query.limit);
       return ok(reply, result);
     } catch (error) {
       return handleError(reply, error);

@@ -48,6 +48,26 @@ Cronlet stores secret values encrypted at rest and records encryption metadata p
 
 Configure cloud key material with `CLOUD_SECRET_ENCRYPTION_KEYS` using versioned entries such as `v1:<base64-32-byte-key>,v2:<base64-32-byte-key>`.
 
+## Retention
+
+Cronlet enforces plan-aware history retention and shorter verbose-data retention.
+
+- run metadata follows the plan retention window
+- verbose fields such as run logs and response previews are pruned earlier
+- dead-letter runs are retained longer than standard successful history
+- audit history is retained longer than delivery history
+
+Current defaults:
+
+- `free`: `7` days run retention
+- `pro`: `90` days run retention
+- `team`: `365` days run retention
+- verbose payload/log retention: up to `30` days, capped by the plan window
+- dead-letter retention: at least `180` days
+- audit retention: at least `365` days
+
+Cronlet exposes the current retention windows in `GET /v1/ops-summary` and supports internal cleanup execution with `POST /internal/retention/cleanup`.
+
 ## Success semantics
 
 For webhook delivery, Cronlet treats HTTP `2xx` as success.
@@ -105,6 +125,17 @@ Cronlet applies bounded lease fairness when dispatching due work:
 - concurrency is capped per organization and per destination key
 
 This keeps one noisy customer or one hot endpoint from monopolizing the worker fleet.
+
+## Ops summary
+
+`GET /v1/ops-summary` returns a lightweight operator-facing snapshot for the current organization, including:
+
+- pending, leased, running, and retry-wait dispatch counts
+- dead-letter run count
+- overdue scheduled task count
+- open circuit breaker count
+- oldest pending and retry-wait dispatch timestamps
+- effective retention windows for that org's plan
 
 ## Cancellation
 

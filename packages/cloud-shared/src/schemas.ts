@@ -387,6 +387,10 @@ export const circuitBreakerListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 
+export const retentionCleanupQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
 // ============================================
 // INFERRED TYPES
 // ============================================

@@ -28,10 +28,12 @@ import {
   type InternalDispatchCompleteInput,
   type InternalDispatchStartInput,
   type InternalRunStatusInput,
+  type OpsSummaryRecord,
   type OutboundPolicyPatchInput,
   type OutboundPolicyRecord,
   type ReconciliationCompareInput,
   type ReconciliationCompareResult,
+  type RetentionCleanupResult,
   type RetryPolicy,
   type RunEventRecord,
   type RunRecord,
@@ -86,6 +88,21 @@ function normalizeAllowedHosts(hosts: readonly string[]): string[] {
       .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
       .filter((host) => host.length > 0),
   )).sort();
+}
+
+function retentionPolicyForTier(tier: PlanTier): {
+  retentionDays: number;
+  verboseRetentionDays: number;
+  deadLetterRetentionDays: number;
+  auditRetentionDays: number;
+} {
+  const retentionDays = PLAN_LIMITS[tier].retentionDays;
+  return {
+    retentionDays,
+    verboseRetentionDays: Math.min(retentionDays, 30),
+    deadLetterRetentionDays: Math.max(retentionDays, 180),
+    auditRetentionDays: Math.max(retentionDays, 365),
+  };
 }
 
 function formatPlanLabel(tier: PlanTier): string {
@@ -2397,6 +2414,54 @@ export class PrismaCloudStore implements CloudStore {
     };
   }
 
+  async getOpsSummary(orgId: string): Promise<OpsSummaryRecord> {
+    await this.ensureOrganization(orgId);
+    const entitlement = await this.getBillingState(orgId);
+    const retention = retentionPolicyForTier(entitlement.tier);
+    const [pendingDispatches, retryWaitDispatches, leasedDispatches, runningDispatches, deadLetterRuns, overdueTasks, openCircuitBreakers, oldestPending, oldestRetryWait] = await Promise.all([
+      this.prisma.dispatchJob.count({ where: { organizationId: orgId, status: "pending" } }),
+      this.prisma.dispatchJob.count({ where: { organizationId: orgId, status: "retry_wait" } }),
+      this.prisma.dispatchJob.count({ where: { organizationId: orgId, status: "leased" } }),
+      this.prisma.dispatchJob.count({ where: { organizationId: orgId, status: "running" } }),
+      this.prisma.run.count({ where: { organizationId: orgId, status: "dead_lettered" } }),
+      this.prisma.task.count({
+        where: {
+          organizationId: orgId,
+          kind: "scheduled",
+          active: true,
+          nextRunAt: { lte: new Date() },
+        },
+      }),
+      this.prisma.circuitBreaker.count({ where: { organizationId: orgId, state: "open" } }),
+      this.prisma.dispatchJob.findFirst({
+        where: { organizationId: orgId, status: "pending" },
+        orderBy: { availableAt: "asc" },
+        select: { availableAt: true },
+      }),
+      this.prisma.dispatchJob.findFirst({
+        where: { organizationId: orgId, status: "retry_wait" },
+        orderBy: { availableAt: "asc" },
+        select: { availableAt: true },
+      }),
+    ]);
+
+    return {
+      pendingDispatches,
+      retryWaitDispatches,
+      leasedDispatches,
+      runningDispatches,
+      deadLetterRuns,
+      overdueTasks,
+      openCircuitBreakers,
+      oldestPendingDispatchAt: oldestPending ? iso(oldestPending.availableAt) : null,
+      oldestRetryWaitDispatchAt: oldestRetryWait ? iso(oldestRetryWait.availableAt) : null,
+      retentionDays: retention.retentionDays,
+      verboseRetentionDays: retention.verboseRetentionDays,
+      deadLetterRetentionDays: retention.deadLetterRetentionDays,
+      auditRetentionDays: retention.auditRetentionDays,
+    };
+  }
+
   // ============================================
   // WORKER DISPATCH
   // ============================================
@@ -3109,5 +3174,126 @@ export class PrismaCloudStore implements CloudStore {
       });
     }
     return { repaired: expired.length };
+  }
+
+  async cleanupRetention(limit = 100): Promise<RetentionCleanupResult> {
+    const organizations = await this.prisma.organization.findMany({
+      select: { id: true },
+      take: limit,
+      orderBy: { createdAt: "asc" },
+    });
+
+    let runsDeleted = 0;
+    let oneOffTasksDeleted = 0;
+    let runLogsCleared = 0;
+    let runAttemptLogsCleared = 0;
+    let auditEventsDeleted = 0;
+
+    for (const organization of organizations) {
+      const entitlement = await this.getBillingState(organization.id);
+      const retention = retentionPolicyForTier(entitlement.tier);
+      const verboseCutoff = new Date(Date.now() - retention.verboseRetentionDays * 24 * 60 * 60 * 1000);
+      const terminalCutoff = new Date(Date.now() - retention.retentionDays * 24 * 60 * 60 * 1000);
+      const deadLetterCutoff = new Date(Date.now() - retention.deadLetterRetentionDays * 24 * 60 * 60 * 1000);
+      const auditCutoff = new Date(Date.now() - retention.auditRetentionDays * 24 * 60 * 60 * 1000);
+
+      const clearedRuns = await this.prisma.run.updateMany({
+        where: {
+          organizationId: organization.id,
+          logs: { not: null },
+          OR: [
+            { completedAt: { lte: verboseCutoff } },
+            { completedAt: null, createdAt: { lte: verboseCutoff } },
+          ],
+        },
+        data: {
+          logs: null,
+        },
+      });
+      runLogsCleared += clearedRuns.count;
+
+      const clearedAttempts = await this.prisma.runAttempt.updateMany({
+        where: {
+          organizationId: organization.id,
+          AND: [
+            {
+              OR: [
+                { logs: { not: null } },
+                { responseBodyPreview: { not: null } },
+              ],
+            },
+            {
+              OR: [
+                { completedAt: { lte: verboseCutoff } },
+                { completedAt: null, createdAt: { lte: verboseCutoff } },
+              ],
+            },
+          ],
+        },
+        data: {
+          logs: null,
+          responseBodyPreview: null,
+        },
+      });
+      runAttemptLogsCleared += clearedAttempts.count;
+
+      const deletedAudit = await this.prisma.auditEvent.deleteMany({
+        where: {
+          organizationId: organization.id,
+          createdAt: { lte: auditCutoff },
+        },
+      });
+      auditEventsDeleted += deletedAudit.count;
+
+      const deletedTerminalRuns = await this.prisma.run.deleteMany({
+        where: {
+          organizationId: organization.id,
+          status: {
+            in: ["success", "failure", "timeout", "cancelled", "terminal_client_error", "retry_window_expired"],
+          },
+          OR: [
+            { completedAt: { lte: terminalCutoff } },
+            { completedAt: null, createdAt: { lte: terminalCutoff } },
+          ],
+        },
+      });
+      runsDeleted += deletedTerminalRuns.count;
+
+      const deletedDeadLetterRuns = await this.prisma.run.deleteMany({
+        where: {
+          organizationId: organization.id,
+          status: "dead_lettered",
+          OR: [
+            { completedAt: { lte: deadLetterCutoff } },
+            { completedAt: null, createdAt: { lte: deadLetterCutoff } },
+          ],
+        },
+      });
+      runsDeleted += deletedDeadLetterRuns.count;
+
+      const deletedOneOffTasks = await this.prisma.task.deleteMany({
+        where: {
+          organizationId: organization.id,
+          kind: "scheduled",
+          scheduleType: "once",
+          active: false,
+          nextRunAt: null,
+          updatedAt: { lte: terminalCutoff },
+          runs: {
+            none: {},
+          },
+        },
+      });
+      oneOffTasksDeleted += deletedOneOffTasks.count;
+    }
+
+    return {
+      organizationsScanned: organizations.length,
+      runsDeleted,
+      oneOffTasksDeleted,
+      runLogsCleared,
+      runAttemptLogsCleared,
+      auditEventsDeleted,
+    };
   }
 }

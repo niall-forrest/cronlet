@@ -27,9 +27,11 @@ import {
   type InternalRunStatusInput,
   type OutboundPolicyPatchInput,
   type OutboundPolicyRecord,
+  type OpsSummaryRecord,
   type PlanTier,
   type ReconciliationCompareInput,
   type ReconciliationCompareResult,
+  type RetentionCleanupResult,
   type RunEventRecord,
   type RunRecord,
   type RunListInput,
@@ -177,6 +179,21 @@ function computeRetryDelayMs(policy: RetryPolicy, attemptNumber: number): number
       : initial * Math.pow(2, Math.max(0, attemptNumber - 1));
   const bounded = Math.min(base, max);
   return policy.jitter ? Math.max(1000, Math.round(bounded * 0.75)) : bounded;
+}
+
+function retentionPolicyForTier(tier: PlanTier): {
+  retentionDays: number;
+  verboseRetentionDays: number;
+  deadLetterRetentionDays: number;
+  auditRetentionDays: number;
+} {
+  const retentionDays = PLAN_LIMITS[tier].retentionDays;
+  return {
+    retentionDays,
+    verboseRetentionDays: Math.min(retentionDays, 30),
+    deadLetterRetentionDays: Math.max(retentionDays, 180),
+    auditRetentionDays: Math.max(retentionDays, 365),
+  };
 }
 
 function metadataMatches(
@@ -1894,6 +1911,48 @@ export class InMemoryCloudStore implements CloudStore {
     };
   }
 
+  getOpsSummary(orgId: string): OpsSummaryRecord {
+    const entitlement = this.getEntitlement(orgId);
+    const retention = retentionPolicyForTier(entitlement.tier);
+    const dispatches = Array.from(this.dispatchJobs.values()).filter((job) => job.orgId === orgId);
+    const pendingDispatches = dispatches.filter((job) => job.status === "pending").length;
+    const retryWaitDispatches = dispatches.filter((job) => job.status === "retry_wait").length;
+    const leasedDispatches = dispatches.filter((job) => job.status === "leased").length;
+    const runningDispatches = dispatches.filter((job) => job.status === "running").length;
+    const deadLetterRuns = Array.from(this.runs.values()).filter((run) => run.orgId === orgId && run.status === "dead_lettered").length;
+    const overdueTasks = this.listTasks(orgId, { status: "active", limit: 500 })
+      .filter((task) => task.nextRunAt !== null && new Date(task.nextRunAt).getTime() <= Date.now())
+      .length;
+    const openCircuitBreakers = Array.from(this.circuitBreakers.values())
+      .filter((breaker) => breaker.orgId === orgId && breaker.state === "open")
+      .length;
+
+    const oldestPendingDispatchAt = dispatches
+      .filter((job) => job.status === "pending")
+      .map((job) => job.availableAt)
+      .sort()[0] ?? null;
+    const oldestRetryWaitDispatchAt = dispatches
+      .filter((job) => job.status === "retry_wait")
+      .map((job) => job.availableAt)
+      .sort()[0] ?? null;
+
+    return {
+      pendingDispatches,
+      retryWaitDispatches,
+      leasedDispatches,
+      runningDispatches,
+      deadLetterRuns,
+      overdueTasks,
+      openCircuitBreakers,
+      oldestPendingDispatchAt,
+      oldestRetryWaitDispatchAt,
+      retentionDays: retention.retentionDays,
+      verboseRetentionDays: retention.verboseRetentionDays,
+      deadLetterRetentionDays: retention.deadLetterRetentionDays,
+      auditRetentionDays: retention.auditRetentionDays,
+    };
+  }
+
   // ============================================
   // WORKER DISPATCH
   // ============================================
@@ -2461,5 +2520,132 @@ export class InMemoryCloudStore implements CloudStore {
       }
     }
     return { repaired };
+  }
+
+  cleanupRetention(limit = 100): RetentionCleanupResult {
+    const organizationIds = Array.from(this.organizations.keys()).slice(0, limit);
+    let runsDeleted = 0;
+    let oneOffTasksDeleted = 0;
+    let runLogsCleared = 0;
+    let runAttemptLogsCleared = 0;
+    let auditEventsDeleted = 0;
+
+    for (const orgId of organizationIds) {
+      const entitlement = this.getEntitlement(orgId);
+      const retention = retentionPolicyForTier(entitlement.tier);
+      const verboseCutoff = Date.now() - retention.verboseRetentionDays * 24 * 60 * 60 * 1000;
+      const terminalCutoff = Date.now() - retention.retentionDays * 24 * 60 * 60 * 1000;
+      const deadLetterCutoff = Date.now() - retention.deadLetterRetentionDays * 24 * 60 * 60 * 1000;
+      const auditCutoff = Date.now() - retention.auditRetentionDays * 24 * 60 * 60 * 1000;
+
+      for (const run of Array.from(this.runs.values())) {
+        if (run.orgId !== orgId) {
+          continue;
+        }
+
+        const runTime = new Date(run.completedAt ?? run.createdAt).getTime();
+        if (run.logs && runTime <= verboseCutoff) {
+          this.runs.set(run.id, { ...run, logs: null });
+          runLogsCleared += 1;
+        }
+      }
+
+      for (const attempt of Array.from(this.runAttempts.values())) {
+        if (attempt.orgId !== orgId) {
+          continue;
+        }
+
+        const attemptTime = new Date(attempt.completedAt ?? attempt.createdAt).getTime();
+        if ((attempt.logs || attempt.responseBodyPreview) && attemptTime <= verboseCutoff) {
+          this.runAttempts.set(attempt.id, {
+            ...attempt,
+            logs: null,
+            responseBodyPreview: null,
+          });
+          runAttemptLogsCleared += 1;
+        }
+      }
+
+      for (const event of Array.from(this.auditEvents.values())) {
+        if (event.orgId === orgId && new Date(event.createdAt).getTime() <= auditCutoff) {
+          this.auditEvents.delete(event.id);
+          auditEventsDeleted += 1;
+        }
+      }
+
+      for (const run of Array.from(this.runs.values())) {
+        if (run.orgId !== orgId || !isTerminalRunStatus(run.status)) {
+          continue;
+        }
+
+        const runTime = new Date(run.completedAt ?? run.createdAt).getTime();
+        const cutoff = run.status === "dead_lettered" ? deadLetterCutoff : terminalCutoff;
+        if (runTime > cutoff) {
+          continue;
+        }
+
+        this.runs.delete(run.id);
+        runsDeleted += 1;
+
+        for (const attempt of Array.from(this.runAttempts.values())) {
+          if (attempt.runId === run.id) {
+            this.runAttempts.delete(attempt.id);
+          }
+        }
+
+        for (const runEvent of Array.from(this.runEvents.values())) {
+          if (runEvent.runId === run.id) {
+            this.runEvents.delete(runEvent.id);
+          }
+        }
+
+        for (const job of Array.from(this.dispatchJobs.values())) {
+          if (job.runId !== run.id) {
+            continue;
+          }
+          this.dispatchJobs.delete(job.id);
+          for (const dispatchEvent of Array.from(this.dispatchEvents.values())) {
+            if (dispatchEvent.dispatchJobId === job.id) {
+              this.dispatchEvents.delete(dispatchEvent.id);
+            }
+          }
+        }
+      }
+
+      for (const task of Array.from(this.tasks.values())) {
+        if (
+          task.orgId !== orgId
+          || task.kind !== "scheduled"
+          || task.scheduleType !== "once"
+          || task.active
+          || task.nextRunAt !== null
+          || new Date(task.updatedAt).getTime() > terminalCutoff
+        ) {
+          continue;
+        }
+
+        const hasRuns = Array.from(this.runs.values()).some((run) => run.taskId === task.id);
+        if (hasRuns) {
+          continue;
+        }
+
+        this.tasks.delete(task.id);
+        oneOffTasksDeleted += 1;
+        for (const taskEvent of Array.from(this.taskEvents.values())) {
+          if (taskEvent.taskId === task.id) {
+            this.taskEvents.delete(taskEvent.id);
+          }
+        }
+      }
+    }
+
+    return {
+      organizationsScanned: organizationIds.length,
+      runsDeleted,
+      oneOffTasksDeleted,
+      runLogsCleared,
+      runAttemptLogsCleared,
+      auditEventsDeleted,
+    };
   }
 }

@@ -441,6 +441,31 @@ export interface CallbackSigningSecretRecord {
   rotatedAt: string;
 }
 
+export interface OpsSummaryRecord {
+  pendingDispatches: number;
+  retryWaitDispatches: number;
+  leasedDispatches: number;
+  runningDispatches: number;
+  deadLetterRuns: number;
+  overdueTasks: number;
+  openCircuitBreakers: number;
+  oldestPendingDispatchAt: string | null;
+  oldestRetryWaitDispatchAt: string | null;
+  retentionDays: number;
+  verboseRetentionDays: number;
+  deadLetterRetentionDays: number;
+  auditRetentionDays: number;
+}
+
+export interface RetentionCleanupResult {
+  organizationsScanned: number;
+  runsDeleted: number;
+  oneOffTasksDeleted: number;
+  runLogsCleared: number;
+  runAttemptLogsCleared: number;
+  auditEventsDeleted: number;
+}
+
 // ============================================
 // DISPATCH (Worker)
 // ============================================

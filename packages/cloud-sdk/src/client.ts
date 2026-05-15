@@ -20,6 +20,7 @@ import type {
   CallbackSigningSecretRecord,
   CircuitBreakerListInput,
   CircuitBreakerRecord,
+  OpsSummaryRecord,
   ReconciliationCompareInput,
   ReconciliationCompareResult,
   SecretRecord,
@@ -400,6 +401,11 @@ export class CloudClient {
       this.request<CallbackSigningSecretRecord>("/v1/callback-signing-secret/rotate", {
         method: "POST",
       }),
+  };
+
+  readonly opsSummary = {
+    get: (): Promise<OpsSummaryRecord> =>
+      this.request<OpsSummaryRecord>("/v1/ops-summary"),
   };
 
   /**

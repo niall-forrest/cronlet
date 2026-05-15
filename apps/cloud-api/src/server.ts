@@ -17,6 +17,7 @@ import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerApiKeyRoutes } from "./routes/api-keys.js";
 import { registerAuditEventRoutes } from "./routes/audit-events.js";
 import { registerOrgStatusRoutes } from "./routes/org-status.js";
+import { registerOpsSummaryRoutes } from "./routes/ops-summary.js";
 import { registerCallbackSigningRoutes } from "./routes/callback-signing.js";
 import { registerCircuitBreakerRoutes } from "./routes/circuit-breakers.js";
 import { registerOutboundPolicyRoutes } from "./routes/outbound-policy.js";
@@ -100,6 +101,7 @@ export async function buildServer() {
   await registerUsageRoutes(app);
   await registerApiKeyRoutes(app);
   await registerOrgStatusRoutes(app);
+  await registerOpsSummaryRoutes(app);
   await registerAuditEventRoutes(app);
   await registerCircuitBreakerRoutes(app);
   await registerReconciliationRoutes(app);

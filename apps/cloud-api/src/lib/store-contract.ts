@@ -25,7 +25,9 @@ import type {
   BulkRunReplayResult,
   OutboundPolicyPatchInput,
   OutboundPolicyRecord,
+  OpsSummaryRecord,
   RunReplayResult,
+  RetentionCleanupResult,
   CircuitBreakerListInput,
   CircuitBreakerRecord,
   SecretCreateInput,
@@ -124,10 +126,12 @@ export interface CloudStore {
   rotateCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> | CallbackSigningSecretRecord;
   getOutboundPolicy(orgId: string): Promise<OutboundPolicyRecord> | OutboundPolicyRecord;
   updateOutboundPolicy(orgId: string, input: OutboundPolicyPatchInput): Promise<OutboundPolicyRecord> | OutboundPolicyRecord;
+  getOpsSummary(orgId: string): Promise<OpsSummaryRecord> | OpsSummaryRecord;
 
   // Worker dispatch
   claimDueDispatches(limit?: number): Promise<DispatchInstruction[]> | DispatchInstruction[];
   startDispatchAttempt(input: InternalDispatchStartInput): Promise<void> | void;
   completeDispatchAttempt(input: InternalDispatchCompleteInput): Promise<void> | void;
   reconcileDispatches(limit?: number): Promise<{ repaired: number }> | { repaired: number };
+  cleanupRetention(limit?: number): Promise<RetentionCleanupResult> | RetentionCleanupResult;
 }
