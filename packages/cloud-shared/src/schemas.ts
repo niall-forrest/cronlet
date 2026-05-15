@@ -263,6 +263,8 @@ export const auditEventListSchema = z.object({
   actorType: z.enum(["user", "api_key", "agent", "internal", "webhook"]).optional(),
   action: z.string().min(1).max(120).optional(),
   actionPrefix: z.string().min(1).max(120).optional(),
+  targetType: z.string().min(1).max(120).optional(),
+  targetId: z.string().min(1).max(200).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),

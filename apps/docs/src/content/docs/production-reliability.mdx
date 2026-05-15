@@ -113,6 +113,17 @@ Cronlet exposes metadata-first control-plane APIs for product reconciliation:
 
 These APIs are intended for application-owned workflows such as email drips, reminders, billing retries, and agent follow-ups where your product stores the canonical entity state and Cronlet provides durable wake-ups.
 
+## Auditability
+
+Cronlet records audit events for mutating control-plane actions such as:
+
+- task create, update, cancel, bulk cancel, delete, and manual trigger
+- run replay and bulk replay
+- secret create, update, and delete
+- API key lifecycle changes
+
+`/v1/audit-events` supports filtering by actor, action, target type, target ID, and time window so operators can ask focused questions like “what changed for this task?” or “who replayed this run?”.
+
 ## Initial cloud assumptions
 
 Cronlet Cloud starts as a single-primary-region scheduler. Postgres is the authoritative clock and source of truth for due claiming.

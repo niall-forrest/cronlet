@@ -1481,6 +1481,8 @@ export class PrismaCloudStore implements CloudStore {
       ...(input.actorType ? { actorType: input.actorType } : {}),
       ...(input.action ? { action: input.action } : {}),
       ...(input.actionPrefix ? { action: { startsWith: input.actionPrefix } } : {}),
+      ...(input.targetType ? { targetType: input.targetType } : {}),
+      ...(input.targetId ? { targetId: input.targetId } : {}),
       ...(input.from || input.to
         ? {
           createdAt: {

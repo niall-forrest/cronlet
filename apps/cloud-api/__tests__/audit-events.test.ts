@@ -134,4 +134,132 @@ describe("audit timeline and api key governance", () => {
       await app.close();
     }
   });
+
+  it("records task, run, and secret lifecycle events with target filters", async () => {
+    const app = await buildServer();
+
+    try {
+      const orgId = "org_audit_3";
+      const adminHeaders = {
+        "x-org-id": orgId,
+        "x-user-id": "admin_2",
+        "x-role": "admin",
+      };
+
+      const createdTask = await app.inject({
+        method: "POST",
+        url: "/v1/tasks",
+        headers: adminHeaders,
+        payload: {
+          name: "Send welcome email",
+          externalId: "email_send_1",
+          schedule: {
+            type: "once",
+            at: "2026-05-20T09:00:00.000Z",
+          },
+          handler: {
+            type: "webhook",
+            url: "https://example.com/email/send",
+          },
+          metadata: {
+            workflow: "drip",
+          },
+        },
+      });
+      expect(createdTask.statusCode).toBe(201);
+      const taskId = createdTask.json().data.id as string;
+
+      const updatedTask = await app.inject({
+        method: "PATCH",
+        url: `/v1/tasks/${taskId}`,
+        headers: adminHeaders,
+        payload: {
+          name: "Send welcome email v2",
+        },
+      });
+      expect(updatedTask.statusCode).toBe(200);
+
+      const triggeredRun = await app.inject({
+        method: "POST",
+        url: `/v1/tasks/${taskId}/trigger`,
+        headers: adminHeaders,
+      });
+      expect(triggeredRun.statusCode).toBe(201);
+      const runId = triggeredRun.json().data.id as string;
+
+      const replayedRun = await app.inject({
+        method: "POST",
+        url: `/v1/runs/${runId}/replay`,
+        headers: adminHeaders,
+      });
+      expect(replayedRun.statusCode).toBe(201);
+      const replayRunId = replayedRun.json().data.run.id as string;
+
+      const createdSecret = await app.inject({
+        method: "POST",
+        url: "/v1/secrets",
+        headers: adminHeaders,
+        payload: {
+          name: "MAILCHIMP_API_KEY",
+          value: "secret_123",
+        },
+      });
+      expect(createdSecret.statusCode).toBe(201);
+
+      const updatedSecret = await app.inject({
+        method: "PATCH",
+        url: "/v1/secrets/MAILCHIMP_API_KEY",
+        headers: adminHeaders,
+        payload: {
+          value: "secret_456",
+        },
+      });
+      expect(updatedSecret.statusCode).toBe(200);
+
+      const deletedSecret = await app.inject({
+        method: "DELETE",
+        url: "/v1/secrets/MAILCHIMP_API_KEY",
+        headers: adminHeaders,
+      });
+      expect(deletedSecret.statusCode).toBe(200);
+
+      const taskAudit = await app.inject({
+        method: "GET",
+        url: `/v1/audit-events?targetType=task&targetId=${taskId}`,
+        headers: adminHeaders,
+      });
+      expect(taskAudit.statusCode).toBe(200);
+      expect(taskAudit.json().data.map((event: { action: string }) => event.action)).toEqual(
+        expect.arrayContaining(["task.created", "task.updated"])
+      );
+
+      const runAudit = await app.inject({
+        method: "GET",
+        url: `/v1/audit-events?targetType=run&targetId=${runId}`,
+        headers: adminHeaders,
+      });
+      expect(runAudit.statusCode).toBe(200);
+      expect(runAudit.json().data.map((event: { action: string }) => event.action)).toContain("task.triggered");
+
+      const replayAudit = await app.inject({
+        method: "GET",
+        url: `/v1/audit-events?targetType=run&targetId=${replayRunId}`,
+        headers: adminHeaders,
+      });
+      expect(replayAudit.statusCode).toBe(200);
+      expect(replayAudit.json().data.map((event: { action: string }) => event.action)).toContain("run.replayed");
+
+      const secretAudit = await app.inject({
+        method: "GET",
+        url: "/v1/audit-events?targetType=secret&targetId=MAILCHIMP_API_KEY&actionPrefix=secret.",
+        headers: adminHeaders,
+      });
+      expect(secretAudit.statusCode).toBe(200);
+      expect(secretAudit.json().data.map((event: { action: string }) => event.action)).toEqual(
+        expect.arrayContaining(["secret.created", "secret.updated", "secret.deleted"])
+      );
+    } finally {
+      await app.close();
+    }
+  });
 });

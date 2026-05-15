@@ -1212,6 +1212,14 @@ export class InMemoryCloudStore implements CloudStore {
           return false;
         }
 
+        if (input.targetType && event.targetType !== input.targetType) {
+          return false;
+        }
+
+        if (input.targetId && event.targetId !== input.targetId) {
+          return false;
+        }
+
         const createdAtTime = new Date(event.createdAt).getTime();
         if (fromTime !== null && createdAtTime < fromTime) {
           return false;

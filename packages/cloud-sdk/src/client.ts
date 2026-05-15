@@ -1,5 +1,7 @@
 import type {
   ApiResponse,
+  AuditEventCreateInput,
+  AuditEventRecord,
   TaskCreateInput,
   TaskDispatchInput,
   TaskPatchInput,
@@ -68,6 +70,17 @@ export interface AuditRecordInput {
   actorType: string;
   actorId: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface AuditEventFilter {
+  actorType?: "user" | "api_key" | "agent" | "internal" | "webhook";
+  action?: string;
+  actionPrefix?: string;
+  targetType?: string;
+  targetId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
 }
 
 export interface RateLimitInfo {
@@ -464,11 +477,25 @@ export class CloudClient {
    * Audit event recording (internal use)
    */
   readonly audit = {
+    list: (filter?: AuditEventFilter): Promise<AuditEventRecord[]> => {
+      const params = new URLSearchParams();
+      if (filter?.actorType) params.set("actorType", filter.actorType);
+      if (filter?.action) params.set("action", filter.action);
+      if (filter?.actionPrefix) params.set("actionPrefix", filter.actionPrefix);
+      if (filter?.targetType) params.set("targetType", filter.targetType);
+      if (filter?.targetId) params.set("targetId", filter.targetId);
+      if (filter?.from) params.set("from", filter.from);
+      if (filter?.to) params.set("to", filter.to);
+      if (typeof filter?.limit === "number") params.set("limit", String(filter.limit));
+      const query = params.toString() ? `?${params.toString()}` : "";
+      return this.request<AuditEventRecord[]>(`/v1/audit-events${query}`);
+    },
+
     /**
      * Record an audit event
      */
-    record: (input: AuditRecordInput): Promise<{ id: string }> =>
-      this.request<{ id: string }>("/v1/audit", {
+    record: (input: AuditRecordInput | AuditEventCreateInput): Promise<{ recorded: boolean }> =>
+      this.request<{ recorded: boolean }>("/v1/audit-events", {
         method: "POST",
         body: JSON.stringify(input),
       }),
