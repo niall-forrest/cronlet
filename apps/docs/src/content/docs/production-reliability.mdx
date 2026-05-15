@@ -22,6 +22,17 @@ Cronlet does not guarantee exactly-once callback effects. Your application must 
 
 Cronlet is designed so your application can reconcile its own business state against Cronlet state instead of treating Cronlet as the source of truth.
 
+## Outbound guardrails
+
+Cronlet validates outbound webhook and callback destinations at delivery time.
+
+- `http` and `https` are allowed
+- `localhost` and `*.localhost` are blocked
+- private, loopback, link-local, and cloud-metadata IP ranges are blocked
+- DNS is resolved at execution time before delivery
+
+If you set `CLOUD_ALLOWED_OUTBOUND_HOSTS`, Cronlet also requires every outbound destination hostname to appear in that allowlist.
+
 ## Success semantics
 
 For webhook delivery, Cronlet treats HTTP `2xx` as success.

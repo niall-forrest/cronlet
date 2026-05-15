@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DispatchInstruction } from "@cronlet/shared";
 import { DispatchQueueRuntime } from "./dispatcher.js";
+import { createOutboundPolicyFromEnv } from "./outbound.js";
 
 function instruction(overrides: Partial<DispatchInstruction> = {}): DispatchInstruction {
   return {
@@ -65,6 +66,10 @@ describe("DispatchQueueRuntime callback delivery", () => {
 
   it("signs callbacks and includes task name and expiresAt", async () => {
     const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime;
+    Reflect.set(runtime as object, "outboundPolicy", {
+      allowedHosts: null,
+      resolveHostname: async () => ["93.184.216.34"],
+    });
     const sendCallback = Reflect.get(runtime as object, "sendCallback") as (
       instruction: DispatchInstruction,
       event: string,
@@ -122,5 +127,28 @@ describe("DispatchQueueRuntime callback delivery", () => {
       undefined,
       "expired_at_reached"
     );
+  });
+
+  it("skips callback delivery to blocked local targets", async () => {
+    const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime;
+    Reflect.set(runtime as object, "outboundPolicy", createOutboundPolicyFromEnv());
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await Reflect.get(runtime as object, "sendCallback").call(
+      runtime,
+      instruction({ callbackUrl: "http://127.0.0.1:4050/internal/callback" }),
+      "task.run.completed",
+      {
+        status: "success",
+        output: { ok: true },
+        errorMessage: null,
+        durationMs: 40,
+        attempt: 1,
+      },
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("blocked address 127.0.0.1"));
+    warnSpy.mockRestore();
   });
 });

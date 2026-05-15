@@ -8,6 +8,7 @@ import type {
   TaskCallbackEventType,
 } from "@cronlet/shared";
 import type { CloudApiClient } from "./api.js";
+import { assertSafeOutboundUrl, createOutboundPolicyFromEnv } from "./outbound.js";
 import { executeTool, type ToolContext } from "./tools/index.js";
 import { SecretsCache } from "./secrets.js";
 
@@ -40,6 +41,7 @@ function signCallbackPayload(timestamp: string, body: string, secret: string): s
 
 export class DispatchQueueRuntime {
   private readonly secretsCache: SecretsCache;
+  private readonly outboundPolicy = createOutboundPolicyFromEnv();
 
   constructor(
     _redisUrl: string,
@@ -190,6 +192,8 @@ export class DispatchQueueRuntime {
     payload.signature = { version: "v1" };
 
     try {
+      await assertSafeOutboundUrl(instruction.callbackUrl, this.outboundPolicy);
+
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const body = JSON.stringify(payload);
       const response = await fetch(instruction.callbackUrl, {
@@ -258,6 +262,8 @@ export class DispatchQueueRuntime {
     config: WebhookHandlerConfig,
     signal: AbortSignal
   ): Promise<HandlerResult> {
+    await assertSafeOutboundUrl(config.url, this.outboundPolicy);
+
     const headers: Record<string, string> = {
       "content-type": "application/json",
       ...config.headers,
