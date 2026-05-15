@@ -326,6 +326,11 @@ export interface SecretRecord {
   // Note: encryptedValue is never exposed via API
 }
 
+export interface OutboundPolicyRecord {
+  allowedHosts: string[];
+  updatedAt: string;
+}
+
 export interface AlertRecord {
   id: string;
   orgId: string;
@@ -458,6 +463,7 @@ export interface DispatchInstruction {
   // Callback info for agent loop
   callbackUrl: string | null;
   callbackSigningSecret: string | null;
+  outboundAllowedHosts: string[] | null;
   metadata: Record<string, unknown> | null;
   maxRuns: number | null;
   expiresAt: string | null;

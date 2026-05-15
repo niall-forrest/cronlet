@@ -25,6 +25,8 @@ import {
   type InternalDispatchStartInput,
   type HandlerType,
   type InternalRunStatusInput,
+  type OutboundPolicyPatchInput,
+  type OutboundPolicyRecord,
   type PlanTier,
   type ReconciliationCompareInput,
   type ReconciliationCompareResult,
@@ -101,6 +103,7 @@ interface InternalOrganizationRecord {
   name?: string;
   slug?: string;
   callbackSigningSecret: string;
+  outboundAllowedHosts: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -111,6 +114,14 @@ function formatPlanLabel(tier: PlanTier): string {
 
 function generateCallbackSigningSecret(): string {
   return `crsig_${randomBytes(32).toString("hex")}`;
+}
+
+function normalizeAllowedHosts(hosts: readonly string[]): string[] {
+  return Array.from(new Set(
+    hosts
+      .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
+      .filter((host) => host.length > 0),
+  )).sort();
 }
 
 function isExpiredAt(expiresAt: string | null, nowMs = Date.now()): boolean {
@@ -582,6 +593,7 @@ export class InMemoryCloudStore implements CloudStore {
         name: input?.name ?? existing.name,
         slug: input?.slug ?? existing.slug,
         callbackSigningSecret: existing.callbackSigningSecret || generateCallbackSigningSecret(),
+        outboundAllowedHosts: existing.outboundAllowedHosts,
         updatedAt: nowIso(),
       };
       this.organizations.set(orgId, updated);
@@ -594,6 +606,7 @@ export class InMemoryCloudStore implements CloudStore {
       name: input?.name,
       slug: input?.slug,
       callbackSigningSecret: generateCallbackSigningSecret(),
+      outboundAllowedHosts: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -603,6 +616,10 @@ export class InMemoryCloudStore implements CloudStore {
 
   private getCallbackSigningSecretValue(orgId: string): string {
     return this.ensureOrganization(orgId).callbackSigningSecret;
+  }
+
+  private getOutboundAllowedHosts(orgId: string): string[] {
+    return [...this.ensureOrganization(orgId).outboundAllowedHosts];
   }
 
   private toPublicTask(task: InternalTaskRecord): TaskRecord {
@@ -806,6 +823,7 @@ export class InMemoryCloudStore implements CloudStore {
       callbackSigningSecret: task.callbackUrl
         ? this.getCallbackSigningSecretValue(task.orgId)
         : null,
+      outboundAllowedHosts: this.getOutboundAllowedHosts(task.orgId),
       metadata: task.metadata,
       maxRuns: task.maxRuns,
       expiresAt: task.expiresAt,
@@ -1830,6 +1848,28 @@ export class InMemoryCloudStore implements CloudStore {
   getCallbackSigningSecret(orgId: string): CallbackSigningSecretRecord {
     return {
       secret: this.getCallbackSigningSecretValue(orgId),
+    };
+  }
+
+  getOutboundPolicy(orgId: string): OutboundPolicyRecord {
+    const organization = this.ensureOrganization(orgId);
+    return {
+      allowedHosts: [...organization.outboundAllowedHosts],
+      updatedAt: organization.updatedAt,
+    };
+  }
+
+  updateOutboundPolicy(orgId: string, input: OutboundPolicyPatchInput): OutboundPolicyRecord {
+    const organization = this.ensureOrganization(orgId);
+    const updated: InternalOrganizationRecord = {
+      ...organization,
+      outboundAllowedHosts: normalizeAllowedHosts(input.allowedHosts),
+      updatedAt: nowIso(),
+    };
+    this.organizations.set(orgId, updated);
+    return {
+      allowedHosts: [...updated.outboundAllowedHosts],
+      updatedAt: updated.updatedAt,
     };
   }
 

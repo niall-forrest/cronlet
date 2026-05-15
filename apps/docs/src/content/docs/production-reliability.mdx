@@ -34,6 +34,8 @@ Cronlet validates outbound webhook and callback destinations at delivery time.
 
 If you set `CLOUD_ALLOWED_OUTBOUND_HOSTS`, Cronlet also requires every outbound destination hostname to appear in that allowlist.
 
+Organizations can also maintain their own outbound hostname allowlist with `GET /v1/outbound-policy` and `PATCH /v1/outbound-policy`. When both are configured, Cronlet uses the intersection so the org policy can only narrow, never widen, the process-level policy.
+
 ## Secret protection
 
 Cronlet stores secret values encrypted at rest and records encryption metadata per secret.

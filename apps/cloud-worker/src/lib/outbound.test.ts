@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSafeOutboundUrl, createOutboundPolicyFromEnv } from "./outbound.js";
+import { assertSafeOutboundUrl, createOutboundPolicyFromEnv, createScopedOutboundPolicy } from "./outbound.js";
 
 describe("outbound target policy", () => {
   it("allows public outbound https targets", async () => {
@@ -41,5 +41,14 @@ describe("outbound target policy", () => {
     process.env.CLOUD_ALLOWED_OUTBOUND_HOSTS = "hooks.example.com, api.example.com ";
     expect(createOutboundPolicyFromEnv().allowedHosts).toEqual(new Set(["hooks.example.com", "api.example.com"]));
     delete process.env.CLOUD_ALLOWED_OUTBOUND_HOSTS;
+  });
+
+  it("intersects org-scoped allowlists with the process allowlist", () => {
+    const scoped = createScopedOutboundPolicy({
+      allowedHosts: new Set(["hooks.example.com", "api.example.com"]),
+      resolveHostname: async () => ["93.184.216.34"],
+    }, ["api.example.com", "jobs.example.com"]);
+
+    expect(scoped.allowedHosts).toEqual(new Set(["api.example.com"]));
   });
 });

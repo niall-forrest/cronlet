@@ -28,6 +28,8 @@ import {
   type InternalDispatchCompleteInput,
   type InternalDispatchStartInput,
   type InternalRunStatusInput,
+  type OutboundPolicyPatchInput,
+  type OutboundPolicyRecord,
   type ReconciliationCompareInput,
   type ReconciliationCompareResult,
   type RetryPolicy,
@@ -76,6 +78,14 @@ function orgSlug(orgId: string, preferredSlug?: string): string {
   const base = slugify(preferredSlug ?? orgId).slice(0, 48);
   const suffix = slugify(orgId).slice(-8) || "org";
   return `${base}-${suffix}`;
+}
+
+function normalizeAllowedHosts(hosts: readonly string[]): string[] {
+  return Array.from(new Set(
+    hosts
+      .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
+      .filter((host) => host.length > 0),
+  )).sort();
 }
 
 function formatPlanLabel(tier: PlanTier): string {
@@ -806,6 +816,7 @@ export class PrismaCloudStore implements CloudStore {
         name: name ?? `Organization ${orgId}`,
         slug: orgSlug(orgId, slug),
         callbackSigningSecret: generateCallbackSigningSecret(),
+        outboundAllowedHosts: [],
       },
     });
   }
@@ -1005,6 +1016,11 @@ export class PrismaCloudStore implements CloudStore {
     const job = await this.prisma.dispatchJob.findUnique({
       where: { id: dispatchJobId },
       include: {
+        organization: {
+          select: {
+            outboundAllowedHosts: true,
+          },
+        },
         task: true,
         run: true,
         attempts: {
@@ -1040,6 +1056,7 @@ export class PrismaCloudStore implements CloudStore {
       callbackSigningSecret: job.task.callbackUrl
         ? await this.getOrCreateCallbackSigningSecret(job.organizationId)
         : null,
+      outboundAllowedHosts: job.organization?.outboundAllowedHosts ?? [],
       metadata: job.task.metadata as Record<string, unknown> | null,
       maxRuns: job.task.maxRuns,
       expiresAt: isoNullable(job.task.expiresAt),
@@ -2296,6 +2313,39 @@ export class PrismaCloudStore implements CloudStore {
   async getCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> {
     return {
       secret: await this.getOrCreateCallbackSigningSecret(orgId),
+    };
+  }
+
+  async getOutboundPolicy(orgId: string): Promise<OutboundPolicyRecord> {
+    await this.ensureOrganization(orgId);
+    const organization = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: orgId },
+      select: {
+        outboundAllowedHosts: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      allowedHosts: organization.outboundAllowedHosts,
+      updatedAt: iso(organization.updatedAt),
+    };
+  }
+
+  async updateOutboundPolicy(orgId: string, input: OutboundPolicyPatchInput): Promise<OutboundPolicyRecord> {
+    await this.ensureOrganization(orgId);
+    const organization = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        outboundAllowedHosts: normalizeAllowedHosts(input.allowedHosts),
+      },
+      select: {
+        outboundAllowedHosts: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      allowedHosts: organization.outboundAllowedHosts,
+      updatedAt: iso(organization.updatedAt),
     };
   }
 

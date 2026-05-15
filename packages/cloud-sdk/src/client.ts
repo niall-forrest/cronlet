@@ -25,6 +25,8 @@ import type {
   TimelineEntryRecord,
   UsageSnapshot,
   CreatedBy,
+  OutboundPolicyPatchInput,
+  OutboundPolicyRecord,
   TaskSource,
 } from "@cronlet/shared";
 import { ERROR_CODES, resolveSchedule, ScheduleParseError } from "@cronlet/shared";
@@ -376,6 +378,17 @@ export class CloudClient {
 
       return summarizeTasksOverview(filteredTasks, new Map(taskRuns), resolvedOptions);
     },
+  };
+
+  readonly outboundPolicy = {
+    get: (): Promise<OutboundPolicyRecord> =>
+      this.request<OutboundPolicyRecord>("/v1/outbound-policy"),
+
+    update: (input: OutboundPolicyPatchInput): Promise<OutboundPolicyRecord> =>
+      this.request<OutboundPolicyRecord>("/v1/outbound-policy", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
   };
 
   /**

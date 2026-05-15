@@ -230,6 +230,20 @@ export const secretPatchSchema = z.object({
   value: z.string().min(1).max(10000),
 });
 
+const outboundHostnameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(255)
+  .regex(/^[a-z0-9.-]+$/i, "Hostnames may contain letters, numbers, dots, and hyphens")
+  .transform((value) => value.toLowerCase().replace(/\.$/, ""))
+  .refine((value) => !value.includes(".."), "Hostnames cannot contain empty labels")
+  .refine((value) => value !== "localhost" && !value.endsWith(".localhost"), "Localhost cannot be allowlisted");
+
+export const outboundPolicyPatchSchema = z.object({
+  allowedHosts: z.array(outboundHostnameSchema).max(200),
+});
+
 // ============================================
 // ALERT
 // ============================================
@@ -382,6 +396,7 @@ export type TaskPatchInput = z.infer<typeof taskPatchSchema>;
 export type TaskDispatchInput = z.input<typeof taskDispatchSchema>;
 export type SecretCreateInput = z.infer<typeof secretCreateSchema>;
 export type SecretPatchInput = z.infer<typeof secretPatchSchema>;
+export type OutboundPolicyPatchInput = z.infer<typeof outboundPolicyPatchSchema>;
 export type AlertCreateInput = z.infer<typeof alertCreateSchema>;
 export type ApiKeyCreateInput = z.infer<typeof apiKeyCreateSchema>;
 export type ApiKeyRotateInput = z.infer<typeof apiKeyRotateSchema>;

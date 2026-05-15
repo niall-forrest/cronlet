@@ -134,6 +134,14 @@ function parseAllowedHosts(raw = process.env.CLOUD_ALLOWED_OUTBOUND_HOSTS): Read
   return hosts.length > 0 ? new Set(hosts) : null;
 }
 
+function toAllowedHostSet(hosts: readonly string[] | null | undefined): ReadonlySet<string> | null {
+  if (!hosts || hosts.length === 0) {
+    return null;
+  }
+
+  return new Set(hosts.map((value) => normalizeHostname(value)).filter((value) => value.length > 0));
+}
+
 async function resolvePublicAddresses(hostname: string): Promise<readonly string[]> {
   const resolved = await lookup(hostname, { all: true, verbatim: true });
   return resolved.map((entry) => entry.address);
@@ -143,6 +151,25 @@ export function createOutboundPolicyFromEnv(): OutboundPolicy {
   return {
     allowedHosts: parseAllowedHosts(),
     resolveHostname: resolvePublicAddresses,
+  };
+}
+
+export function createScopedOutboundPolicy(
+  basePolicy: OutboundPolicy,
+  allowedHosts: readonly string[] | null | undefined,
+): OutboundPolicy {
+  const scopedAllowedHosts = toAllowedHostSet(allowedHosts);
+  if (!scopedAllowedHosts) {
+    return basePolicy;
+  }
+
+  const mergedAllowedHosts = basePolicy.allowedHosts
+    ? new Set(Array.from(scopedAllowedHosts).filter((hostname) => basePolicy.allowedHosts?.has(hostname)))
+    : scopedAllowedHosts;
+
+  return {
+    allowedHosts: mergedAllowedHosts,
+    resolveHostname: basePolicy.resolveHostname,
   };
 }
 

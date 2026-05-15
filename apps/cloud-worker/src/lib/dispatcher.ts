@@ -8,7 +8,12 @@ import type {
   TaskCallbackEventType,
 } from "@cronlet/shared";
 import type { CloudApiClient } from "./api.js";
-import { assertSafeOutboundUrl, createOutboundPolicyFromEnv } from "./outbound.js";
+import {
+  assertSafeOutboundUrl,
+  createOutboundPolicyFromEnv,
+  createScopedOutboundPolicy,
+  type OutboundPolicy,
+} from "./outbound.js";
 import { executeTool, type ToolContext } from "./tools/index.js";
 import { SecretsCache } from "./secrets.js";
 
@@ -139,6 +144,7 @@ export class DispatchQueueRuntime {
       followRedirects: boolean;
       maxRedirects: number;
     },
+    outboundPolicy: OutboundPolicy,
   ): Promise<Response> {
     let currentUrl = url;
     let requestInit: RequestInit = {
@@ -149,7 +155,7 @@ export class DispatchQueueRuntime {
     let remainingRedirects = options.followRedirects ? options.maxRedirects : 0;
 
     while (true) {
-      await assertSafeOutboundUrl(currentUrl, this.outboundPolicy);
+      await assertSafeOutboundUrl(currentUrl, outboundPolicy);
       const response = await fetch(currentUrl, requestInit);
       const location = response.headers.get("location");
       const isRedirect = response.status >= 300 && response.status < 400 && location;
@@ -176,6 +182,10 @@ export class DispatchQueueRuntime {
       currentUrl = nextUrl;
       remainingRedirects -= 1;
     }
+  }
+
+  private outboundPolicyForInstruction(instruction: DispatchInstruction): OutboundPolicy {
+    return createScopedOutboundPolicy(this.outboundPolicy, instruction.outboundAllowedHosts);
   }
 
   private async sendCallback(
@@ -238,7 +248,8 @@ export class DispatchQueueRuntime {
     payload.signature = { version: "v1" };
 
     try {
-      await assertSafeOutboundUrl(instruction.callbackUrl, this.outboundPolicy);
+      const outboundPolicy = this.outboundPolicyForInstruction(instruction);
+      await assertSafeOutboundUrl(instruction.callbackUrl, outboundPolicy);
 
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const body = JSON.stringify(payload);
@@ -258,7 +269,7 @@ export class DispatchQueueRuntime {
       }, {
         followRedirects: false,
         maxRedirects: 0,
-      });
+      }, outboundPolicy);
 
       if (!response.ok) {
         console.warn(`Callback to ${instruction.callbackUrl} failed with status ${response.status}`);
@@ -311,6 +322,7 @@ export class DispatchQueueRuntime {
     config: WebhookHandlerConfig,
     signal: AbortSignal
   ): Promise<HandlerResult> {
+    const outboundPolicy = this.outboundPolicyForInstruction(instruction);
     const headers: Record<string, string> = {
       "content-type": "application/json",
       ...config.headers,
@@ -349,7 +361,7 @@ export class DispatchQueueRuntime {
     }, {
       followRedirects: config.followRedirects ?? false,
       maxRedirects: config.maxRedirects ?? 0,
-    });
+    }, outboundPolicy);
 
     const responseText = await response.text();
     const responseBodyPreview = responseText.slice(0, 400);

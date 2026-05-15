@@ -35,6 +35,7 @@ function instruction(overrides: Partial<DispatchInstruction> = {}): DispatchInst
     },
     callbackUrl: "https://example.com/callback",
     callbackSigningSecret: "crsig_test_secret",
+    outboundAllowedHosts: null,
     metadata: {
       reportId: "report_123",
     },
@@ -152,6 +153,34 @@ describe("DispatchQueueRuntime callback delivery", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("blocked address 127.0.0.1"));
+    warnSpy.mockRestore();
+  });
+
+  it("skips callback delivery when the org allowlist excludes the callback host", async () => {
+    const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime;
+    Reflect.set(runtime as object, "outboundPolicy", {
+      allowedHosts: null,
+      resolveHostname: async () => ["93.184.216.34"],
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await Reflect.get(runtime as object, "sendCallback").call(
+      runtime,
+      instruction({
+        outboundAllowedHosts: ["hooks.example.com"],
+      }),
+      "task.run.completed",
+      {
+        status: "success",
+        output: { ok: true },
+        errorMessage: null,
+        durationMs: 40,
+        attempt: 1,
+      },
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("configured allowlist"));
     warnSpy.mockRestore();
   });
 
