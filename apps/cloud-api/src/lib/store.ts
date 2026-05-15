@@ -16,6 +16,7 @@ import {
   type AlertCreateInput,
   type AlertRecord,
   type CreatedBy,
+  type DispatchEventRecord,
   type DispatchInstruction,
   type DispatchJobStatus,
   type InternalDispatchCompleteInput,
@@ -25,6 +26,7 @@ import {
   type PlanTier,
   type ReconciliationCompareInput,
   type ReconciliationCompareResult,
+  type RunEventRecord,
   type RunRecord,
   type RunListInput,
   type RunReplayResult,
@@ -37,10 +39,12 @@ import {
   type SecretRecord,
   type TaskCreateInput,
   type TaskDispatchInput,
+  type TaskEventRecord,
   type TaskListInput,
   type TaskPatchInput,
   type TaskRecord,
   type TaskCancelResult,
+  type TimelineEntryRecord,
   type UsageSnapshot,
   parseDuration,
 } from "@cronlet/shared";
@@ -199,6 +203,9 @@ export class InMemoryCloudStore implements CloudStore {
   private readonly runs = new Map<string, RunRecord>();
   private readonly runAttempts = new Map<string, RunAttemptRecord>();
   private readonly dispatchJobs = new Map<string, InternalDispatchJobRecord>();
+  private readonly taskEvents = new Map<string, TaskEventRecord>();
+  private readonly runEvents = new Map<string, RunEventRecord>();
+  private readonly dispatchEvents = new Map<string, DispatchEventRecord>();
   private readonly secrets = new Map<string, InternalSecretRecord>();
   private readonly alerts = new Map<string, AlertRecord>();
   private readonly apiKeys = new Map<string, ApiKeyRecord & { keyHash: string }>();
@@ -208,6 +215,100 @@ export class InMemoryCloudStore implements CloudStore {
 
   private usageKey(orgId: string, yearMonth: string): string {
     return `${orgId}:${yearMonth}`;
+  }
+
+  private appendTaskEvent(input: Omit<TaskEventRecord, "id" | "createdAt"> & { createdAt?: string }): void {
+    const id = nanoid();
+    this.taskEvents.set(id, {
+      id,
+      createdAt: input.createdAt ?? nowIso(),
+      ...input,
+    });
+  }
+
+  private appendRunEvent(input: Omit<RunEventRecord, "id" | "createdAt"> & { createdAt?: string }): void {
+    const id = nanoid();
+    this.runEvents.set(id, {
+      id,
+      createdAt: input.createdAt ?? nowIso(),
+      ...input,
+    });
+  }
+
+  private appendDispatchEvent(input: Omit<DispatchEventRecord, "id" | "createdAt"> & { createdAt?: string }): void {
+    const id = nanoid();
+    this.dispatchEvents.set(id, {
+      id,
+      createdAt: input.createdAt ?? nowIso(),
+      ...input,
+    });
+  }
+
+  private toTimelineEntryFromTaskEvent(event: TaskEventRecord): TimelineEntryRecord {
+    return {
+      id: event.id,
+      kind: "task_event",
+      action: event.action,
+      createdAt: event.createdAt,
+      targetType: "task",
+      targetId: event.taskId,
+      previousState: event.previousState,
+      nextState: event.nextState,
+      reason: event.reason,
+      metadata: event.metadata,
+    };
+  }
+
+  private toTimelineEntryFromRunEvent(event: RunEventRecord): TimelineEntryRecord {
+    return {
+      id: event.id,
+      kind: "run_event",
+      action: event.action,
+      createdAt: event.createdAt,
+      targetType: "run",
+      targetId: event.runId,
+      previousState: event.previousState,
+      nextState: event.nextState,
+      reason: event.reason,
+      metadata: event.metadata,
+    };
+  }
+
+  private toTimelineEntryFromDispatchEvent(event: DispatchEventRecord): TimelineEntryRecord {
+    return {
+      id: event.id,
+      kind: "dispatch_event",
+      action: event.action,
+      createdAt: event.createdAt,
+      targetType: "dispatch",
+      targetId: event.dispatchJobId,
+      previousState: event.previousState,
+      nextState: event.nextState,
+      reason: event.reason,
+      metadata: event.metadata,
+    };
+  }
+
+  private toTimelineEntryFromAuditEvent(event: AuditEventRecord): TimelineEntryRecord {
+    return {
+      id: event.id,
+      kind: "audit_event",
+      action: event.action,
+      createdAt: event.createdAt,
+      targetType: "audit",
+      targetId: event.id,
+      previousState: null,
+      nextState: null,
+      reason: null,
+      actorType: event.actorType,
+      actorId: event.actorId,
+      metadata: {
+        targetType: event.targetType,
+        targetId: event.targetId,
+        payloadHash: event.payloadHash,
+        ...(event.metadata ?? {}),
+      },
+    };
   }
 
 
@@ -436,6 +537,19 @@ export class InMemoryCloudStore implements CloudStore {
       updatedAt: now,
     };
     this.dispatchJobs.set(dispatchJob.id, dispatchJob);
+    this.appendDispatchEvent({
+      orgId: task.orgId,
+      dispatchJobId: dispatchJob.id,
+      action: "dispatch.queued",
+      previousState: null,
+      nextState: "pending",
+      reason: run.trigger === "schedule" ? "schedule_due" : run.trigger,
+      metadata: {
+        runId: run.id,
+        taskId: task.id,
+        attemptNumber: 1,
+      },
+    });
 
     const attempt: RunAttemptRecord = {
       id: nanoid(),
@@ -540,12 +654,51 @@ export class InMemoryCloudStore implements CloudStore {
     return this.toPublicTask(this.assertTaskAccessible(this.tasks.get(taskId), orgId));
   }
 
+  getTaskTimeline(orgId: string, taskId: string, limit = 100): TimelineEntryRecord[] {
+    this.assertTaskAccessible(this.tasks.get(taskId), orgId);
+    const runIds = Array.from(this.runs.values())
+      .filter((run) => run.orgId === orgId && run.taskId === taskId)
+      .map((run) => run.id);
+    const dispatchJobIds = Array.from(this.dispatchJobs.values())
+      .filter((job) => job.orgId === orgId && job.taskId === taskId)
+      .map((job) => job.id);
+
+    return [
+      ...this.listTaskEvents(orgId, taskId, limit).map((event) => this.toTimelineEntryFromTaskEvent(event)),
+      ...Array.from(this.runEvents.values())
+        .filter((event) => event.orgId === orgId && runIds.includes(event.runId))
+        .map((event) => this.toTimelineEntryFromRunEvent(event)),
+      ...Array.from(this.dispatchEvents.values())
+        .filter((event) => event.orgId === orgId && dispatchJobIds.includes(event.dispatchJobId))
+        .map((event) => this.toTimelineEntryFromDispatchEvent(event)),
+      ...this.listAuditEvents(orgId, { targetType: "task", targetId: taskId, limit })
+        .map((event) => this.toTimelineEntryFromAuditEvent(event)),
+      ...Array.from(this.auditEvents.values())
+        .filter((event) => event.orgId === orgId && event.targetType === "run" && runIds.includes(event.targetId))
+        .map((event) => this.toTimelineEntryFromAuditEvent(event)),
+    ]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): TaskRecord {
     this.assertWritable(orgId);
     this.assertWithinTaskLimit(orgId);
 
     const task = this.buildScheduledTask(orgId, input, createdBy);
     this.tasks.set(task.id, task);
+    this.appendTaskEvent({
+      orgId,
+      taskId: task.id,
+      action: "task.created",
+      previousState: null,
+      nextState: task.active ? "active" : "paused",
+      reason: "api_create",
+      metadata: {
+        scheduleType: task.scheduleType,
+        handlerType: task.handlerType,
+      },
+    });
     return this.toPublicTask(task);
   }
 
@@ -629,11 +782,31 @@ export class InMemoryCloudStore implements CloudStore {
     };
 
     this.tasks.set(taskId, updated);
+    this.appendTaskEvent({
+      orgId,
+      taskId,
+      action: "task.updated",
+      previousState: task.active ? "active" : "paused",
+      nextState: updated.active ? "active" : "paused",
+      reason: "api_update",
+      metadata: {
+        nextRunAt: updated.nextRunAt,
+      },
+    });
     return this.toPublicTask(updated);
   }
 
   deleteTask(orgId: string, taskId: string): void {
-    this.assertTaskAccessible(this.tasks.get(taskId), orgId);
+    const task = this.assertTaskAccessible(this.tasks.get(taskId), orgId);
+    this.appendTaskEvent({
+      orgId,
+      taskId,
+      action: "task.deleted",
+      previousState: task.active ? "active" : "paused",
+      nextState: "deleted",
+      reason: "api_delete",
+      metadata: null,
+    });
     this.tasks.delete(taskId);
   }
 
@@ -664,6 +837,18 @@ export class InMemoryCloudStore implements CloudStore {
       active: false,
       nextRunAt: null,
       updatedAt: nowIso(),
+    });
+    this.appendTaskEvent({
+      orgId,
+      taskId,
+      action: "task.cancelled",
+      previousState: task.active ? "active" : "paused",
+      nextState: "paused",
+      reason: "api_cancel",
+      metadata: {
+        cancelledDispatchJobs,
+        runningAttemptIds,
+      },
     });
 
     return {
@@ -726,6 +911,17 @@ export class InMemoryCloudStore implements CloudStore {
     this.runs.set(run.id, run);
     this.incrementUsage(orgId);
     this.createDispatchForRun(task, run);
+    this.appendRunEvent({
+      orgId,
+      runId: run.id,
+      action: "run.queued",
+      previousState: null,
+      nextState: "queued",
+      reason: trigger,
+      metadata: {
+        taskId: task.id,
+      },
+    });
 
     return run;
   }
@@ -804,6 +1000,18 @@ export class InMemoryCloudStore implements CloudStore {
     this.runs.set(run.id, run);
     this.incrementUsage(orgId);
     this.createDispatchForRun(task, run);
+    this.appendRunEvent({
+      orgId,
+      runId: run.id,
+      action: "run.queued",
+      previousState: null,
+      nextState: "queued",
+      reason: trigger,
+      metadata: {
+        taskId: task.id,
+        kind: "dispatch",
+      },
+    });
     return run;
   }
 
@@ -849,6 +1057,24 @@ export class InMemoryCloudStore implements CloudStore {
     return run;
   }
 
+  getRunTimeline(orgId: string, runId: string, limit = 100): TimelineEntryRecord[] {
+    this.getRun(orgId, runId);
+    const dispatchJobIds = Array.from(this.dispatchJobs.values())
+      .filter((job) => job.orgId === orgId && job.runId === runId)
+      .map((job) => job.id);
+
+    return [
+      ...this.listRunEvents(orgId, runId, limit).map((event) => this.toTimelineEntryFromRunEvent(event)),
+      ...Array.from(this.dispatchEvents.values())
+        .filter((event) => event.orgId === orgId && dispatchJobIds.includes(event.dispatchJobId))
+        .map((event) => this.toTimelineEntryFromDispatchEvent(event)),
+      ...this.listAuditEvents(orgId, { targetType: "run", targetId: runId, limit })
+        .map((event) => this.toTimelineEntryFromAuditEvent(event)),
+    ]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   replayRun(orgId: string, runId: string, trigger: "manual" | "api" = "manual"): RunReplayResult {
     const source = this.getRun(orgId, runId);
     const task = this.tasks.get(source.taskId);
@@ -875,6 +1101,18 @@ export class InMemoryCloudStore implements CloudStore {
     };
     this.runs.set(run.id, run);
     this.createDispatchForRun(task, run);
+    this.appendRunEvent({
+      orgId,
+      runId: run.id,
+      action: "run.replayed",
+      previousState: null,
+      nextState: "queued",
+      reason: trigger,
+      metadata: {
+        replayOfRunId: runId,
+        taskId: task.id,
+      },
+    });
     return { run, replayOfRunId: runId };
   }
 
@@ -987,6 +1225,18 @@ export class InMemoryCloudStore implements CloudStore {
     };
 
     this.runs.set(run.id, updated);
+    this.appendRunEvent({
+      orgId: run.orgId,
+      runId: run.id,
+      action: `run.${input.status}`,
+      previousState: run.status,
+      nextState: updated.status,
+      reason: "internal_status_update",
+      metadata: {
+        attempt: input.attempt,
+        durationMs: input.durationMs ?? null,
+      },
+    });
 
     if (isTerminal) {
       const task = this.tasks.get(run.taskId);
@@ -1189,6 +1439,27 @@ export class InMemoryCloudStore implements CloudStore {
   // AUDIT EVENTS
   // ============================================
 
+  listTaskEvents(orgId: string, taskId: string, limit = 100): TaskEventRecord[] {
+    return Array.from(this.taskEvents.values())
+      .filter((event) => event.orgId === orgId && event.taskId === taskId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  listRunEvents(orgId: string, runId: string, limit = 100): RunEventRecord[] {
+    return Array.from(this.runEvents.values())
+      .filter((event) => event.orgId === orgId && event.runId === runId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  listDispatchEvents(orgId: string, dispatchJobId: string, limit = 100): DispatchEventRecord[] {
+    return Array.from(this.dispatchEvents.values())
+      .filter((event) => event.orgId === orgId && event.dispatchJobId === dispatchJobId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   listAuditEvents(orgId: string, input: AuditEventListInput): AuditEventRecord[] {
     const fromTime = input.from ? new Date(input.from).getTime() : null;
     const toTime = input.to ? new Date(input.to).getTime() : null;
@@ -1363,6 +1634,29 @@ export class InMemoryCloudStore implements CloudStore {
       this.runs.set(run.id, run);
       this.incrementUsage(normalizedTask.orgId);
       this.createDispatchForRun(normalizedTask, run);
+      this.appendRunEvent({
+        orgId: normalizedTask.orgId,
+        runId: run.id,
+        action: "run.queued",
+        previousState: null,
+        nextState: "queued",
+        reason: "schedule_due",
+        metadata: {
+          taskId: normalizedTask.id,
+          scheduledAt: normalizedTask.nextRunAt,
+        },
+      });
+      this.appendTaskEvent({
+        orgId: normalizedTask.orgId,
+        taskId: normalizedTask.id,
+        action: "task.dispatched",
+        previousState: normalizedTask.active ? "active" : "paused",
+        nextState: normalizedTask.active ? "active" : "paused",
+        reason: "schedule_due",
+        metadata: {
+          runId: run.id,
+        },
+      });
 
       // Update next run time
       const nextRunAt = computeNextRun(normalizedTask.scheduleConfig, normalizedTask.timezone, now);
@@ -1425,6 +1719,20 @@ export class InMemoryCloudStore implements CloudStore {
         status: "leased",
         attempt: attemptNumber,
       });
+      this.appendDispatchEvent({
+        orgId: job.orgId,
+        dispatchJobId: job.id,
+        action: "dispatch.leased",
+        previousState: job.status,
+        nextState: "leased",
+        reason: "worker_claim",
+        metadata: {
+          runId: job.runId,
+          taskId: job.taskId,
+          attemptId: attempt.id,
+          attemptNumber,
+        },
+      });
       instructions.push(this.instructionForDispatch(task, run, this.dispatchJobs.get(id) ?? job, attempt));
     }
 
@@ -1443,6 +1751,18 @@ export class InMemoryCloudStore implements CloudStore {
       status: "running",
       updatedAt: now,
     });
+    this.appendDispatchEvent({
+      orgId: job.orgId,
+      dispatchJobId: job.id,
+      action: "dispatch.running",
+      previousState: job.status,
+      nextState: "running",
+      reason: "worker_start",
+      metadata: {
+        attemptId: attempt.id,
+        attemptNumber: input.attemptNumber,
+      },
+    });
     this.runAttempts.set(attempt.id, {
       ...attempt,
       status: "running",
@@ -1455,6 +1775,18 @@ export class InMemoryCloudStore implements CloudStore {
         status: "running",
         startedAt: run.startedAt ?? now,
         attempt: input.attemptNumber,
+      });
+      this.appendRunEvent({
+        orgId: run.orgId,
+        runId: run.id,
+        action: "run.running",
+        previousState: run.status,
+        nextState: "running",
+        reason: "worker_start",
+        metadata: {
+          attemptId: attempt.id,
+          attemptNumber: input.attemptNumber,
+        },
       });
     }
   }
@@ -1502,6 +1834,20 @@ export class InMemoryCloudStore implements CloudStore {
         lastError: input.errorMessage ?? input.errorClass ?? "delivery failed",
         updatedAt: now,
       });
+      this.appendDispatchEvent({
+        orgId: job.orgId,
+        dispatchJobId: job.id,
+        action: "dispatch.retry_wait",
+        previousState: job.status,
+        nextState: "retry_wait",
+        reason: "delivery_retry_scheduled",
+        metadata: {
+          attemptId: attempt.id,
+          attemptNumber: input.attemptNumber,
+          httpStatus: input.httpStatus ?? null,
+          errorClass: input.errorClass ?? null,
+        },
+      });
       this.runs.set(run.id, {
         ...run,
         status: "retry_wait",
@@ -1530,6 +1876,19 @@ export class InMemoryCloudStore implements CloudStore {
       lastError: input.errorMessage ?? null,
       updatedAt: now,
     });
+    this.appendDispatchEvent({
+      orgId: job.orgId,
+      dispatchJobId: job.id,
+      action: terminalSuccess ? "dispatch.succeeded" : "dispatch.dead_lettered",
+      previousState: job.status,
+      nextState: terminalSuccess ? "succeeded" : "dead_lettered",
+      reason: terminalSuccess ? "delivery_succeeded" : finalStatus,
+      metadata: {
+        attemptId: attempt.id,
+        attemptNumber: input.attemptNumber,
+        httpStatus: input.httpStatus ?? null,
+      },
+    });
     this.updateRunStatus(run.id, {
       status: finalStatus,
       attempt: input.attemptNumber,
@@ -1556,6 +1915,18 @@ export class InMemoryCloudStore implements CloudStore {
           availableAt: nowIso(),
           lastError: "lease expired",
           updatedAt: nowIso(),
+        });
+        this.appendDispatchEvent({
+          orgId: job.orgId,
+          dispatchJobId: job.id,
+          action: "dispatch.reconciled",
+          previousState: job.status,
+          nextState: "retry_wait",
+          reason: "lease_expired",
+          metadata: {
+            runId: job.runId,
+            taskId: job.taskId,
+          },
         });
         const run = this.runs.get(job.runId);
         if (run && !isTerminalRunStatus(run.status)) {

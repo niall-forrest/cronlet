@@ -4,11 +4,13 @@ import { buildServer } from "../src/server.js";
 describe("audit timeline and api key governance", () => {
   beforeEach(() => {
     process.env.CLOUD_STORE_MODE = "memory";
+    process.env.CLOUD_INTERNAL_TOKEN = "dev-internal-token";
     delete process.env.CLERK_WEBHOOK_SECRET;
   });
 
   afterEach(() => {
     delete process.env.CLOUD_STORE_MODE;
+    delete process.env.CLOUD_INTERNAL_TOKEN;
   });
 
   it("records API key lifecycle and supports audit filtering", async () => {
@@ -258,6 +260,131 @@ describe("audit timeline and api key governance", () => {
       expect(secretAudit.json().data.map((event: { action: string }) => event.action)).toEqual(
         expect.arrayContaining(["secret.created", "secret.updated", "secret.deleted"])
       );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns task and run timelines with control-plane and dispatch events", async () => {
+    const app = await buildServer();
+
+    try {
+      const headers = {
+        "x-org-id": "org_timeline_1",
+        "x-user-id": "admin_timeline",
+        "x-role": "admin",
+      };
+
+      const createdTask = await app.inject({
+        method: "POST",
+        url: "/v1/tasks",
+        headers,
+        payload: {
+          name: "Timeline task",
+          schedule: {
+            type: "once",
+            at: "2026-05-20T09:00:00.000Z",
+          },
+          handler: {
+            type: "webhook",
+            url: "https://example.com/timeline",
+          },
+        },
+      });
+      expect(createdTask.statusCode).toBe(201);
+      const taskId = createdTask.json().data.id as string;
+
+      const triggeredRun = await app.inject({
+        method: "POST",
+        url: `/v1/tasks/${taskId}/trigger`,
+        headers,
+      });
+      expect(triggeredRun.statusCode).toBe(201);
+      const runId = triggeredRun.json().data.id as string;
+
+      const due = await app.inject({
+        method: "GET",
+        url: "/internal/tasks/due?limit=10",
+        headers: {
+          "x-org-id": "org_timeline_1",
+          "x-user-id": "owner_timeline",
+          "x-role": "owner",
+          "x-internal-token": "dev-internal-token",
+        },
+      });
+      expect(due.statusCode).toBe(200);
+      const dispatchInstruction = due.json().data.find((entry: { runId: string }) => entry.runId === runId) as {
+        dispatchJobId: string;
+        attemptId: string;
+        attemptNumber: number;
+      };
+
+      const started = await app.inject({
+        method: "POST",
+        url: "/internal/dispatch/start",
+        headers: {
+          "x-org-id": "org_timeline_1",
+          "x-user-id": "owner_timeline",
+          "x-role": "owner",
+          "x-internal-token": "dev-internal-token",
+        },
+        payload: dispatchInstruction,
+      });
+      expect(started.statusCode).toBe(200);
+
+      const completed = await app.inject({
+        method: "POST",
+        url: "/internal/dispatch/complete",
+        headers: {
+          "x-org-id": "org_timeline_1",
+          "x-user-id": "owner_timeline",
+          "x-role": "owner",
+          "x-internal-token": "dev-internal-token",
+        },
+        payload: {
+          ...dispatchInstruction,
+          status: "success",
+          durationMs: 42,
+          output: { ok: true },
+        },
+      });
+      expect(completed.statusCode).toBe(200);
+
+      const taskTimeline = await app.inject({
+        method: "GET",
+        url: `/v1/tasks/${taskId}/timeline`,
+        headers,
+      });
+      expect(taskTimeline.statusCode).toBe(200);
+      const taskTimelineActions = taskTimeline.json().data.map((entry: { action: string }) => entry.action);
+      expect(taskTimelineActions).toEqual(expect.arrayContaining([
+        "task.created",
+        "task.triggered",
+        "run.queued",
+        "dispatch.queued",
+        "dispatch.leased",
+        "dispatch.running",
+        "dispatch.succeeded",
+        "run.success",
+      ]));
+
+      const runTimeline = await app.inject({
+        method: "GET",
+        url: `/v1/runs/${runId}/timeline`,
+        headers,
+      });
+      expect(runTimeline.statusCode).toBe(200);
+      const runTimelineActions = runTimeline.json().data.map((entry: { action: string }) => entry.action);
+      expect(runTimelineActions).toEqual(expect.arrayContaining([
+        "task.triggered",
+        "run.queued",
+        "run.running",
+        "run.success",
+        "dispatch.queued",
+        "dispatch.leased",
+        "dispatch.running",
+        "dispatch.succeeded",
+      ]));
     } finally {
       await app.close();
     }

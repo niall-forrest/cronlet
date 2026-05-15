@@ -343,6 +343,57 @@ export interface AuditEventRecord {
   createdAt: string;
 }
 
+export interface TaskEventRecord {
+  id: string;
+  orgId: string;
+  taskId: string;
+  action: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface RunEventRecord {
+  id: string;
+  orgId: string;
+  runId: string;
+  action: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface DispatchEventRecord {
+  id: string;
+  orgId: string;
+  dispatchJobId: string;
+  action: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface TimelineEntryRecord {
+  id: string;
+  kind: "task_event" | "run_event" | "dispatch_event" | "audit_event";
+  action: string;
+  createdAt: string;
+  targetType: "task" | "run" | "dispatch" | "audit";
+  targetId: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  actorType?: AuditActorType;
+  actorId?: string;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface UsageSnapshot {
   tier: PlanTier;
   month: string;

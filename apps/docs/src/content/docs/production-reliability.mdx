@@ -124,6 +124,13 @@ Cronlet records audit events for mutating control-plane actions such as:
 
 `/v1/audit-events` supports filtering by actor, action, target type, target ID, and time window so operators can ask focused questions like “what changed for this task?” or “who replayed this run?”.
 
+For execution history, Cronlet also exposes timeline endpoints:
+
+- `GET /v1/tasks/:taskId/timeline`
+- `GET /v1/runs/:runId/timeline`
+
+These timelines combine durable task, run, and dispatch state transitions with relevant audit events so operators can answer “why did this run fire?”, “why was it replayed?”, or “what changed around this delivery?” from one stream.
+
 ## Initial cloud assumptions
 
 Cronlet Cloud starts as a single-primary-region scheduler. Postgres is the authoritative clock and source of truth for due claiming.

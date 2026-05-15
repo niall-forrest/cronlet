@@ -11,6 +11,7 @@ import type {
   CallbackSigningSecretRecord,
   CreatedBy,
   DispatchInstruction,
+  DispatchEventRecord,
   InternalDispatchCompleteInput,
   InternalDispatchStartInput,
   InternalRunStatusInput,
@@ -18,6 +19,7 @@ import type {
   ReconciliationCompareInput,
   ReconciliationCompareResult,
   RunRecord,
+  RunEventRecord,
   RunListInput,
   BulkRunReplayInput,
   BulkRunReplayResult,
@@ -28,11 +30,13 @@ import type {
   BulkTaskCancelInput,
   BulkTaskCancelResult,
   TaskCreateInput,
+  TaskEventRecord,
   TaskDispatchInput,
   TaskListInput,
   TaskPatchInput,
   TaskRecord,
   TaskCancelResult,
+  TimelineEntryRecord,
   UsageSnapshot,
 } from "@cronlet/shared";
 
@@ -53,6 +57,7 @@ export interface CloudStore {
   listTasks(orgId: string, input?: TaskListInput): Promise<TaskRecord[]> | TaskRecord[];
   countTasks(orgId: string): Promise<number> | number;
   getTask(orgId: string, taskId: string): Promise<TaskRecord> | TaskRecord;
+  getTaskTimeline(orgId: string, taskId: string, limit?: number): Promise<TimelineEntryRecord[]> | TimelineEntryRecord[];
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> | TaskRecord;
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> | TaskRecord;
   deleteTask(orgId: string, taskId: string): Promise<void> | void;
@@ -64,6 +69,7 @@ export interface CloudStore {
   // Runs
   listRuns(orgId: string, input?: RunListInput): Promise<RunRecord[]> | RunRecord[];
   getRun(orgId: string, runId: string): Promise<RunRecord> | RunRecord;
+  getRunTimeline(orgId: string, runId: string, limit?: number): Promise<TimelineEntryRecord[]> | TimelineEntryRecord[];
   replayRun(orgId: string, runId: string, trigger?: "manual" | "api"): Promise<RunReplayResult> | RunReplayResult;
   bulkReplayRuns(orgId: string, input: BulkRunReplayInput, trigger?: "manual" | "api"): Promise<BulkRunReplayResult> | BulkRunReplayResult;
   compareReconciliation(orgId: string, input: ReconciliationCompareInput): Promise<ReconciliationCompareResult> | ReconciliationCompareResult;
@@ -89,6 +95,9 @@ export interface CloudStore {
 
   // Audit
   listAuditEvents(orgId: string, input: AuditEventListInput): Promise<AuditEventRecord[]> | AuditEventRecord[];
+  listTaskEvents(orgId: string, taskId: string, limit?: number): Promise<TaskEventRecord[]> | TaskEventRecord[];
+  listRunEvents(orgId: string, runId: string, limit?: number): Promise<RunEventRecord[]> | RunEventRecord[];
+  listDispatchEvents(orgId: string, dispatchJobId: string, limit?: number): Promise<DispatchEventRecord[]> | DispatchEventRecord[];
   createAuditEvent(input: {
     organizationId: string;
     actorType?: string;

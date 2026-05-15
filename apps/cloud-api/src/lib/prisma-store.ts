@@ -19,6 +19,7 @@ import {
   type AlertCreateInput,
   type AlertRecord,
   type CreatedBy,
+  type DispatchEventRecord,
   type DispatchInstruction,
   type HandlerConfig,
   type HandlerType,
@@ -28,6 +29,7 @@ import {
   type ReconciliationCompareInput,
   type ReconciliationCompareResult,
   type RetryPolicy,
+  type RunEventRecord,
   type RunRecord,
   type RunListInput,
   type RunReplayResult,
@@ -39,10 +41,12 @@ import {
   type SecretRecord,
   type TaskCreateInput,
   type TaskDispatchInput,
+  type TaskEventRecord,
   type TaskListInput,
   type TaskPatchInput,
   type TaskRecord,
   type TaskCancelResult,
+  type TimelineEntryRecord,
   type UsageSnapshot,
 } from "@cronlet/shared";
 import { ERROR_CODES } from "@cronlet/shared";
@@ -343,6 +347,145 @@ function toAuditEventRecord(value: {
   };
 }
 
+function toTaskEventRecord(value: {
+  id: string;
+  organizationId: string;
+  taskId: string;
+  action: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}): TaskEventRecord {
+  return {
+    id: value.id,
+    orgId: value.organizationId,
+    taskId: value.taskId,
+    action: value.action,
+    previousState: value.previousState,
+    nextState: value.nextState,
+    reason: value.reason,
+    metadata: toAuditMetadata(value.metadata),
+    createdAt: iso(value.createdAt),
+  };
+}
+
+function toRunEventRecord(value: {
+  id: string;
+  organizationId: string;
+  runId: string;
+  action: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}): RunEventRecord {
+  return {
+    id: value.id,
+    orgId: value.organizationId,
+    runId: value.runId,
+    action: value.action,
+    previousState: value.previousState,
+    nextState: value.nextState,
+    reason: value.reason,
+    metadata: toAuditMetadata(value.metadata),
+    createdAt: iso(value.createdAt),
+  };
+}
+
+function toDispatchEventRecord(value: {
+  id: string;
+  organizationId: string;
+  dispatchJobId: string;
+  action: string;
+  previousState: string | null;
+  nextState: string | null;
+  reason: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}): DispatchEventRecord {
+  return {
+    id: value.id,
+    orgId: value.organizationId,
+    dispatchJobId: value.dispatchJobId,
+    action: value.action,
+    previousState: value.previousState,
+    nextState: value.nextState,
+    reason: value.reason,
+    metadata: toAuditMetadata(value.metadata),
+    createdAt: iso(value.createdAt),
+  };
+}
+
+function taskTimelineEntry(event: TaskEventRecord): TimelineEntryRecord {
+  return {
+    id: event.id,
+    kind: "task_event",
+    action: event.action,
+    createdAt: event.createdAt,
+    targetType: "task",
+    targetId: event.taskId,
+    previousState: event.previousState,
+    nextState: event.nextState,
+    reason: event.reason,
+    metadata: event.metadata,
+  };
+}
+
+function runTimelineEntry(event: RunEventRecord): TimelineEntryRecord {
+  return {
+    id: event.id,
+    kind: "run_event",
+    action: event.action,
+    createdAt: event.createdAt,
+    targetType: "run",
+    targetId: event.runId,
+    previousState: event.previousState,
+    nextState: event.nextState,
+    reason: event.reason,
+    metadata: event.metadata,
+  };
+}
+
+function dispatchTimelineEntry(event: DispatchEventRecord): TimelineEntryRecord {
+  return {
+    id: event.id,
+    kind: "dispatch_event",
+    action: event.action,
+    createdAt: event.createdAt,
+    targetType: "dispatch",
+    targetId: event.dispatchJobId,
+    previousState: event.previousState,
+    nextState: event.nextState,
+    reason: event.reason,
+    metadata: event.metadata,
+  };
+}
+
+function auditTimelineEntry(event: AuditEventRecord): TimelineEntryRecord {
+  return {
+    id: event.id,
+    kind: "audit_event",
+    action: event.action,
+    createdAt: event.createdAt,
+    targetType: "audit",
+    targetId: event.id,
+    previousState: null,
+    nextState: null,
+    reason: null,
+    actorType: event.actorType,
+    actorId: event.actorId,
+    metadata: {
+      targetType: event.targetType,
+      targetId: event.targetId,
+      payloadHash: event.payloadHash,
+      ...(event.metadata ?? {}),
+    },
+  };
+}
+
 interface BillingState {
   tier: UsageSnapshot["tier"];
   delinquent: boolean;
@@ -556,6 +699,20 @@ export class PrismaCloudStore implements CloudStore {
         destinationKey,
       },
     });
+    await tx.dispatchEvent.create({
+      data: {
+        organizationId: task.organizationId,
+        dispatchJobId: dispatchJob.id,
+        action: "dispatch.queued",
+        nextState: "pending",
+        reason: "dispatch_created",
+        metadata: {
+          runId: run.id,
+          taskId: task.id,
+          attemptNumber: 1,
+        } as Prisma.InputJsonValue,
+      },
+    });
     await tx.runAttempt.create({
       data: {
         organizationId: task.organizationId,
@@ -668,6 +825,55 @@ export class PrismaCloudStore implements CloudStore {
     return toTaskRecord(task);
   }
 
+  async getTaskTimeline(orgId: string, taskId: string, limit = 100): Promise<TimelineEntryRecord[]> {
+    await this.getTask(orgId, taskId);
+    const [taskEvents, runs, auditEvents] = await Promise.all([
+      this.listTaskEvents(orgId, taskId, limit),
+      this.prisma.run.findMany({
+        where: { organizationId: orgId, taskId },
+        select: { id: true },
+      }),
+      this.listAuditEvents(orgId, { targetType: "task", targetId: taskId, limit }),
+    ]);
+    const runIds = runs.map((run) => run.id);
+    const [runEvents, dispatchJobs, runAuditEvents] = await Promise.all([
+      runIds.length > 0
+        ? this.prisma.runEvent.findMany({
+          where: { organizationId: orgId, runId: { in: runIds } },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+        })
+        : Promise.resolve([]),
+      this.prisma.dispatchJob.findMany({
+        where: { organizationId: orgId, taskId },
+        select: { id: true },
+      }),
+      runIds.length > 0
+        ? this.prisma.auditEvent.findMany({
+          where: { organizationId: orgId, targetType: "run", targetId: { in: runIds } },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+        })
+        : Promise.resolve([]),
+    ]);
+    const dispatchJobIds = dispatchJobs.map((job) => job.id);
+    const dispatchEvents = dispatchJobIds.length > 0
+      ? await this.prisma.dispatchEvent.findMany({
+        where: { organizationId: orgId, dispatchJobId: { in: dispatchJobIds } },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      })
+      : [];
+
+    return [
+      ...taskEvents.map(taskTimelineEntry),
+      ...runEvents.map((event) => runTimelineEntry(toRunEventRecord(event))),
+      ...dispatchEvents.map((event) => dispatchTimelineEntry(toDispatchEventRecord(event))),
+      ...auditEvents.map(auditTimelineEntry),
+      ...runAuditEvents.map((event) => auditTimelineEntry(toAuditEventRecord(event))),
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+
   async createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> {
     await this.assertWritable(orgId);
     await this.assertWithinTaskLimit(orgId);
@@ -716,6 +922,19 @@ export class PrismaCloudStore implements CloudStore {
         metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
         maxRuns,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+      },
+    });
+    await this.prisma.taskEvent.create({
+      data: {
+        organizationId: orgId,
+        taskId: created.id,
+        action: "task.created",
+        nextState: created.active ? "active" : "paused",
+        reason: "api_create",
+        metadata: {
+          scheduleType: created.scheduleType,
+          handlerType: created.handlerType,
+        } as Prisma.InputJsonValue,
       },
     });
 
@@ -796,6 +1015,19 @@ export class PrismaCloudStore implements CloudStore {
         active,
       },
     });
+    await this.prisma.taskEvent.create({
+      data: {
+        organizationId: orgId,
+        taskId: updated.id,
+        action: "task.updated",
+        previousState: existing.active ? "active" : "paused",
+        nextState: updated.active ? "active" : "paused",
+        reason: "api_update",
+        metadata: {
+          nextRunAt: isoNullable(updated.nextRunAt),
+        } as Prisma.InputJsonValue,
+      },
+    });
 
     return toTaskRecord(updated);
   }
@@ -813,8 +1045,20 @@ export class PrismaCloudStore implements CloudStore {
       throw new AppError(404, ERROR_CODES.NOT_FOUND, "Task not found");
     }
 
-    await this.prisma.task.delete({
-      where: { id: taskId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.taskEvent.create({
+        data: {
+          organizationId: orgId,
+          taskId,
+          action: "task.deleted",
+          previousState: "active",
+          nextState: "deleted",
+          reason: "api_delete",
+        },
+      });
+      await tx.task.delete({
+        where: { id: taskId },
+      });
     });
   }
 
@@ -828,6 +1072,10 @@ export class PrismaCloudStore implements CloudStore {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const existingTask = await tx.task.findUnique({
+        where: { id: taskId },
+        select: { active: true },
+      });
       await tx.task.update({
         where: { id: taskId },
         data: {
@@ -854,6 +1102,19 @@ export class PrismaCloudStore implements CloudStore {
           status: "running",
         },
         select: { id: true },
+      });
+      await tx.taskEvent.create({
+        data: {
+          organizationId: orgId,
+          taskId,
+          action: "task.cancelled",
+          previousState: existingTask?.active ? "active" : "paused",
+          nextState: "paused",
+          reason: "api_cancel",
+          metadata: {
+            runningAttemptIds: runningAttempts.map((attempt) => attempt.id),
+          } as Prisma.InputJsonValue,
+        },
       });
       return { cancelledJobs: cancelled.count, runningAttemptIds: runningAttempts.map((attempt) => attempt.id) };
     });
@@ -939,6 +1200,18 @@ export class PrismaCloudStore implements CloudStore {
     });
 
     await this.createDispatchForRun(task, run);
+    await this.prisma.runEvent.create({
+      data: {
+        organizationId: orgId,
+        runId: run.id,
+        action: "run.queued",
+        nextState: "queued",
+        reason: trigger,
+        metadata: {
+          taskId: task.id,
+        } as Prisma.InputJsonValue,
+      },
+    });
 
     return toRunRecord(run);
   }
@@ -1004,6 +1277,19 @@ export class PrismaCloudStore implements CloudStore {
     });
 
     await this.createDispatchForRun(task, run);
+    await this.prisma.runEvent.create({
+      data: {
+        organizationId: orgId,
+        runId: run.id,
+        action: "run.queued",
+        nextState: "queued",
+        reason: trigger,
+        metadata: {
+          taskId: task.id,
+          kind: "dispatch",
+        } as Prisma.InputJsonValue,
+      },
+    });
     return toRunRecord(run);
   }
 
@@ -1053,6 +1339,32 @@ export class PrismaCloudStore implements CloudStore {
     return toRunRecord(run);
   }
 
+  async getRunTimeline(orgId: string, runId: string, limit = 100): Promise<TimelineEntryRecord[]> {
+    await this.getRun(orgId, runId);
+    const [runEvents, dispatchJobs, auditEvents] = await Promise.all([
+      this.listRunEvents(orgId, runId, limit),
+      this.prisma.dispatchJob.findMany({
+        where: { organizationId: orgId, runId },
+        select: { id: true },
+      }),
+      this.listAuditEvents(orgId, { targetType: "run", targetId: runId, limit }),
+    ]);
+    const dispatchJobIds = dispatchJobs.map((job) => job.id);
+    const dispatchEvents = dispatchJobIds.length > 0
+      ? await this.prisma.dispatchEvent.findMany({
+        where: { organizationId: orgId, dispatchJobId: { in: dispatchJobIds } },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      })
+      : [];
+
+    return [
+      ...runEvents.map(runTimelineEntry),
+      ...dispatchEvents.map((event) => dispatchTimelineEntry(toDispatchEventRecord(event))),
+      ...auditEvents.map(auditTimelineEntry),
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+
   async replayRun(orgId: string, runId: string, trigger: "manual" | "api" = "manual"): Promise<RunReplayResult> {
     const existing = await this.prisma.run.findFirst({
       where: { id: runId, organizationId: orgId },
@@ -1073,6 +1385,19 @@ export class PrismaCloudStore implements CloudStore {
       },
     });
     await this.createDispatchForRun(existing.task, run);
+    await this.prisma.runEvent.create({
+      data: {
+        organizationId: orgId,
+        runId: run.id,
+        action: "run.replayed",
+        nextState: "queued",
+        reason: trigger,
+        metadata: {
+          replayOfRunId: runId,
+          taskId: existing.taskId,
+        } as Prisma.InputJsonValue,
+      },
+    });
     return { run: toRunRecord(run), replayOfRunId: runId };
   }
 
@@ -1475,6 +1800,42 @@ export class PrismaCloudStore implements CloudStore {
   // AUDIT EVENTS
   // ============================================
 
+  async listTaskEvents(orgId: string, taskId: string, limit = 100): Promise<TaskEventRecord[]> {
+    const events = await this.prisma.taskEvent.findMany({
+      where: {
+        organizationId: orgId,
+        taskId,
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return events.map(toTaskEventRecord);
+  }
+
+  async listRunEvents(orgId: string, runId: string, limit = 100): Promise<RunEventRecord[]> {
+    const events = await this.prisma.runEvent.findMany({
+      where: {
+        organizationId: orgId,
+        runId,
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return events.map(toRunEventRecord);
+  }
+
+  async listDispatchEvents(orgId: string, dispatchJobId: string, limit = 100): Promise<DispatchEventRecord[]> {
+    const events = await this.prisma.dispatchEvent.findMany({
+      where: {
+        organizationId: orgId,
+        dispatchJobId,
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return events.map(toDispatchEventRecord);
+  }
+
   async listAuditEvents(orgId: string, input: AuditEventListInput): Promise<AuditEventRecord[]> {
     const where = {
       organizationId: orgId,
@@ -1810,6 +2171,20 @@ export class PrismaCloudStore implements CloudStore {
           leasedUntil: new Date(Date.now() + 5 * 60 * 1000),
         },
       });
+      await tx.dispatchEvent.create({
+        data: {
+          organizationId: job.organizationId,
+          dispatchJobId: job.id,
+          action: "dispatch.running",
+          previousState: job.status,
+          nextState: "running",
+          reason: "worker_start",
+          metadata: {
+            attemptId: input.attemptId,
+            attemptNumber: input.attemptNumber,
+          } as Prisma.InputJsonValue,
+        },
+      });
       await tx.runAttempt.update({
         where: { id: input.attemptId },
         data: {
@@ -1823,6 +2198,20 @@ export class PrismaCloudStore implements CloudStore {
           status: "running",
           startedAt: now,
           attempt: input.attemptNumber,
+        },
+      });
+      await tx.runEvent.create({
+        data: {
+          organizationId: job.organizationId,
+          runId: job.runId,
+          action: "run.running",
+          previousState: "leased",
+          nextState: "running",
+          reason: "worker_start",
+          metadata: {
+            attemptId: input.attemptId,
+            attemptNumber: input.attemptNumber,
+          } as Prisma.InputJsonValue,
         },
       });
     });
@@ -1871,6 +2260,22 @@ export class PrismaCloudStore implements CloudStore {
             lastError: input.errorMessage ?? input.errorClass ?? "delivery failed",
           },
         });
+        await tx.dispatchEvent.create({
+          data: {
+            organizationId: job.organizationId,
+            dispatchJobId: job.id,
+            action: "dispatch.retry_wait",
+            previousState: job.status,
+            nextState: "retry_wait",
+            reason: "delivery_retry_scheduled",
+            metadata: {
+              attemptId: input.attemptId,
+              attemptNumber: input.attemptNumber,
+              httpStatus: input.httpStatus ?? null,
+              errorClass: input.errorClass ?? null,
+            } as Prisma.InputJsonValue,
+          },
+        });
         await tx.run.update({
           where: { id: job.runId },
           data: {
@@ -1878,6 +2283,20 @@ export class PrismaCloudStore implements CloudStore {
             attempt: input.attemptNumber,
             durationMs: input.durationMs,
             errorMessage: input.errorMessage ?? undefined,
+          },
+        });
+        await tx.runEvent.create({
+          data: {
+            organizationId: job.organizationId,
+            runId: job.runId,
+            action: "run.retry_wait",
+            previousState: job.run.status,
+            nextState: "retry_wait",
+            reason: "delivery_retry_scheduled",
+            metadata: {
+              attemptId: input.attemptId,
+              attemptNumber: input.attemptNumber,
+            } as Prisma.InputJsonValue,
           },
         });
         return;
@@ -1902,6 +2321,21 @@ export class PrismaCloudStore implements CloudStore {
           lastError: input.errorMessage ?? null,
         },
       });
+      await tx.dispatchEvent.create({
+        data: {
+          organizationId: job.organizationId,
+          dispatchJobId: job.id,
+          action: success ? "dispatch.succeeded" : "dispatch.dead_lettered",
+          previousState: job.status,
+          nextState: success ? "succeeded" : "dead_lettered",
+          reason: success ? "delivery_succeeded" : finalStatus,
+          metadata: {
+            attemptId: input.attemptId,
+            attemptNumber: input.attemptNumber,
+            httpStatus: input.httpStatus ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
       await tx.run.update({
         where: { id: job.runId },
         data: {
@@ -1912,6 +2346,21 @@ export class PrismaCloudStore implements CloudStore {
           output: input.output ? (input.output as Prisma.InputJsonValue) : undefined,
           logs: input.logs ?? undefined,
           errorMessage: input.errorMessage ?? (success ? null : undefined),
+        },
+      });
+      await tx.runEvent.create({
+        data: {
+          organizationId: job.organizationId,
+          runId: job.runId,
+          action: `run.${finalStatus}`,
+          previousState: job.run.status,
+          nextState: finalStatus,
+          reason: success ? "delivery_succeeded" : finalStatus,
+          metadata: {
+            attemptId: input.attemptId,
+            attemptNumber: input.attemptNumber,
+            durationMs: input.durationMs,
+          } as Prisma.InputJsonValue,
         },
       });
       if (isTerminalRunStatus(finalStatus)) {
@@ -1947,6 +2396,20 @@ export class PrismaCloudStore implements CloudStore {
           leasedUntil: null,
           availableAt: new Date(),
           lastError: "lease expired",
+        },
+      });
+      await this.prisma.dispatchEvent.create({
+        data: {
+          organizationId: job.organizationId,
+          dispatchJobId: job.id,
+          action: "dispatch.reconciled",
+          previousState: job.status,
+          nextState: "retry_wait",
+          reason: "lease_expired",
+          metadata: {
+            runId: job.runId,
+            taskId: job.taskId,
+          } as Prisma.InputJsonValue,
         },
       });
       await this.prisma.run.update({

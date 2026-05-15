@@ -363,6 +363,10 @@ export const reconciliationCompareSchema = z.object({
   limit: z.number().int().min(1).max(500).default(100).optional(),
 });
 
+export const timelineQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
 // ============================================
 // INFERRED TYPES
 // ============================================

@@ -1,4 +1,4 @@
-import { bulkTaskCancelSchema, taskCreateSchema, taskDispatchSchema, taskListQuerySchema, taskPatchSchema } from "@cronlet/shared";
+import { bulkTaskCancelSchema, taskCreateSchema, taskDispatchSchema, taskListQuerySchema, taskPatchSchema, timelineQuerySchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { recordAuditEvent } from "../lib/audit.js";
 import { handleError, ok } from "../lib/http.js";
@@ -40,6 +40,17 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
       authorize(request.auth, { minimumRole: "viewer", requiredScope: "tasks:read" });
       const task = await app.cloudStore.getTask(request.auth.orgId, request.params.taskId);
       return ok(reply, task);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  app.get<{ Params: { taskId: string } }>("/v1/tasks/:taskId/timeline", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "viewer", requiredScope: "tasks:read" });
+      const query = timelineQuerySchema.parse(request.query);
+      const timeline = await app.cloudStore.getTaskTimeline(request.auth.orgId, request.params.taskId, query.limit);
+      return ok(reply, timeline);
     } catch (error) {
       return handleError(reply, error);
     }

@@ -20,6 +20,7 @@ import type {
   ReconciliationCompareInput,
   ReconciliationCompareResult,
   SecretRecord,
+  TimelineEntryRecord,
   UsageSnapshot,
   CreatedBy,
   TaskSource,
@@ -282,6 +283,11 @@ export class CloudClient {
     get: (taskId: string): Promise<TaskRecord> =>
       this.request<TaskRecord>(`/v1/tasks/${taskId}`),
 
+    timeline: (taskId: string, limit?: number): Promise<TimelineEntryRecord[]> => {
+      const query = typeof limit === "number" ? `?limit=${limit}` : "";
+      return this.request<TimelineEntryRecord[]>(`/v1/tasks/${taskId}/timeline${query}`);
+    },
+
     /**
      * Update a task
      */
@@ -412,6 +418,11 @@ export class CloudClient {
      */
     get: (runId: string): Promise<RunRecord> =>
       this.request<RunRecord>(`/v1/runs/${runId}`),
+
+    timeline: (runId: string, limit?: number): Promise<TimelineEntryRecord[]> => {
+      const query = typeof limit === "number" ? `?limit=${limit}` : "";
+      return this.request<TimelineEntryRecord[]>(`/v1/runs/${runId}/timeline${query}`);
+    },
 
     /**
      * Replay a previous run as a new delivery attempt chain

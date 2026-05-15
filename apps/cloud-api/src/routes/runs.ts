@@ -1,4 +1,4 @@
-import { bulkRunReplaySchema, internalRunStatusSchema, runListQuerySchema } from "@cronlet/shared";
+import { bulkRunReplaySchema, internalRunStatusSchema, runListQuerySchema, timelineQuerySchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { recordAuditEvent } from "../lib/audit.js";
 import { handleError, ok } from "../lib/http.js";
@@ -23,6 +23,17 @@ export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
       authorize(request.auth, { minimumRole: "viewer", requiredScope: "runs:read" });
       const run = await app.cloudStore.getRun(request.auth.orgId, request.params.runId);
       return ok(reply, run);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  app.get<{ Params: { runId: string } }>("/v1/runs/:runId/timeline", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "viewer", requiredScope: "runs:read" });
+      const query = timelineQuerySchema.parse(request.query);
+      const timeline = await app.cloudStore.getRunTimeline(request.auth.orgId, request.params.runId, query.limit);
+      return ok(reply, timeline);
     } catch (error) {
       return handleError(reply, error);
     }
