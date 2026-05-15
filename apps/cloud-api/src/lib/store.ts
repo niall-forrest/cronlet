@@ -332,6 +332,39 @@ export class InMemoryCloudStore implements CloudStore {
     return !breaker.probeInFlight;
   }
 
+  private recordCircuitBreakerTransition(
+    job: Pick<InternalDispatchJobRecord, "id" | "orgId" | "runId" | "taskId" | "status" | "destinationKey">,
+    previousState: CircuitBreakerRecord["state"] | null,
+    nextState: CircuitBreakerRecord["state"] | null,
+    reason: string,
+    metadata?: Record<string, unknown> | null,
+  ): void {
+    if (previousState === nextState || !nextState) {
+      return;
+    }
+
+    const action = nextState === "open"
+      ? "dispatch.circuit_opened"
+      : nextState === "half_open"
+        ? "dispatch.circuit_half_open"
+        : "dispatch.circuit_closed";
+
+    this.appendDispatchEvent({
+      orgId: job.orgId,
+      dispatchJobId: job.id,
+      action,
+      previousState: previousState ?? "closed",
+      nextState,
+      reason,
+      metadata: {
+        runId: job.runId,
+        taskId: job.taskId,
+        destinationKey: job.destinationKey,
+        ...(metadata ?? {}),
+      },
+    });
+  }
+
   private markProbeInFlight(orgId: string, destinationKey: string | null): void {
     if (!destinationKey) {
       return;
@@ -1889,9 +1922,17 @@ export class InMemoryCloudStore implements CloudStore {
 
         while (queue.length > 0) {
           const [id, job] = queue.shift()!;
+          const breakerBefore = this.getCircuitBreaker(job.orgId, job.destinationKey);
           if (!this.canLeaseForDestination(job.orgId, job.destinationKey)) {
             continue;
           }
+          const breakerAfterEligibility = this.getCircuitBreaker(job.orgId, job.destinationKey);
+          this.recordCircuitBreakerTransition(
+            job,
+            breakerBefore?.state ?? null,
+            breakerAfterEligibility?.state ?? null,
+            "destination_probe_reenabled",
+          );
           if (job.destinationKey) {
             const destinationCountKey = this.orgDestinationKey(job.orgId, job.destinationKey);
             if ((destinationCounts.get(destinationCountKey) ?? 0) >= MAX_CONCURRENT_DISPATCHES_PER_DESTINATION) {
@@ -2072,6 +2113,7 @@ export class InMemoryCloudStore implements CloudStore {
 
     if (shouldRetry) {
       const policy = retryPolicyForTask(task);
+      const breakerBefore = this.getCircuitBreaker(job.orgId, job.destinationKey);
       const breaker = this.markCircuitBreakerFailure(
         job.orgId,
         job.destinationKey,
@@ -2091,6 +2133,34 @@ export class InMemoryCloudStore implements CloudStore {
       });
       if (breaker?.state === "open" && breaker.cooldownUntil) {
         this.deferDestinationJobs(job.orgId, breaker.destinationKey, breaker.cooldownUntil);
+      }
+      this.recordCircuitBreakerTransition(
+        job,
+        breakerBefore?.state ?? null,
+        breaker?.state ?? null,
+        breaker?.state === "open" ? "retryable_failure_threshold_reached" : "retryable_failure_recorded",
+        {
+          errorClass: input.errorClass ?? null,
+          errorMessage: input.errorMessage ?? null,
+        },
+      );
+      if (input.errorClass === "OutboundTargetError") {
+        this.appendDispatchEvent({
+          orgId: job.orgId,
+          dispatchJobId: job.id,
+          action: "dispatch.policy_blocked",
+          previousState: job.status,
+          nextState: "retry_wait",
+          reason: "outbound_policy_blocked",
+          metadata: {
+            runId: job.runId,
+            taskId: job.taskId,
+            attemptId: attempt.id,
+            attemptNumber: input.attemptNumber,
+            destinationKey: job.destinationKey,
+            errorMessage: input.errorMessage ?? null,
+          },
+        });
       }
       this.appendDispatchEvent({
         orgId: job.orgId,
@@ -2135,8 +2205,17 @@ export class InMemoryCloudStore implements CloudStore {
       updatedAt: now,
     });
     if (terminalSuccess) {
+      const breakerBefore = this.getCircuitBreaker(job.orgId, job.destinationKey);
       this.closeCircuitBreaker(job.orgId, job.destinationKey);
+      const breakerAfter = this.getCircuitBreaker(job.orgId, job.destinationKey);
+      this.recordCircuitBreakerTransition(
+        job,
+        breakerBefore?.state ?? null,
+        breakerAfter?.state ?? null,
+        "delivery_succeeded",
+      );
     } else if (input.status !== "terminal_client_error") {
+      const breakerBefore = this.getCircuitBreaker(job.orgId, job.destinationKey);
       const breaker = this.markCircuitBreakerFailure(
         job.orgId,
         job.destinationKey,
@@ -2145,8 +2224,79 @@ export class InMemoryCloudStore implements CloudStore {
       if (breaker?.state === "open" && breaker.cooldownUntil) {
         this.deferDestinationJobs(job.orgId, breaker.destinationKey, breaker.cooldownUntil);
       }
+      this.recordCircuitBreakerTransition(
+        job,
+        breakerBefore?.state ?? null,
+        breaker?.state ?? null,
+        breaker?.state === "open" ? "terminal_failure_threshold_reached" : finalStatus,
+        {
+          errorClass: input.errorClass ?? null,
+          errorMessage: input.errorMessage ?? null,
+        },
+      );
+      if (input.errorClass === "OutboundTargetError") {
+        this.appendDispatchEvent({
+          orgId: job.orgId,
+          dispatchJobId: job.id,
+          action: "dispatch.policy_blocked",
+          previousState: job.status,
+          nextState: "dead_lettered",
+          reason: "outbound_policy_blocked",
+          metadata: {
+            runId: job.runId,
+            taskId: job.taskId,
+            attemptId: attempt.id,
+            attemptNumber: input.attemptNumber,
+            destinationKey: job.destinationKey,
+            errorMessage: input.errorMessage ?? null,
+          },
+        });
+      }
     } else if (this.getCircuitBreaker(job.orgId, job.destinationKey)?.state === "half_open") {
+      const breakerBefore = this.getCircuitBreaker(job.orgId, job.destinationKey);
       this.closeCircuitBreaker(job.orgId, job.destinationKey);
+      const breakerAfter = this.getCircuitBreaker(job.orgId, job.destinationKey);
+      this.recordCircuitBreakerTransition(
+        job,
+        breakerBefore?.state ?? null,
+        breakerAfter?.state ?? null,
+        "terminal_client_error",
+      );
+      if (input.errorClass === "OutboundTargetError") {
+        this.appendDispatchEvent({
+          orgId: job.orgId,
+          dispatchJobId: job.id,
+          action: "dispatch.policy_blocked",
+          previousState: job.status,
+          nextState: "dead_lettered",
+          reason: "outbound_policy_blocked",
+          metadata: {
+            runId: job.runId,
+            taskId: job.taskId,
+            attemptId: attempt.id,
+            attemptNumber: input.attemptNumber,
+            destinationKey: job.destinationKey,
+            errorMessage: input.errorMessage ?? null,
+          },
+        });
+      }
+    } else if (input.errorClass === "OutboundTargetError") {
+      this.appendDispatchEvent({
+        orgId: job.orgId,
+        dispatchJobId: job.id,
+        action: "dispatch.policy_blocked",
+        previousState: job.status,
+        nextState: "dead_lettered",
+        reason: "outbound_policy_blocked",
+        metadata: {
+          runId: job.runId,
+          taskId: job.taskId,
+          attemptId: attempt.id,
+          attemptNumber: input.attemptNumber,
+          destinationKey: job.destinationKey,
+          errorMessage: input.errorMessage ?? null,
+        },
+      });
     }
     this.appendDispatchEvent({
       orgId: job.orgId,

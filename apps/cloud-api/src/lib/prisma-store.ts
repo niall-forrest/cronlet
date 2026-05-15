@@ -732,6 +732,42 @@ export class PrismaCloudStore implements CloudStore {
     return `${orgId}:${destinationKey}`;
   }
 
+  private async recordCircuitBreakerTransition(
+    job: Pick<Prisma.DispatchJobUncheckedCreateInput, "id" | "organizationId" | "runId" | "taskId" | "status" | "destinationKey">,
+    previousState: CircuitBreakerRecord["state"] | null,
+    nextState: CircuitBreakerRecord["state"] | null,
+    reason: string,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+    metadata?: Record<string, unknown> | null,
+  ): Promise<void> {
+    if (previousState === nextState || !nextState) {
+      return;
+    }
+
+    const action = nextState === "open"
+      ? "dispatch.circuit_opened"
+      : nextState === "half_open"
+        ? "dispatch.circuit_half_open"
+        : "dispatch.circuit_closed";
+
+    await tx.dispatchEvent.create({
+      data: {
+        organizationId: String(job.organizationId),
+        dispatchJobId: String(job.id),
+        action,
+        previousState: previousState ?? "closed",
+        nextState,
+        reason,
+        metadata: {
+          runId: String(job.runId),
+          taskId: String(job.taskId),
+          destinationKey: job.destinationKey ? String(job.destinationKey) : null,
+          ...(metadata ?? {}),
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   private async tryClaimDispatchLock(): Promise<boolean> {
     const rows = await this.prisma.$queryRaw<Array<{ locked: boolean }>>`
       SELECT pg_try_advisory_lock(hashtext(${this.claimLockId})) AS locked
@@ -2381,9 +2417,18 @@ export class PrismaCloudStore implements CloudStore {
 
             while (queue.length > 0) {
               const job = queue.shift()!;
+              const breakerBefore = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
               if (!await this.canLeaseForDestination(job.organizationId, job.destinationKey, tx)) {
                 continue;
               }
+              const breakerAfterEligibility = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
+              await this.recordCircuitBreakerTransition(
+                job,
+                breakerBefore?.state ?? null,
+                breakerAfterEligibility?.state ?? null,
+                "destination_probe_reenabled",
+                tx,
+              );
               if (job.destinationKey) {
                 const destinationCountKey = this.orgDestinationKey(job.organizationId, job.destinationKey);
                 if ((destinationCounts.get(destinationCountKey) ?? 0) >= MAX_CONCURRENT_DISPATCHES_PER_DESTINATION) {
@@ -2577,6 +2622,7 @@ export class PrismaCloudStore implements CloudStore {
       });
 
       if (shouldRetry) {
+        const breakerBefore = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
         const breaker = await this.markCircuitBreakerFailure(
           job.organizationId,
           job.destinationKey,
@@ -2598,6 +2644,37 @@ export class PrismaCloudStore implements CloudStore {
         });
         if (breaker?.state === "open" && breaker.cooldownUntil) {
           await this.deferDestinationJobs(job.organizationId, breaker.destinationKey, breaker.cooldownUntil, tx);
+        }
+        await this.recordCircuitBreakerTransition(
+          job,
+          breakerBefore?.state ?? null,
+          breaker?.state ?? null,
+          breaker?.state === "open" ? "retryable_failure_threshold_reached" : "retryable_failure_recorded",
+          tx,
+          {
+            errorClass: input.errorClass ?? null,
+            errorMessage: input.errorMessage ?? null,
+          },
+        );
+        if (input.errorClass === "OutboundTargetError") {
+          await tx.dispatchEvent.create({
+            data: {
+              organizationId: job.organizationId,
+              dispatchJobId: job.id,
+              action: "dispatch.policy_blocked",
+              previousState: job.status,
+              nextState: "retry_wait",
+              reason: "outbound_policy_blocked",
+              metadata: {
+                runId: job.runId,
+                taskId: job.taskId,
+                attemptId: input.attemptId,
+                attemptNumber: input.attemptNumber,
+                destinationKey: job.destinationKey,
+                errorMessage: input.errorMessage ?? null,
+              } as Prisma.InputJsonValue,
+            },
+          });
         }
         await tx.dispatchEvent.create({
           data: {
@@ -2661,8 +2738,18 @@ export class PrismaCloudStore implements CloudStore {
         },
       });
       if (success) {
+        const breakerBefore = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
         await this.closeCircuitBreaker(job.organizationId, job.destinationKey, tx);
+        const breakerAfter = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
+        await this.recordCircuitBreakerTransition(
+          job,
+          breakerBefore?.state ?? null,
+          breakerAfter?.state ?? null,
+          "delivery_succeeded",
+          tx,
+        );
       } else if (input.status !== "terminal_client_error") {
+        const breakerBefore = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
         const breaker = await this.markCircuitBreakerFailure(
           job.organizationId,
           job.destinationKey,
@@ -2672,8 +2759,87 @@ export class PrismaCloudStore implements CloudStore {
         if (breaker?.state === "open" && breaker.cooldownUntil) {
           await this.deferDestinationJobs(job.organizationId, breaker.destinationKey, breaker.cooldownUntil, tx);
         }
+        await this.recordCircuitBreakerTransition(
+          job,
+          breakerBefore?.state ?? null,
+          breaker?.state ?? null,
+          breaker?.state === "open" ? "terminal_failure_threshold_reached" : finalStatus,
+          tx,
+          {
+            errorClass: input.errorClass ?? null,
+            errorMessage: input.errorMessage ?? null,
+          },
+        );
+        if (input.errorClass === "OutboundTargetError") {
+          await tx.dispatchEvent.create({
+            data: {
+              organizationId: job.organizationId,
+              dispatchJobId: job.id,
+              action: "dispatch.policy_blocked",
+              previousState: job.status,
+              nextState: "dead_lettered",
+              reason: "outbound_policy_blocked",
+              metadata: {
+                runId: job.runId,
+                taskId: job.taskId,
+                attemptId: input.attemptId,
+                attemptNumber: input.attemptNumber,
+                destinationKey: job.destinationKey,
+                errorMessage: input.errorMessage ?? null,
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
       } else if ((await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx))?.state === "half_open") {
+        const breakerBefore = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
         await this.closeCircuitBreaker(job.organizationId, job.destinationKey, tx);
+        const breakerAfter = await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx);
+        await this.recordCircuitBreakerTransition(
+          job,
+          breakerBefore?.state ?? null,
+          breakerAfter?.state ?? null,
+          "terminal_client_error",
+          tx,
+        );
+        if (input.errorClass === "OutboundTargetError") {
+          await tx.dispatchEvent.create({
+            data: {
+              organizationId: job.organizationId,
+              dispatchJobId: job.id,
+              action: "dispatch.policy_blocked",
+              previousState: job.status,
+              nextState: "dead_lettered",
+              reason: "outbound_policy_blocked",
+              metadata: {
+                runId: job.runId,
+                taskId: job.taskId,
+                attemptId: input.attemptId,
+                attemptNumber: input.attemptNumber,
+                destinationKey: job.destinationKey,
+                errorMessage: input.errorMessage ?? null,
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
+      } else if (input.errorClass === "OutboundTargetError") {
+        await tx.dispatchEvent.create({
+          data: {
+            organizationId: job.organizationId,
+            dispatchJobId: job.id,
+            action: "dispatch.policy_blocked",
+            previousState: job.status,
+            nextState: "dead_lettered",
+            reason: "outbound_policy_blocked",
+            metadata: {
+              runId: job.runId,
+              taskId: job.taskId,
+              attemptId: input.attemptId,
+              attemptNumber: input.attemptNumber,
+              destinationKey: job.destinationKey,
+              errorMessage: input.errorMessage ?? null,
+            } as Prisma.InputJsonValue,
+          },
+        });
       }
       await tx.dispatchEvent.create({
         data: {

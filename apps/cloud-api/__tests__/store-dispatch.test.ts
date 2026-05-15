@@ -226,6 +226,14 @@ describe("InMemoryCloudStore dispatch semantics", () => {
     expect(store.listCircuitBreakers("org_breaker")[0]?.state).toBe("closed");
     const recoveredLease = store.claimDueDispatches(10);
     expect(recoveredLease).toHaveLength(1);
+
+    const dispatchEvents = (store as unknown as {
+      dispatchEvents: Map<string, { action: string }>;
+    }).dispatchEvents;
+    const actions = Array.from(dispatchEvents.values()).map((event) => event.action);
+    expect(actions).toContain("dispatch.circuit_opened");
+    expect(actions).toContain("dispatch.circuit_half_open");
+    expect(actions).toContain("dispatch.circuit_closed");
   });
 
   it("round-robins leases across orgs instead of letting one org consume the whole batch", () => {
@@ -300,5 +308,33 @@ describe("InMemoryCloudStore dispatch semantics", () => {
 
     const afterRelease = store.claimDueDispatches(3);
     expect(afterRelease).toHaveLength(1);
+  });
+
+  it("records explicit dispatch events when outbound policy blocks delivery", () => {
+    const store = new InMemoryCloudStore();
+    const task = store.createTask("org_policy", {
+      name: "Policy Blocked",
+      handler: { type: "webhook", url: "https://blocked.example.com/hook" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+
+    store.triggerTask("org_policy", task.id, "manual");
+    const [lease] = store.claimDueDispatches(1);
+    expect(lease).toBeDefined();
+
+    store.completeDispatchAttempt({
+      dispatchJobId: lease!.dispatchJobId,
+      attemptId: lease!.attemptId,
+      attemptNumber: lease!.attemptNumber,
+      status: "terminal_client_error",
+      durationMs: 25,
+      errorClass: "OutboundTargetError",
+      errorMessage: "Outbound target resolved to blocked address 127.0.0.1",
+    });
+
+    const events = store.listDispatchEvents("org_policy", lease!.dispatchJobId);
+    expect(events.map((event) => event.action)).toContain("dispatch.policy_blocked");
+    expect(events.find((event) => event.action === "dispatch.policy_blocked")?.reason).toBe("outbound_policy_blocked");
   });
 });

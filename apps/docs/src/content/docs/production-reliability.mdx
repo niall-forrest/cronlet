@@ -74,6 +74,14 @@ Cronlet tracks per-destination circuit breaker state for retryable webhook failu
 
 Operators can inspect current breaker state with `GET /v1/circuit-breakers`.
 
+Cronlet also records explicit dispatch events for:
+
+- circuit breaker open, half-open, and close transitions
+- outbound-policy-blocked delivery attempts
+- reconciliation repairs after expired leases
+
+These events flow through task and run timelines so operators can see why delivery paused, resumed, or was blocked.
+
 ## Fairness
 
 Cronlet applies bounded lease fairness when dispatching due work:
