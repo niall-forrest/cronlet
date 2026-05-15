@@ -50,10 +50,12 @@ describe("DispatchQueueRuntime callback delivery", () => {
 
   beforeEach(() => {
     fetchMock.mockReset();
-    fetchMock.mockResolvedValue({
-      ok: true,
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
       status: 200,
-    });
+      headers: {
+        "content-type": "application/json",
+      },
+    }));
     vi.stubGlobal("fetch", fetchMock);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-27T12:00:00.000Z"));
@@ -101,6 +103,7 @@ describe("DispatchQueueRuntime callback delivery", () => {
     expect(headers.get("x-cronlet-event")).toBe("task.run.completed");
     expect(headers.get("x-cronlet-timestamp")).toBe("1774612800");
     expect(headers.get("x-cronlet-signature")).toMatch(/^v1=/);
+    expect(init.redirect).toBe("manual");
 
     const body = JSON.parse(String(init.body));
     expect(body.task.name).toBe("Digest Task");
@@ -150,5 +153,40 @@ describe("DispatchQueueRuntime callback delivery", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("blocked address 127.0.0.1"));
     warnSpy.mockRestore();
+  });
+
+  it("revalidates redirect targets before following webhook redirects", async () => {
+    const runtime = Object.create(DispatchQueueRuntime.prototype) as DispatchQueueRuntime;
+    Reflect.set(runtime as object, "outboundPolicy", {
+      allowedHosts: null,
+      resolveHostname: async (hostname: string) => hostname === "example.com" ? ["93.184.216.34"] : ["127.0.0.1"],
+    });
+    fetchMock.mockResolvedValueOnce(new Response(null, {
+      status: 302,
+      headers: {
+        location: "http://127.0.0.1:4050/internal",
+      },
+    }));
+
+    const executeWebhookHandler = Reflect.get(runtime as object, "executeWebhookHandler") as (
+      instruction: DispatchInstruction,
+      config: DispatchInstruction["handlerConfig"] & { type: "webhook" },
+      signal: AbortSignal,
+    ) => Promise<unknown>;
+
+    await expect(executeWebhookHandler.call(
+      runtime,
+      instruction(),
+      {
+        type: "webhook",
+        url: "https://example.com/hook",
+        method: "POST",
+        followRedirects: true,
+        maxRedirects: 1,
+      },
+      new AbortController().signal,
+    )).rejects.toThrow(/blocked address 127.0.0.1/);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

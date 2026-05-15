@@ -132,6 +132,52 @@ export class DispatchQueueRuntime {
     }
   }
 
+  private async fetchWithValidatedRedirects(
+    url: string,
+    init: RequestInit,
+    options: {
+      followRedirects: boolean;
+      maxRedirects: number;
+    },
+  ): Promise<Response> {
+    let currentUrl = url;
+    let requestInit: RequestInit = {
+      ...init,
+      headers: new Headers(init.headers),
+      redirect: "manual",
+    };
+    let remainingRedirects = options.followRedirects ? options.maxRedirects : 0;
+
+    while (true) {
+      await assertSafeOutboundUrl(currentUrl, this.outboundPolicy);
+      const response = await fetch(currentUrl, requestInit);
+      const location = response.headers.get("location");
+      const isRedirect = response.status >= 300 && response.status < 400 && location;
+      if (!isRedirect || remainingRedirects <= 0) {
+        return response;
+      }
+
+      const nextUrl = new URL(location, currentUrl).toString();
+      const currentMethod = (requestInit.method ?? "GET").toUpperCase();
+      if (
+        response.status === 303
+        || ((response.status === 301 || response.status === 302) && currentMethod !== "GET" && currentMethod !== "HEAD")
+      ) {
+        const headers = new Headers(requestInit.headers);
+        headers.delete("content-type");
+        requestInit = {
+          ...requestInit,
+          method: "GET",
+          body: undefined,
+          headers,
+        };
+      }
+
+      currentUrl = nextUrl;
+      remainingRedirects -= 1;
+    }
+  }
+
   private async sendCallback(
     instruction: DispatchInstruction,
     event: TaskCallbackEventType,
@@ -196,7 +242,7 @@ export class DispatchQueueRuntime {
 
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const body = JSON.stringify(payload);
-      const response = await fetch(instruction.callbackUrl, {
+      const response = await this.fetchWithValidatedRedirects(instruction.callbackUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -209,6 +255,9 @@ export class DispatchQueueRuntime {
             : "",
         },
         body,
+      }, {
+        followRedirects: false,
+        maxRedirects: 0,
       });
 
       if (!response.ok) {
@@ -262,8 +311,6 @@ export class DispatchQueueRuntime {
     config: WebhookHandlerConfig,
     signal: AbortSignal
   ): Promise<HandlerResult> {
-    await assertSafeOutboundUrl(config.url, this.outboundPolicy);
-
     const headers: Record<string, string> = {
       "content-type": "application/json",
       ...config.headers,
@@ -294,12 +341,14 @@ export class DispatchQueueRuntime {
       config.body ?? { runId: instruction.runId, taskId: instruction.taskId }
     );
 
-    const response = await fetch(config.url, {
+    const response = await this.fetchWithValidatedRedirects(config.url, {
       method,
       headers,
       body,
-      redirect: config.followRedirects ? "follow" : "manual",
       signal,
+    }, {
+      followRedirects: config.followRedirects ?? false,
+      maxRedirects: config.maxRedirects ?? 0,
     });
 
     const responseText = await response.text();

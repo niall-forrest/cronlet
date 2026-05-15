@@ -30,6 +30,7 @@ Cronlet validates outbound webhook and callback destinations at delivery time.
 - `localhost` and `*.localhost` are blocked
 - private, loopback, link-local, and cloud-metadata IP ranges are blocked
 - DNS is resolved at execution time before delivery
+- redirect hops are revalidated before Cronlet follows them
 
 If you set `CLOUD_ALLOWED_OUTBOUND_HOSTS`, Cronlet also requires every outbound destination hostname to appear in that allowlist.
 
