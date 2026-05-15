@@ -73,6 +73,16 @@ Cronlet tracks per-destination circuit breaker state for retryable webhook failu
 
 Operators can inspect current breaker state with `GET /v1/circuit-breakers`.
 
+## Fairness
+
+Cronlet applies bounded lease fairness when dispatching due work:
+
+- due dispatches are leased in small batches
+- leasing is spread across organizations instead of letting one org consume the whole batch
+- concurrency is capped per organization and per destination key
+
+This keeps one noisy customer or one hot endpoint from monopolizing the worker fleet.
+
 ## Cancellation
 
 `tasks.cancel(taskId)` cancels pending and retry-wait dispatches, clears `nextRunAt`, and prevents new attempts from starting after the API returns.

@@ -92,6 +92,8 @@ interface InternalDispatchJobRecord {
 
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
+const MAX_CONCURRENT_DISPATCHES_PER_ORG = 5;
+const MAX_CONCURRENT_DISPATCHES_PER_DESTINATION = 2;
 
 interface InternalOrganizationRecord {
   orgId: string;
@@ -221,6 +223,10 @@ export class InMemoryCloudStore implements CloudStore {
 
   private usageKey(orgId: string, yearMonth: string): string {
     return `${orgId}:${yearMonth}`;
+  }
+
+  private orgDestinationKey(orgId: string, destinationKey: string): string {
+    return `${orgId}:${destinationKey}`;
   }
 
   private circuitBreakerKey(orgId: string, destinationKey: string): string {
@@ -358,6 +364,27 @@ export class InMemoryCloudStore implements CloudStore {
         updatedAt: nowIso(),
       });
     }
+  }
+
+  private activeDispatchCounts(): {
+    orgCounts: Map<string, number>;
+    destinationCounts: Map<string, number>;
+  } {
+    const orgCounts = new Map<string, number>();
+    const destinationCounts = new Map<string, number>();
+
+    for (const job of this.dispatchJobs.values()) {
+      if (job.status !== "leased" && job.status !== "running") {
+        continue;
+      }
+      orgCounts.set(job.orgId, (orgCounts.get(job.orgId) ?? 0) + 1);
+      if (job.destinationKey) {
+        const destinationKey = this.orgDestinationKey(job.orgId, job.destinationKey);
+        destinationCounts.set(destinationKey, (destinationCounts.get(destinationKey) ?? 0) + 1);
+      }
+    }
+
+    return { orgCounts, destinationCounts };
   }
 
   private appendTaskEvent(input: Omit<TaskEventRecord, "id" | "createdAt"> & { createdAt?: string }): void {
@@ -1827,76 +1854,133 @@ export class InMemoryCloudStore implements CloudStore {
     }
 
     const nowMs = Date.now();
+    const { orgCounts, destinationCounts } = this.activeDispatchCounts();
+    const dueJobs = Array.from(this.dispatchJobs.entries())
+      .filter(([, job]) => (job.status === "pending" || job.status === "retry_wait") && new Date(job.availableAt).getTime() <= nowMs)
+      .sort((a, b) => new Date(a[1].availableAt).getTime() - new Date(b[1].availableAt).getTime());
+    const jobsByOrg = new Map<string, Array<[string, InternalDispatchJobRecord]>>();
+    const orgOrder: string[] = [];
+
+    for (const entry of dueJobs) {
+      const [_, job] = entry;
+      const existing = jobsByOrg.get(job.orgId);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        jobsByOrg.set(job.orgId, [entry]);
+        orgOrder.push(job.orgId);
+      }
+    }
+
     const instructions: DispatchInstruction[] = [];
-    for (const [id, job] of this.dispatchJobs.entries()) {
-      if (instructions.length >= limit) {
+    let pendingOrgOrder = orgOrder;
+    while (instructions.length < limit && pendingOrgOrder.length > 0) {
+      let claimedInRound = false;
+      const nextOrgOrder: string[] = [];
+
+      for (const orgId of pendingOrgOrder) {
+        const queue = jobsByOrg.get(orgId);
+        if (!queue || queue.length === 0) {
+          continue;
+        }
+        if ((orgCounts.get(orgId) ?? 0) >= MAX_CONCURRENT_DISPATCHES_PER_ORG) {
+          continue;
+        }
+
+        while (queue.length > 0) {
+          const [id, job] = queue.shift()!;
+          if (!this.canLeaseForDestination(job.orgId, job.destinationKey)) {
+            continue;
+          }
+          if (job.destinationKey) {
+            const destinationCountKey = this.orgDestinationKey(job.orgId, job.destinationKey);
+            if ((destinationCounts.get(destinationCountKey) ?? 0) >= MAX_CONCURRENT_DISPATCHES_PER_DESTINATION) {
+              continue;
+            }
+          }
+
+          const task = this.tasks.get(job.taskId);
+          const run = this.runs.get(job.runId);
+          if (!task || !run || !task.active && task.kind === "scheduled") {
+            continue;
+          }
+
+          const attemptNumber = job.attemptCount + 1;
+          const existingAttempt = Array.from(this.runAttempts.values()).find(
+            (candidate) => candidate.dispatchJobId === job.id && candidate.attemptNumber === attemptNumber
+          );
+          const attempt: RunAttemptRecord = existingAttempt ?? {
+            id: nanoid(),
+            orgId: job.orgId,
+            runId: job.runId,
+            taskId: job.taskId,
+            dispatchJobId: job.id,
+            attemptNumber,
+            status: "pending",
+            startedAt: null,
+            completedAt: null,
+            durationMs: null,
+            httpStatus: null,
+            errorClass: null,
+            errorMessage: null,
+            responseBodyPreview: null,
+            responseBodyHash: null,
+            output: null,
+            logs: null,
+            createdAt: nowIso(),
+          };
+          this.runAttempts.set(attempt.id, attempt);
+          this.dispatchJobs.set(id, {
+            ...job,
+            status: "leased",
+            leaseOwner: "memory-worker",
+            leasedUntil: new Date(Date.now() + parseDuration(task.timeout) + 30_000).toISOString(),
+            attemptCount: attemptNumber,
+            updatedAt: nowIso(),
+          });
+          this.runs.set(run.id, {
+            ...run,
+            status: "leased",
+            attempt: attemptNumber,
+          });
+          this.markProbeInFlight(job.orgId, job.destinationKey);
+          this.appendDispatchEvent({
+            orgId: job.orgId,
+            dispatchJobId: job.id,
+            action: "dispatch.leased",
+            previousState: job.status,
+            nextState: "leased",
+            reason: "worker_claim",
+            metadata: {
+              runId: job.runId,
+              taskId: job.taskId,
+              attemptId: attempt.id,
+              attemptNumber,
+            },
+          });
+          orgCounts.set(orgId, (orgCounts.get(orgId) ?? 0) + 1);
+          if (job.destinationKey) {
+            const destinationCountKey = this.orgDestinationKey(job.orgId, job.destinationKey);
+            destinationCounts.set(destinationCountKey, (destinationCounts.get(destinationCountKey) ?? 0) + 1);
+          }
+          instructions.push(this.instructionForDispatch(task, run, this.dispatchJobs.get(id) ?? job, attempt));
+          claimedInRound = true;
+
+          if (
+            instructions.length < limit
+            && queue.length > 0
+            && (orgCounts.get(orgId) ?? 0) < MAX_CONCURRENT_DISPATCHES_PER_ORG
+          ) {
+            nextOrgOrder.push(orgId);
+          }
+          break;
+        }
+      }
+
+      if (!claimedInRound) {
         break;
       }
-      if ((job.status !== "pending" && job.status !== "retry_wait") || new Date(job.availableAt).getTime() > nowMs) {
-        continue;
-      }
-      if (!this.canLeaseForDestination(job.orgId, job.destinationKey)) {
-        continue;
-      }
-      const task = this.tasks.get(job.taskId);
-      const run = this.runs.get(job.runId);
-      if (!task || !run || !task.active && task.kind === "scheduled") {
-        continue;
-      }
-      const attemptNumber = job.attemptCount + 1;
-      const existingAttempt = Array.from(this.runAttempts.values()).find(
-        (candidate) => candidate.dispatchJobId === job.id && candidate.attemptNumber === attemptNumber
-      );
-      const attempt: RunAttemptRecord = existingAttempt ?? {
-        id: nanoid(),
-        orgId: job.orgId,
-        runId: job.runId,
-        taskId: job.taskId,
-        dispatchJobId: job.id,
-        attemptNumber,
-        status: "pending",
-        startedAt: null,
-        completedAt: null,
-        durationMs: null,
-        httpStatus: null,
-        errorClass: null,
-        errorMessage: null,
-        responseBodyPreview: null,
-        responseBodyHash: null,
-        output: null,
-        logs: null,
-        createdAt: nowIso(),
-      };
-      this.runAttempts.set(attempt.id, attempt);
-      this.dispatchJobs.set(id, {
-        ...job,
-        status: "leased",
-        leaseOwner: "memory-worker",
-        leasedUntil: new Date(Date.now() + parseDuration(task.timeout) + 30_000).toISOString(),
-        attemptCount: attemptNumber,
-        updatedAt: nowIso(),
-      });
-      this.runs.set(run.id, {
-        ...run,
-        status: "leased",
-        attempt: attemptNumber,
-      });
-      this.markProbeInFlight(job.orgId, job.destinationKey);
-      this.appendDispatchEvent({
-        orgId: job.orgId,
-        dispatchJobId: job.id,
-        action: "dispatch.leased",
-        previousState: job.status,
-        nextState: "leased",
-        reason: "worker_claim",
-        metadata: {
-          runId: job.runId,
-          taskId: job.taskId,
-          attemptId: attempt.id,
-          attemptNumber,
-        },
-      });
-      instructions.push(this.instructionForDispatch(task, run, this.dispatchJobs.get(id) ?? job, attempt));
+      pendingOrgOrder = nextOrgOrder;
     }
 
     return instructions;

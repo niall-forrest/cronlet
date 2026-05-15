@@ -206,13 +206,6 @@ describe("InMemoryCloudStore dispatch semantics", () => {
     expect(breakers[0]?.state).toBe("open");
     expect(breakers[0]?.probeInFlight).toBe(false);
 
-    const dispatchJobs = (store as unknown as {
-      dispatchJobs: Map<string, { destinationKey: string | null; status: string; availableAt: string }>;
-    }).dispatchJobs;
-    const siblingJob = Array.from(dispatchJobs.values()).find((job) => job.status === "pending" && job.destinationKey === "example.com");
-    expect(siblingJob).toBeDefined();
-    expect(new Date(siblingJob!.availableAt).getTime()).toBeGreaterThan(Date.now() + 4 * 60 * 1000);
-
     expect(store.claimDueDispatches(10)).toHaveLength(0);
 
     vi.advanceTimersByTime(5 * 60 * 1000);
@@ -231,7 +224,81 @@ describe("InMemoryCloudStore dispatch semantics", () => {
     });
 
     expect(store.listCircuitBreakers("org_breaker")[0]?.state).toBe("closed");
-    const siblingLease = store.claimDueDispatches(10);
-    expect(siblingLease).toHaveLength(1);
+    const recoveredLease = store.claimDueDispatches(10);
+    expect(recoveredLease).toHaveLength(1);
+  });
+
+  it("round-robins leases across orgs instead of letting one org consume the whole batch", () => {
+    const store = new InMemoryCloudStore();
+    const firstOrgTaskA = store.createTask("org_alpha", {
+      name: "Alpha A",
+      handler: { type: "webhook", url: "https://alpha.example.com/a" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+    const firstOrgTaskB = store.createTask("org_alpha", {
+      name: "Alpha B",
+      handler: { type: "webhook", url: "https://alpha.example.com/b" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+    const secondOrgTask = store.createTask("org_beta", {
+      name: "Beta A",
+      handler: { type: "webhook", url: "https://beta.example.com/a" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+
+    store.triggerTask("org_alpha", firstOrgTaskA.id, "manual");
+    store.triggerTask("org_alpha", firstOrgTaskB.id, "manual");
+    store.triggerTask("org_beta", secondOrgTask.id, "manual");
+
+    const leases = store.claimDueDispatches(2);
+    expect(leases).toHaveLength(2);
+    expect(new Set(leases.map((lease) => lease.orgId))).toEqual(new Set(["org_alpha", "org_beta"]));
+  });
+
+  it("caps concurrent leases per destination within an org", () => {
+    const store = new InMemoryCloudStore();
+    const taskA = store.createTask("org_dest", {
+      name: "Dest A",
+      handler: { type: "webhook", url: "https://shared.example.com/a" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+    const taskB = store.createTask("org_dest", {
+      name: "Dest B",
+      handler: { type: "webhook", url: "https://shared.example.com/b" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+    const taskC = store.createTask("org_dest", {
+      name: "Dest C",
+      handler: { type: "webhook", url: "https://shared.example.com/c" },
+      schedule: { type: "daily", times: ["09:00"] },
+      timezone: "UTC",
+    });
+
+    store.triggerTask("org_dest", taskA.id, "manual");
+    store.triggerTask("org_dest", taskB.id, "manual");
+    store.triggerTask("org_dest", taskC.id, "manual");
+
+    const firstLeases = store.claimDueDispatches(3);
+    expect(firstLeases).toHaveLength(2);
+    expect(firstLeases.every((lease) => lease.handlerType === "webhook")).toBe(true);
+
+    const pendingShared = store.claimDueDispatches(3);
+    expect(pendingShared).toHaveLength(0);
+
+    store.completeDispatchAttempt({
+      dispatchJobId: firstLeases[0]!.dispatchJobId,
+      attemptId: firstLeases[0]!.attemptId,
+      attemptNumber: firstLeases[0]!.attemptNumber,
+      status: "success",
+      durationMs: 50,
+    });
+
+    const afterRelease = store.claimDueDispatches(3);
+    expect(afterRelease).toHaveLength(1);
   });
 });

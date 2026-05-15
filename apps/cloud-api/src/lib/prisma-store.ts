@@ -518,6 +518,8 @@ function toCircuitBreakerRecord(value: {
 
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
+const MAX_CONCURRENT_DISPATCHES_PER_ORG = 5;
+const MAX_CONCURRENT_DISPATCHES_PER_DESTINATION = 2;
 
 interface BillingState {
   tier: UsageSnapshot["tier"];
@@ -724,6 +726,10 @@ export class PrismaCloudStore implements CloudStore {
         availableAt: new Date(availableAt),
       },
     });
+  }
+
+  private orgDestinationKey(orgId: string, destinationKey: string): string {
+    return `${orgId}:${destinationKey}`;
   }
 
   private async tryClaimDispatchLock(): Promise<boolean> {
@@ -2325,67 +2331,142 @@ export class PrismaCloudStore implements CloudStore {
             availableAt: { lte: now },
           },
           orderBy: { availableAt: "asc" },
-          take: limit,
+          take: Math.max(limit * 10, limit),
         });
-        const leased: string[] = [];
-        for (const job of candidates) {
-          if (!await this.canLeaseForDestination(job.organizationId, job.destinationKey, tx)) {
-            continue;
+        const activeJobs = await tx.dispatchJob.findMany({
+          where: {
+            status: { in: ["leased", "running"] },
+          },
+          select: {
+            organizationId: true,
+            destinationKey: true,
+          },
+        });
+        const orgCounts = new Map<string, number>();
+        const destinationCounts = new Map<string, number>();
+        for (const activeJob of activeJobs) {
+          orgCounts.set(activeJob.organizationId, (orgCounts.get(activeJob.organizationId) ?? 0) + 1);
+          if (activeJob.destinationKey) {
+            const destinationCountKey = this.orgDestinationKey(activeJob.organizationId, activeJob.destinationKey);
+            destinationCounts.set(destinationCountKey, (destinationCounts.get(destinationCountKey) ?? 0) + 1);
           }
-          const attemptNumber = job.attemptCount + 1;
-          let attempt = await tx.runAttempt.findFirst({
-            where: {
-              dispatchJobId: job.id,
-              attemptNumber,
-            },
-          });
-          if (!attempt) {
-            attempt = await tx.runAttempt.create({
-              data: {
-                organizationId: job.organizationId,
-                taskId: job.taskId,
-                runId: job.runId,
-                dispatchJobId: job.id,
-                attemptNumber,
-                status: "pending",
-              },
-            });
+        }
+
+        const jobsByOrg = new Map<string, typeof candidates>();
+        const orgOrder: string[] = [];
+        for (const candidate of candidates) {
+          const existing = jobsByOrg.get(candidate.organizationId);
+          if (existing) {
+            existing.push(candidate);
+          } else {
+            jobsByOrg.set(candidate.organizationId, [candidate]);
+            orgOrder.push(candidate.organizationId);
+          }
+        }
+
+        const leased: string[] = [];
+        let pendingOrgOrder = orgOrder;
+        while (leased.length < limit && pendingOrgOrder.length > 0) {
+          let claimedInRound = false;
+          const nextOrgOrder: string[] = [];
+
+          for (const orgId of pendingOrgOrder) {
+            const queue = jobsByOrg.get(orgId);
+            if (!queue || queue.length === 0) {
+              continue;
+            }
+            if ((orgCounts.get(orgId) ?? 0) >= MAX_CONCURRENT_DISPATCHES_PER_ORG) {
+              continue;
+            }
+
+            while (queue.length > 0) {
+              const job = queue.shift()!;
+              if (!await this.canLeaseForDestination(job.organizationId, job.destinationKey, tx)) {
+                continue;
+              }
+              if (job.destinationKey) {
+                const destinationCountKey = this.orgDestinationKey(job.organizationId, job.destinationKey);
+                if ((destinationCounts.get(destinationCountKey) ?? 0) >= MAX_CONCURRENT_DISPATCHES_PER_DESTINATION) {
+                  continue;
+                }
+              }
+
+              const attemptNumber = job.attemptCount + 1;
+              let attempt = await tx.runAttempt.findFirst({
+                where: {
+                  dispatchJobId: job.id,
+                  attemptNumber,
+                },
+              });
+              if (!attempt) {
+                attempt = await tx.runAttempt.create({
+                  data: {
+                    organizationId: job.organizationId,
+                    taskId: job.taskId,
+                    runId: job.runId,
+                    dispatchJobId: job.id,
+                    attemptNumber,
+                    status: "pending",
+                  },
+                });
+              }
+
+              const update = await tx.dispatchJob.updateMany({
+                where: {
+                  id: job.id,
+                  status: job.status,
+                },
+                data: {
+                  status: "leased",
+                  leaseOwner: "cloud-worker",
+                  leasedUntil: new Date(Date.now() + 5 * 60 * 1000),
+                  attemptCount: attemptNumber,
+                },
+              });
+              if (update.count === 0) {
+                continue;
+              }
+              await tx.run.update({
+                where: { id: job.runId },
+                data: {
+                  status: "leased",
+                  attempt: attemptNumber,
+                },
+              });
+              await this.markProbeInFlight(job.organizationId, job.destinationKey, tx);
+              await tx.dispatchEvent.create({
+                data: {
+                  organizationId: job.organizationId,
+                  dispatchJobId: job.id,
+                  action: "dispatch.leased",
+                  previousState: job.status,
+                  nextState: "leased",
+                  metadata: { attemptId: attempt.id, attemptNumber } as Prisma.InputJsonValue,
+                },
+              });
+              orgCounts.set(orgId, (orgCounts.get(orgId) ?? 0) + 1);
+              if (job.destinationKey) {
+                const destinationCountKey = this.orgDestinationKey(job.organizationId, job.destinationKey);
+                destinationCounts.set(destinationCountKey, (destinationCounts.get(destinationCountKey) ?? 0) + 1);
+              }
+              leased.push(job.id);
+              claimedInRound = true;
+
+              if (
+                leased.length < limit
+                && queue.length > 0
+                && (orgCounts.get(orgId) ?? 0) < MAX_CONCURRENT_DISPATCHES_PER_ORG
+              ) {
+                nextOrgOrder.push(orgId);
+              }
+              break;
+            }
           }
 
-          const update = await tx.dispatchJob.updateMany({
-            where: {
-              id: job.id,
-              status: job.status,
-            },
-            data: {
-              status: "leased",
-              leaseOwner: "cloud-worker",
-              leasedUntil: new Date(Date.now() + 5 * 60 * 1000),
-              attemptCount: attemptNumber,
-            },
-          });
-          if (update.count === 0) {
-            continue;
+          if (!claimedInRound) {
+            break;
           }
-          await tx.run.update({
-            where: { id: job.runId },
-            data: {
-              status: "leased",
-              attempt: attemptNumber,
-            },
-          });
-          await this.markProbeInFlight(job.organizationId, job.destinationKey, tx);
-          await tx.dispatchEvent.create({
-            data: {
-              organizationId: job.organizationId,
-              dispatchJobId: job.id,
-              action: "dispatch.leased",
-              previousState: job.status,
-              nextState: "leased",
-              metadata: { attemptId: attempt.id, attemptNumber } as Prisma.InputJsonValue,
-            },
-          });
-          leased.push(job.id);
+          pendingOrgOrder = nextOrgOrder;
         }
         return leased;
       });
