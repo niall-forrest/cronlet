@@ -36,6 +36,8 @@ If you set `CLOUD_ALLOWED_OUTBOUND_HOSTS`, Cronlet also requires every outbound 
 
 Organizations can also maintain their own outbound hostname allowlist with `GET /v1/outbound-policy` and `PATCH /v1/outbound-policy`. When both are configured, Cronlet uses the intersection so the org policy can only narrow, never widen, the process-level policy.
 
+Callback verification secrets are also rotatable with `POST /v1/callback-signing-secret/rotate`, and Cronlet records the rotation in audit history.
+
 ## Secret protection
 
 Cronlet stores secret values encrypted at rest and records encryption metadata per secret.

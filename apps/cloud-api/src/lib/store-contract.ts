@@ -121,6 +121,7 @@ export interface CloudStore {
   upsertOrganization(input: OrganizationUpsertInput): Promise<void> | void;
   upsertEntitlementForOrg(orgId: string, input: EntitlementUpdateInput): Promise<void> | void;
   getCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> | CallbackSigningSecretRecord;
+  rotateCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> | CallbackSigningSecretRecord;
   getOutboundPolicy(orgId: string): Promise<OutboundPolicyRecord> | OutboundPolicyRecord;
   updateOutboundPolicy(orgId: string, input: OutboundPolicyPatchInput): Promise<OutboundPolicyRecord> | OutboundPolicyRecord;
 

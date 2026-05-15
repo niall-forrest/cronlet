@@ -816,6 +816,7 @@ export class PrismaCloudStore implements CloudStore {
         name: name ?? `Organization ${orgId}`,
         slug: orgSlug(orgId, slug),
         callbackSigningSecret: generateCallbackSigningSecret(),
+        callbackSigningSecretRotatedAt: new Date(),
         outboundAllowedHosts: [],
       },
     });
@@ -941,6 +942,7 @@ export class PrismaCloudStore implements CloudStore {
       where: { id: orgId },
       data: {
         callbackSigningSecret: secret,
+        callbackSigningSecretRotatedAt: new Date(),
       },
     });
     return secret;
@@ -2311,8 +2313,54 @@ export class PrismaCloudStore implements CloudStore {
   }
 
   async getCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> {
+    await this.ensureOrganization(orgId);
+    const organization = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: orgId },
+      select: {
+        callbackSigningSecret: true,
+        callbackSigningSecretRotatedAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!organization.callbackSigningSecret) {
+      const secret = await this.getOrCreateCallbackSigningSecret(orgId);
+      const refreshed = await this.prisma.organization.findUniqueOrThrow({
+        where: { id: orgId },
+        select: {
+          callbackSigningSecretRotatedAt: true,
+          updatedAt: true,
+        },
+      });
+      return {
+        secret,
+        rotatedAt: iso(refreshed.callbackSigningSecretRotatedAt ?? refreshed.updatedAt),
+      };
+    }
+
     return {
-      secret: await this.getOrCreateCallbackSigningSecret(orgId),
+      secret: organization.callbackSigningSecret,
+      rotatedAt: iso(organization.callbackSigningSecretRotatedAt ?? organization.updatedAt),
+    };
+  }
+
+  async rotateCallbackSigningSecret(orgId: string): Promise<CallbackSigningSecretRecord> {
+    await this.ensureOrganization(orgId);
+    const rotatedAt = new Date();
+    const organization = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        callbackSigningSecret: generateCallbackSigningSecret(),
+        callbackSigningSecretRotatedAt: rotatedAt,
+      },
+      select: {
+        callbackSigningSecret: true,
+      },
+    });
+
+    return {
+      secret: organization.callbackSigningSecret ?? await this.getOrCreateCallbackSigningSecret(orgId),
+      rotatedAt: iso(rotatedAt),
     };
   }
 

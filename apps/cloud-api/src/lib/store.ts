@@ -103,6 +103,7 @@ interface InternalOrganizationRecord {
   name?: string;
   slug?: string;
   callbackSigningSecret: string;
+  callbackSigningSecretRotatedAt: string;
   outboundAllowedHosts: string[];
   createdAt: string;
   updatedAt: string;
@@ -593,6 +594,7 @@ export class InMemoryCloudStore implements CloudStore {
         name: input?.name ?? existing.name,
         slug: input?.slug ?? existing.slug,
         callbackSigningSecret: existing.callbackSigningSecret || generateCallbackSigningSecret(),
+        callbackSigningSecretRotatedAt: existing.callbackSigningSecretRotatedAt,
         outboundAllowedHosts: existing.outboundAllowedHosts,
         updatedAt: nowIso(),
       };
@@ -606,6 +608,7 @@ export class InMemoryCloudStore implements CloudStore {
       name: input?.name,
       slug: input?.slug,
       callbackSigningSecret: generateCallbackSigningSecret(),
+      callbackSigningSecretRotatedAt: now,
       outboundAllowedHosts: [],
       createdAt: now,
       updatedAt: now,
@@ -1846,8 +1849,26 @@ export class InMemoryCloudStore implements CloudStore {
   }
 
   getCallbackSigningSecret(orgId: string): CallbackSigningSecretRecord {
+    const organization = this.ensureOrganization(orgId);
     return {
-      secret: this.getCallbackSigningSecretValue(orgId),
+      secret: organization.callbackSigningSecret,
+      rotatedAt: organization.callbackSigningSecretRotatedAt,
+    };
+  }
+
+  rotateCallbackSigningSecret(orgId: string): CallbackSigningSecretRecord {
+    const organization = this.ensureOrganization(orgId);
+    const rotatedAt = nowIso();
+    const updated: InternalOrganizationRecord = {
+      ...organization,
+      callbackSigningSecret: generateCallbackSigningSecret(),
+      callbackSigningSecretRotatedAt: rotatedAt,
+      updatedAt: rotatedAt,
+    };
+    this.organizations.set(orgId, updated);
+    return {
+      secret: updated.callbackSigningSecret,
+      rotatedAt,
     };
   }
 

@@ -17,6 +17,7 @@ import type {
   RunReplayResult,
   BulkRunReplayInput,
   BulkRunReplayResult,
+  CallbackSigningSecretRecord,
   CircuitBreakerListInput,
   CircuitBreakerRecord,
   ReconciliationCompareInput,
@@ -388,6 +389,16 @@ export class CloudClient {
       this.request<OutboundPolicyRecord>("/v1/outbound-policy", {
         method: "PATCH",
         body: JSON.stringify(input),
+      }),
+  };
+
+  readonly callbackSigning = {
+    get: (): Promise<CallbackSigningSecretRecord> =>
+      this.request<CallbackSigningSecretRecord>("/v1/callback-signing-secret"),
+
+    rotate: (): Promise<CallbackSigningSecretRecord> =>
+      this.request<CallbackSigningSecretRecord>("/v1/callback-signing-secret/rotate", {
+        method: "POST",
       }),
   };
 

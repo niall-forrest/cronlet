@@ -109,6 +109,7 @@ model Organization {
   name          String
   slug          String               @unique
   callbackSigningSecret String?
+  callbackSigningSecretRotatedAt DateTime?
   outboundAllowedHosts String[]      @default([])
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt

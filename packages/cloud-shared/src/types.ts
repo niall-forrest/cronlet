@@ -438,6 +438,7 @@ export interface OrgStatusSnapshot {
 
 export interface CallbackSigningSecretRecord {
   secret: string;
+  rotatedAt: string;
 }
 
 // ============================================
