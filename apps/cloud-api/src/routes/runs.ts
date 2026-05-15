@@ -1,15 +1,15 @@
-import { internalRunStatusSchema } from "@cronlet/shared";
+import { bulkRunReplaySchema, internalRunStatusSchema, runListQuerySchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";
 
 export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
   // List runs (optionally filtered by task)
-  app.get<{ Querystring: { taskId?: string; limit?: string } }>("/v1/runs", async (request, reply) => {
+  app.get("/v1/runs", async (request, reply) => {
     try {
       authorize(request.auth, { minimumRole: "viewer", requiredScope: "runs:read" });
-      const limit = request.query.limit ? parseInt(request.query.limit, 10) : undefined;
-      const runs = await app.cloudStore.listRuns(request.auth.orgId, request.query.taskId, limit);
+      const query = runListQuerySchema.parse(request.query);
+      const runs = await app.cloudStore.listRuns(request.auth.orgId, query);
       return ok(reply, runs);
     } catch (error) {
       return handleError(reply, error);
@@ -32,6 +32,18 @@ export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
       authorize(request.auth, { minimumRole: "member", requiredScope: "runs:write" });
       const trigger = request.auth.actorType === "api_key" ? "api" : "manual";
       const result = await app.cloudStore.replayRun(request.auth.orgId, request.params.runId, trigger);
+      return ok(reply, result, 201);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  app.post("/v1/runs/bulk-replay", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "member", requiredScope: "runs:write" });
+      const input = bulkRunReplaySchema.parse(request.body);
+      const trigger = request.auth.actorType === "api_key" ? "api" : "manual";
+      const result = await app.cloudStore.bulkReplayRuns(request.auth.orgId, input, trigger);
       return ok(reply, result, 201);
     } catch (error) {
       return handleError(reply, error);

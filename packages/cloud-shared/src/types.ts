@@ -197,6 +197,26 @@ export interface RunRecord {
   createdAt: string;
 }
 
+export interface TaskListInput {
+  status?: "active" | "paused";
+  scheduleType?: ScheduleType;
+  externalId?: string;
+  metadata?: Record<string, unknown>;
+  nextRunAfter?: string;
+  nextRunBefore?: string;
+  limit?: number;
+}
+
+export interface RunListInput {
+  taskId?: string;
+  status?: RunStatus;
+  externalId?: string;
+  metadata?: Record<string, unknown>;
+  scheduledAfter?: string;
+  scheduledBefore?: string;
+  limit?: number;
+}
+
 export interface RunAttemptRecord {
   id: string;
   orgId: string;
@@ -230,6 +250,48 @@ export interface TaskCancelResult {
 export interface RunReplayResult {
   run: RunRecord;
   replayOfRunId: string;
+}
+
+export interface BulkTaskCancelInput {
+  taskIds?: string[];
+  externalIds?: string[];
+  metadata?: Record<string, unknown>;
+  limit?: number;
+}
+
+export interface BulkTaskCancelResult {
+  count: number;
+  results: TaskCancelResult[];
+}
+
+export interface BulkRunReplayInput {
+  runIds?: string[];
+  taskId?: string;
+  status?: RunStatus;
+  externalId?: string;
+  metadata?: Record<string, unknown>;
+  limit?: number;
+}
+
+export interface BulkRunReplayResult {
+  count: number;
+  results: RunReplayResult[];
+}
+
+export interface ReconciliationCompareInput {
+  externalIds?: string[];
+  metadata?: Record<string, unknown>;
+  includePendingOnce?: boolean;
+  includeOverdue?: boolean;
+  limit?: number;
+}
+
+export interface ReconciliationCompareResult {
+  matchedTasks: TaskRecord[];
+  missingExternalIds: string[];
+  duplicateExternalIds: string[];
+  pendingOneOffTasks: TaskRecord[];
+  overdueTasks: TaskRecord[];
 }
 
 export interface SecretRecord {

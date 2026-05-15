@@ -6,9 +6,17 @@ import type {
   ScheduleConfigInput,
   SecretCreateInput,
   TaskRecord,
+  TaskListInput,
   RunRecord,
+  RunListInput,
   TaskCancelResult,
+  BulkTaskCancelInput,
+  BulkTaskCancelResult,
   RunReplayResult,
+  BulkRunReplayInput,
+  BulkRunReplayResult,
+  ReconciliationCompareInput,
+  ReconciliationCompareResult,
   SecretRecord,
   UsageSnapshot,
   CreatedBy,
@@ -234,7 +242,26 @@ export class CloudClient {
     /**
      * List all tasks
      */
-    list: (): Promise<TaskRecord[]> => this.request<TaskRecord[]>("/v1/tasks"),
+    list: (filter?: TaskListInput): Promise<TaskRecord[]> => {
+      const params = new URLSearchParams();
+      if (filter?.status) params.set("status", filter.status);
+      if (filter?.scheduleType) params.set("scheduleType", filter.scheduleType);
+      if (filter?.externalId) params.set("externalId", filter.externalId);
+      if (filter?.metadata) params.set("metadata", JSON.stringify(filter.metadata));
+      if (filter?.nextRunAfter) params.set("nextRunAfter", filter.nextRunAfter);
+      if (filter?.nextRunBefore) params.set("nextRunBefore", filter.nextRunBefore);
+      if (typeof filter?.limit === "number") params.set("limit", String(filter.limit));
+      const query = params.toString() ? `?${params.toString()}` : "";
+      return this.request<TaskRecord[]>(`/v1/tasks${query}`);
+    },
+
+    findByExternalId: async (externalId: string): Promise<TaskRecord | null> => {
+      const tasks = await this.tasks.list({ externalId, limit: 1 });
+      return tasks[0] ?? null;
+    },
+
+    findByMetadata: (metadata: Record<string, unknown>, limit = 100): Promise<TaskRecord[]> =>
+      this.tasks.list({ metadata, limit }),
 
     /**
      * Get a task by ID
@@ -265,6 +292,12 @@ export class CloudClient {
     cancel: (taskId: string): Promise<TaskCancelResult> =>
       this.request<TaskCancelResult>(`/v1/tasks/${taskId}/cancel`, {
         method: "POST",
+      }),
+
+    bulkCancel: (input: BulkTaskCancelInput): Promise<BulkTaskCancelResult> =>
+      this.request<BulkTaskCancelResult>("/v1/tasks/bulk-cancel", {
+        method: "POST",
+        body: JSON.stringify(input),
       }),
 
     /**
@@ -340,13 +373,26 @@ export class CloudClient {
     /**
      * List runs, optionally filtered by task
      */
-    list: (taskId?: string, limit?: number): Promise<RunRecord[]> => {
+    list: (filterOrTaskId?: string | RunListInput, limit?: number): Promise<RunRecord[]> => {
       const params = new URLSearchParams();
-      if (taskId) params.set("taskId", taskId);
-      if (limit) params.set("limit", String(limit));
+      if (typeof filterOrTaskId === "string") {
+        params.set("taskId", filterOrTaskId);
+        if (limit) params.set("limit", String(limit));
+      } else if (filterOrTaskId) {
+        if (filterOrTaskId.taskId) params.set("taskId", filterOrTaskId.taskId);
+        if (filterOrTaskId.status) params.set("status", filterOrTaskId.status);
+        if (filterOrTaskId.externalId) params.set("externalId", filterOrTaskId.externalId);
+        if (filterOrTaskId.metadata) params.set("metadata", JSON.stringify(filterOrTaskId.metadata));
+        if (filterOrTaskId.scheduledAfter) params.set("scheduledAfter", filterOrTaskId.scheduledAfter);
+        if (filterOrTaskId.scheduledBefore) params.set("scheduledBefore", filterOrTaskId.scheduledBefore);
+        if (filterOrTaskId.limit) params.set("limit", String(filterOrTaskId.limit));
+      }
       const query = params.toString() ? `?${params.toString()}` : "";
       return this.request<RunRecord[]>(`/v1/runs${query}`);
     },
+
+    find: (filter: RunListInput): Promise<RunRecord[]> =>
+      this.runs.list(filter),
 
     /**
      * Get a specific run by ID
@@ -360,6 +406,20 @@ export class CloudClient {
     replay: (runId: string): Promise<RunReplayResult> =>
       this.request<RunReplayResult>(`/v1/runs/${runId}/replay`, {
         method: "POST",
+      }),
+
+    bulkReplay: (input: BulkRunReplayInput): Promise<BulkRunReplayResult> =>
+      this.request<BulkRunReplayResult>("/v1/runs/bulk-replay", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+  };
+
+  readonly reconciliation = {
+    compare: (input: ReconciliationCompareInput): Promise<ReconciliationCompareResult> =>
+      this.request<ReconciliationCompareResult>("/v1/reconciliation/compare", {
+        method: "POST",
+        body: JSON.stringify(input),
       }),
   };
 

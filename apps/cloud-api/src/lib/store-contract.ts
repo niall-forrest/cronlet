@@ -15,13 +15,21 @@ import type {
   InternalDispatchStartInput,
   InternalRunStatusInput,
   PlanTier,
+  ReconciliationCompareInput,
+  ReconciliationCompareResult,
   RunRecord,
+  RunListInput,
+  BulkRunReplayInput,
+  BulkRunReplayResult,
   RunReplayResult,
   SecretCreateInput,
   SecretPatchInput,
   SecretRecord,
+  BulkTaskCancelInput,
+  BulkTaskCancelResult,
   TaskCreateInput,
   TaskDispatchInput,
+  TaskListInput,
   TaskPatchInput,
   TaskRecord,
   TaskCancelResult,
@@ -42,20 +50,23 @@ export interface OrganizationUpsertInput {
 
 export interface CloudStore {
   // Tasks
-  listTasks(orgId: string): Promise<TaskRecord[]> | TaskRecord[];
+  listTasks(orgId: string, input?: TaskListInput): Promise<TaskRecord[]> | TaskRecord[];
   countTasks(orgId: string): Promise<number> | number;
   getTask(orgId: string, taskId: string): Promise<TaskRecord> | TaskRecord;
   createTask(orgId: string, input: TaskCreateInput, createdBy?: CreatedBy): Promise<TaskRecord> | TaskRecord;
   patchTask(orgId: string, taskId: string, input: TaskPatchInput): Promise<TaskRecord> | TaskRecord;
   deleteTask(orgId: string, taskId: string): Promise<void> | void;
   cancelTask(orgId: string, taskId: string): Promise<TaskCancelResult> | TaskCancelResult;
+  bulkCancelTasks(orgId: string, input: BulkTaskCancelInput): Promise<BulkTaskCancelResult> | BulkTaskCancelResult;
   triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): Promise<RunRecord> | RunRecord;
   dispatchTask(orgId: string, input: TaskDispatchInput, createdBy?: CreatedBy, trigger?: "manual" | "api"): Promise<RunRecord> | RunRecord;
 
   // Runs
-  listRuns(orgId: string, taskId?: string, limit?: number): Promise<RunRecord[]> | RunRecord[];
+  listRuns(orgId: string, input?: RunListInput): Promise<RunRecord[]> | RunRecord[];
   getRun(orgId: string, runId: string): Promise<RunRecord> | RunRecord;
   replayRun(orgId: string, runId: string, trigger?: "manual" | "api"): Promise<RunReplayResult> | RunReplayResult;
+  bulkReplayRuns(orgId: string, input: BulkRunReplayInput, trigger?: "manual" | "api"): Promise<BulkRunReplayResult> | BulkRunReplayResult;
+  compareReconciliation(orgId: string, input: ReconciliationCompareInput): Promise<ReconciliationCompareResult> | ReconciliationCompareResult;
   updateRunStatus(runId: string, input: InternalRunStatusInput): Promise<RunRecord> | RunRecord;
 
   // Secrets

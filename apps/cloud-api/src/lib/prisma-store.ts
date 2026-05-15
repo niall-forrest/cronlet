@@ -3,6 +3,10 @@ import {
   type AuditEventListInput,
   type AuditEventRecord,
   type CallbackSigningSecretRecord,
+  type BulkRunReplayInput,
+  type BulkRunReplayResult,
+  type BulkTaskCancelInput,
+  type BulkTaskCancelResult,
   getTaskLimitForTier,
   PLAN_LIMITS,
   type PlanTier,
@@ -21,8 +25,11 @@ import {
   type InternalDispatchCompleteInput,
   type InternalDispatchStartInput,
   type InternalRunStatusInput,
+  type ReconciliationCompareInput,
+  type ReconciliationCompareResult,
   type RetryPolicy,
   type RunRecord,
+  type RunListInput,
   type RunReplayResult,
   type RunStatus,
   type ScheduleConfig,
@@ -32,6 +39,7 @@ import {
   type SecretRecord,
   type TaskCreateInput,
   type TaskDispatchInput,
+  type TaskListInput,
   type TaskPatchInput,
   type TaskRecord,
   type TaskCancelResult,
@@ -129,6 +137,19 @@ function computeRetryDelayMs(policy: RetryPolicy, attemptNumber: number): number
       : initial * Math.pow(2, Math.max(0, attemptNumber - 1));
   const bounded = Math.min(base, max);
   return policy.jitter ? Math.max(1000, Math.round(bounded * 0.75)) : bounded;
+}
+
+function metadataWhereClauses(metadata: Record<string, unknown> | undefined): Prisma.TaskWhereInput[] {
+  if (!metadata) {
+    return [];
+  }
+
+  return Object.entries(metadata).map(([key, expected]) => ({
+    metadata: {
+      path: [key],
+      equals: expected as Prisma.InputJsonValue,
+    },
+  }));
 }
 
 function toTaskRecord(value: {
@@ -597,13 +618,29 @@ export class PrismaCloudStore implements CloudStore {
   // TASKS
   // ============================================
 
-  async listTasks(orgId: string): Promise<TaskRecord[]> {
+  async listTasks(orgId: string, input: TaskListInput = {}): Promise<TaskRecord[]> {
+    const where: Prisma.TaskWhereInput = {
+      organizationId: orgId,
+      kind: "scheduled",
+      ...(input.status === "active" ? { active: true } : {}),
+      ...(input.status === "paused" ? { active: false } : {}),
+      ...(input.scheduleType ? { scheduleType: input.scheduleType } : {}),
+      ...(input.externalId ? { externalId: input.externalId } : {}),
+      ...(input.nextRunAfter || input.nextRunBefore
+        ? {
+          nextRunAt: {
+            ...(input.nextRunAfter ? { gte: new Date(input.nextRunAfter) } : {}),
+            ...(input.nextRunBefore ? { lte: new Date(input.nextRunBefore) } : {}),
+          },
+        }
+        : {}),
+      ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+    };
+
     const tasks = await this.prisma.task.findMany({
-      where: {
-        organizationId: orgId,
-        kind: "scheduled",
-      },
+      where,
       orderBy: { createdAt: "desc" },
+      take: input.limit ?? 100,
     });
     return tasks.map(toTaskRecord);
   }
@@ -831,6 +868,27 @@ export class PrismaCloudStore implements CloudStore {
     };
   }
 
+  async bulkCancelTasks(orgId: string, input: BulkTaskCancelInput): Promise<BulkTaskCancelResult> {
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        organizationId: orgId,
+        kind: "scheduled",
+        ...(input.taskIds?.length ? { id: { in: input.taskIds } } : {}),
+        ...(input.externalIds?.length ? { externalId: { in: input.externalIds } } : {}),
+        ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: input.limit ?? 100,
+      select: { id: true },
+    });
+
+    const results = await Promise.all(tasks.map((task) => this.cancelTask(orgId, task.id)));
+    return {
+      count: results.length,
+      results,
+    };
+  }
+
   async triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): Promise<RunRecord> {
     await this.assertWritable(orgId);
     await this.assertWithinRunLimit(orgId);
@@ -953,14 +1011,31 @@ export class PrismaCloudStore implements CloudStore {
   // RUNS
   // ============================================
 
-  async listRuns(orgId: string, taskId?: string, limit = 100): Promise<RunRecord[]> {
+  async listRuns(orgId: string, input: RunListInput = {}): Promise<RunRecord[]> {
     const runs = await this.prisma.run.findMany({
       where: {
         organizationId: orgId,
-        ...(taskId ? { taskId } : {}),
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.scheduledAfter || input.scheduledBefore
+          ? {
+            scheduledAt: {
+              ...(input.scheduledAfter ? { gte: new Date(input.scheduledAfter) } : {}),
+              ...(input.scheduledBefore ? { lte: new Date(input.scheduledBefore) } : {}),
+            },
+          }
+          : {}),
+        ...((input.externalId || input.metadata)
+          ? {
+            task: {
+              ...(input.externalId ? { externalId: input.externalId } : {}),
+              ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+            },
+          }
+          : {}),
       },
       orderBy: { createdAt: "desc" },
-      take: limit,
+      take: input.limit ?? 100,
     });
     return runs.map(toRunRecord);
   }
@@ -999,6 +1074,110 @@ export class PrismaCloudStore implements CloudStore {
     });
     await this.createDispatchForRun(existing.task, run);
     return { run: toRunRecord(run), replayOfRunId: runId };
+  }
+
+  async bulkReplayRuns(
+    orgId: string,
+    input: BulkRunReplayInput,
+    trigger: "manual" | "api" = "manual"
+  ): Promise<BulkRunReplayResult> {
+    const runs = await this.prisma.run.findMany({
+      where: {
+        organizationId: orgId,
+        ...(input.runIds?.length ? { id: { in: input.runIds } } : {}),
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.status ? { status: input.status } : {}),
+        ...((input.externalId || input.metadata)
+          ? {
+            task: {
+              ...(input.externalId ? { externalId: input.externalId } : {}),
+              ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+            },
+          }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: input.limit ?? 100,
+      select: { id: true },
+    });
+
+    const results = await Promise.all(runs.map((run) => this.replayRun(orgId, run.id, trigger)));
+    return {
+      count: results.length,
+      results,
+    };
+  }
+
+  async compareReconciliation(orgId: string, input: ReconciliationCompareInput): Promise<ReconciliationCompareResult> {
+    const limit = input.limit ?? 100;
+    const matchedTasks = await this.prisma.task.findMany({
+      where: {
+        organizationId: orgId,
+        kind: "scheduled",
+        ...(input.externalIds?.length ? { externalId: { in: input.externalIds } } : {}),
+        ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    const missingExternalIds = input.externalIds?.length
+      ? input.externalIds.filter((externalId: string) => !matchedTasks.some((task) => task.externalId === externalId))
+      : [];
+
+    const duplicateRows = await this.prisma.task.groupBy({
+      by: ["externalId"],
+      where: {
+        organizationId: orgId,
+        kind: "scheduled",
+        externalId: { not: null },
+      },
+      _count: { externalId: true },
+      having: {
+        externalId: {
+          _count: {
+            gt: 1,
+          },
+        },
+      },
+    });
+
+    const pendingOneOffTasks = input.includePendingOnce === false
+      ? []
+      : await this.prisma.task.findMany({
+        where: {
+          organizationId: orgId,
+          kind: "scheduled",
+          active: true,
+          scheduleType: "once",
+          nextRunAt: { not: null },
+          ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+        },
+        orderBy: { nextRunAt: "asc" },
+        take: limit,
+      });
+
+    const overdueTasks = input.includeOverdue === false
+      ? []
+      : await this.prisma.task.findMany({
+        where: {
+          organizationId: orgId,
+          kind: "scheduled",
+          active: true,
+          nextRunAt: { lt: new Date() },
+          ...(input.metadata ? { AND: metadataWhereClauses(input.metadata) } : {}),
+        },
+        orderBy: { nextRunAt: "asc" },
+        take: limit,
+      });
+
+    return {
+      matchedTasks: matchedTasks.map(toTaskRecord),
+      missingExternalIds,
+      duplicateExternalIds: duplicateRows.map((row) => row.externalId).filter((value): value is string => Boolean(value)),
+      pendingOneOffTasks: pendingOneOffTasks.map(toTaskRecord),
+      overdueTasks: overdueTasks.map(toTaskRecord),
+    };
   }
 
   async updateRunStatus(runId: string, input: InternalRunStatusInput): Promise<RunRecord> {

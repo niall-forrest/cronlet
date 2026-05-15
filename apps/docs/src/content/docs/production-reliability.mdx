@@ -20,6 +20,8 @@ Dispatch is retried until success, cancellation, timeout, retry-window expiry, o
 
 Cronlet does not guarantee exactly-once callback effects. Your application must dedupe with `run.id`, `attempt.id`, `task.externalId`, `callbackDeliveryId`, or a business key such as `emailSendId`.
 
+Cronlet is designed so your application can reconcile its own business state against Cronlet state instead of treating Cronlet as the source of truth.
+
 ## Success semantics
 
 For webhook delivery, Cronlet treats HTTP `2xx` as success.
@@ -82,6 +84,23 @@ await cronlet.tasks.create({
 ```
 
 For customer-facing email or billing workflows, keep canonical state in your application and use Cronlet as the durable wake-up layer. Store the Cronlet task ID and use an overdue-send reconciler in your own system.
+
+## Reconciliation APIs
+
+Cronlet exposes metadata-first control-plane APIs for product reconciliation:
+
+- `tasks.list(...)` supports filtering by `externalId`, metadata, schedule type, active state, and next run time
+- `runs.list(...)` supports filtering by task, run status, `externalId`, metadata, and scheduled time
+- `tasks.bulkCancel(...)` cancels many matching tasks in one request
+- `runs.bulkReplay(...)` replays matching runs without mutating historical records
+- `reconciliation.compare(...)` returns:
+  - matching tasks
+  - missing external IDs
+  - duplicate external IDs
+  - pending one-off tasks
+  - overdue tasks
+
+These APIs are intended for application-owned workflows such as email drips, reminders, billing retries, and agent follow-ups where your product stores the canonical entity state and Cronlet provides durable wake-ups.
 
 ## Initial cloud assumptions
 

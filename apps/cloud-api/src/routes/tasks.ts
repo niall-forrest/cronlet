@@ -1,4 +1,4 @@
-import { taskCreateSchema, taskDispatchSchema, taskPatchSchema } from "@cronlet/shared";
+import { bulkTaskCancelSchema, taskCreateSchema, taskDispatchSchema, taskListQuerySchema, taskPatchSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";
@@ -25,7 +25,8 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/tasks", async (request, reply) => {
     try {
       authorize(request.auth, { minimumRole: "viewer", requiredScope: "tasks:read" });
-      const tasks = await app.cloudStore.listTasks(request.auth.orgId);
+      const query = taskListQuerySchema.parse(request.query);
+      const tasks = await app.cloudStore.listTasks(request.auth.orgId, query);
       return ok(reply, tasks);
     } catch (error) {
       return handleError(reply, error);
@@ -98,6 +99,17 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     try {
       authorize(request.auth, { minimumRole: "admin", requiredScope: "tasks:write" });
       const result = await app.cloudStore.cancelTask(request.auth.orgId, request.params.taskId);
+      return ok(reply, result);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  app.post("/v1/tasks/bulk-cancel", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "admin", requiredScope: "tasks:write" });
+      const input = bulkTaskCancelSchema.parse(request.body);
+      const result = await app.cloudStore.bulkCancelTasks(request.auth.orgId, input);
       return ok(reply, result);
     } catch (error) {
       return handleError(reply, error);

@@ -12,6 +12,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@cronlet/shared": ["../../packages/cloud-shared/src/index.ts"]
+    },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,

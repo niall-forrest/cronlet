@@ -35,6 +35,22 @@ const metadataSchema = z.record(z.unknown()).superRefine((metadata, ctx) => {
   }
 });
 
+function parseMetadataFilter(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  if (!value.trim()) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
 const webhookHandlerConfigSchema = z.object({
   type: z.literal("webhook"),
   url: z.string().url(),
@@ -297,19 +313,52 @@ export const internalDispatchCompleteSchema = z.object({
 });
 
 export const taskListQuerySchema = z.object({
-  status: z.enum(["active", "paused", "cancelled"]).optional(),
+  status: z.enum(["active", "paused"]).optional(),
   scheduleType: z.enum(["every", "daily", "weekly", "monthly", "once", "cron"]).optional(),
   externalId: z.string().min(1).max(200).optional(),
-  metadata: z.string().optional(),
+  metadata: z.preprocess(parseMetadataFilter, metadataSchema.optional()),
+  nextRunAfter: z.string().datetime().optional(),
+  nextRunBefore: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
-  cursor: z.string().optional(),
 });
 
 export const runListQuerySchema = z.object({
   taskId: z.string().optional(),
   status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]).optional(),
+  externalId: z.string().min(1).max(200).optional(),
+  metadata: z.preprocess(parseMetadataFilter, metadataSchema.optional()),
+  scheduledAfter: z.string().datetime().optional(),
+  scheduledBefore: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
-  cursor: z.string().optional(),
+});
+
+export const bulkTaskCancelSchema = z.object({
+  taskIds: z.array(z.string().min(1)).max(500).optional(),
+  externalIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+  metadata: metadataSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(100).optional(),
+}).refine((value) => Boolean(value.taskIds?.length || value.externalIds?.length || value.metadata), {
+  message: "Provide at least one task selector",
+});
+
+export const bulkRunReplaySchema = z.object({
+  runIds: z.array(z.string().min(1)).max(500).optional(),
+  taskId: z.string().optional(),
+  status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]).optional(),
+  externalId: z.string().min(1).max(200).optional(),
+  metadata: metadataSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(100).optional(),
+}).refine(
+  (value) => Boolean(value.runIds?.length || value.taskId || value.status || value.externalId || value.metadata),
+  { message: "Provide at least one run selector" },
+);
+
+export const reconciliationCompareSchema = z.object({
+  externalIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+  metadata: metadataSchema.optional(),
+  includePendingOnce: z.boolean().default(true).optional(),
+  includeOverdue: z.boolean().default(true).optional(),
+  limit: z.number().int().min(1).max(500).default(100).optional(),
 });
 
 // ============================================

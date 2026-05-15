@@ -2,6 +2,10 @@ import {
   type AuditEventListInput,
   type AuditEventRecord,
   type CallbackSigningSecretRecord,
+  type BulkRunReplayInput,
+  type BulkRunReplayResult,
+  type BulkTaskCancelInput,
+  type BulkTaskCancelResult,
   getTaskLimitForTier,
   PLAN_LIMITS,
   type ApiKeyCreateInput,
@@ -19,7 +23,10 @@ import {
   type HandlerType,
   type InternalRunStatusInput,
   type PlanTier,
+  type ReconciliationCompareInput,
+  type ReconciliationCompareResult,
   type RunRecord,
+  type RunListInput,
   type RunReplayResult,
   type RunStatus,
   type RunAttemptRecord,
@@ -30,6 +37,7 @@ import {
   type SecretRecord,
   type TaskCreateInput,
   type TaskDispatchInput,
+  type TaskListInput,
   type TaskPatchInput,
   type TaskRecord,
   type TaskCancelResult,
@@ -145,6 +153,44 @@ function computeRetryDelayMs(policy: RetryPolicy, attemptNumber: number): number
       : initial * Math.pow(2, Math.max(0, attemptNumber - 1));
   const bounded = Math.min(base, max);
   return policy.jitter ? Math.max(1000, Math.round(bounded * 0.75)) : bounded;
+}
+
+function metadataMatches(
+  value: Record<string, unknown> | null | undefined,
+  filter: Record<string, unknown> | undefined
+): boolean {
+  if (!filter) {
+    return true;
+  }
+  if (!value) {
+    return false;
+  }
+
+  return Object.entries(filter).every(([key, expected]) => JSON.stringify(value[key]) === JSON.stringify(expected));
+}
+
+function isWithinOptionalRange(
+  value: string | null,
+  range: {
+    after?: string;
+    before?: string;
+  }
+): boolean {
+  if (!range.after && !range.before) {
+    return true;
+  }
+  if (!value) {
+    return false;
+  }
+
+  const timestamp = new Date(value).getTime();
+  if (range.after && timestamp < new Date(range.after).getTime()) {
+    return false;
+  }
+  if (range.before && timestamp > new Date(range.before).getTime()) {
+    return false;
+  }
+  return true;
 }
 
 export class InMemoryCloudStore implements CloudStore {
@@ -453,11 +499,36 @@ export class InMemoryCloudStore implements CloudStore {
   // TASKS
   // ============================================
 
-  listTasks(orgId: string): TaskRecord[] {
+  listTasks(orgId: string, input: TaskListInput = {}): TaskRecord[] {
     return Array.from(this.tasks.values())
       .filter((task) => task.orgId === orgId && task.kind === "scheduled")
       .map((task) => this.normalizeScheduledTask(task))
+      .filter((task) => {
+        if (input.status === "active" && !task.active) {
+          return false;
+        }
+        if (input.status === "paused" && task.active) {
+          return false;
+        }
+        if (input.scheduleType && task.scheduleType !== input.scheduleType) {
+          return false;
+        }
+        if (input.externalId && task.externalId !== input.externalId) {
+          return false;
+        }
+        if (!metadataMatches(task.metadata, input.metadata)) {
+          return false;
+        }
+        if (!isWithinOptionalRange(task.nextRunAt, {
+          after: input.nextRunAfter,
+          before: input.nextRunBefore,
+        })) {
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, input.limit ?? 100)
       .map((task) => this.toPublicTask(task));
   }
 
@@ -605,6 +676,29 @@ export class InMemoryCloudStore implements CloudStore {
     };
   }
 
+  bulkCancelTasks(orgId: string, input: BulkTaskCancelInput): BulkTaskCancelResult {
+    const limit = input.limit ?? 100;
+    const selected = this.listTasks(orgId, {
+      externalId: input.externalIds?.length === 1 ? input.externalIds[0] : undefined,
+      metadata: input.metadata,
+      limit,
+    }).filter((task) => {
+      if (input.taskIds?.length && !input.taskIds.includes(task.id)) {
+        return false;
+      }
+      if (input.externalIds?.length && !(task.externalId && input.externalIds.includes(task.externalId))) {
+        return false;
+      }
+      return true;
+    });
+
+    const results = selected.map((task) => this.cancelTask(orgId, task.id));
+    return {
+      count: results.length,
+      results,
+    };
+  }
+
   triggerTask(orgId: string, taskId: string, trigger: "manual" | "api"): RunRecord {
     this.assertWritable(orgId);
     this.assertWithinRunLimit(orgId);
@@ -717,11 +811,34 @@ export class InMemoryCloudStore implements CloudStore {
   // RUNS
   // ============================================
 
-  listRuns(orgId: string, taskId?: string, limit = 100): RunRecord[] {
+  listRuns(orgId: string, input: RunListInput = {}): RunRecord[] {
     return Array.from(this.runs.values())
-      .filter((run) => run.orgId === orgId && (!taskId || run.taskId === taskId))
+      .filter((run) => run.orgId === orgId)
+      .filter((run) => {
+        if (input.taskId && run.taskId !== input.taskId) {
+          return false;
+        }
+        if (input.status && run.status !== input.status) {
+          return false;
+        }
+        if (!isWithinOptionalRange(run.scheduledAt, {
+          after: input.scheduledAfter,
+          before: input.scheduledBefore,
+        })) {
+          return false;
+        }
+
+        const task = this.tasks.get(run.taskId);
+        if (input.externalId && task?.externalId !== input.externalId) {
+          return false;
+        }
+        if (!metadataMatches(task?.metadata, input.metadata)) {
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit);
+      .slice(0, input.limit ?? 100);
   }
 
   getRun(orgId: string, runId: string): RunRecord {
@@ -759,6 +876,83 @@ export class InMemoryCloudStore implements CloudStore {
     this.runs.set(run.id, run);
     this.createDispatchForRun(task, run);
     return { run, replayOfRunId: runId };
+  }
+
+  bulkReplayRuns(
+    orgId: string,
+    input: BulkRunReplayInput,
+    trigger: "manual" | "api" = "manual"
+  ): BulkRunReplayResult {
+    const selected: RunRecord[] = input.runIds?.length
+      ? input.runIds.map((runId: string) => this.getRun(orgId, runId))
+      : this.listRuns(orgId, {
+        taskId: input.taskId,
+        status: input.status,
+        externalId: input.externalId,
+        metadata: input.metadata,
+        limit: input.limit ?? 100,
+      });
+
+    const results = selected.map((run: RunRecord) => this.replayRun(orgId, run.id, trigger));
+    return {
+      count: results.length,
+      results,
+    };
+  }
+
+  compareReconciliation(orgId: string, input: ReconciliationCompareInput): ReconciliationCompareResult {
+    const limit = input.limit ?? 100;
+    const scheduledTasks = Array.from(this.tasks.values())
+      .filter((task) => task.orgId === orgId && task.kind === "scheduled")
+      .map((task) => this.normalizeScheduledTask(task));
+    const matchedTasks = scheduledTasks
+      .filter((task) => {
+        if (input.externalIds?.length && !input.externalIds.includes(task.externalId ?? "")) {
+          return false;
+        }
+        return metadataMatches(task.metadata, input.metadata);
+      })
+      .slice(0, limit)
+      .map((task) => this.toPublicTask(task));
+
+    const missingExternalIds = (input.externalIds ?? []).filter(
+      (externalId: string) => !scheduledTasks.some((task) => task.externalId === externalId),
+    );
+
+    const externalIdCounts = new Map<string, number>();
+    for (const task of scheduledTasks) {
+      if (!task.externalId) {
+        continue;
+      }
+      externalIdCounts.set(task.externalId, (externalIdCounts.get(task.externalId) ?? 0) + 1);
+    }
+    const duplicateExternalIds = Array.from(externalIdCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([externalId]) => externalId);
+
+    const pendingOneOffTasks = input.includePendingOnce === false
+      ? []
+      : scheduledTasks
+        .filter((task) => task.scheduleType === "once" && task.nextRunAt !== null && task.active)
+        .filter((task) => metadataMatches(task.metadata, input.metadata))
+        .slice(0, limit)
+        .map((task) => this.toPublicTask(task));
+
+    const overdueTasks = input.includeOverdue === false
+      ? []
+      : scheduledTasks
+        .filter((task) => task.nextRunAt !== null && new Date(task.nextRunAt).getTime() < Date.now())
+        .filter((task) => metadataMatches(task.metadata, input.metadata))
+        .slice(0, limit)
+        .map((task) => this.toPublicTask(task));
+
+    return {
+      matchedTasks,
+      missingExternalIds,
+      duplicateExternalIds,
+      pendingOneOffTasks,
+      overdueTasks,
+    };
   }
 
   updateRunStatus(runId: string, input: InternalRunStatusInput): RunRecord {
