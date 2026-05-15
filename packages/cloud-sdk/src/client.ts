@@ -17,6 +17,8 @@ import type {
   RunReplayResult,
   BulkRunReplayInput,
   BulkRunReplayResult,
+  CircuitBreakerListInput,
+  CircuitBreakerRecord,
   ReconciliationCompareInput,
   ReconciliationCompareResult,
   SecretRecord,
@@ -445,6 +447,17 @@ export class CloudClient {
         method: "POST",
         body: JSON.stringify(input),
       }),
+  };
+
+  readonly circuitBreakers = {
+    list: (filter?: CircuitBreakerListInput): Promise<CircuitBreakerRecord[]> => {
+      const params = new URLSearchParams();
+      if (filter?.state) params.set("state", filter.state);
+      if (filter?.destinationKey) params.set("destinationKey", filter.destinationKey);
+      if (typeof filter?.limit === "number") params.set("limit", String(filter.limit));
+      const query = params.toString() ? `?${params.toString()}` : "";
+      return this.request<CircuitBreakerRecord[]>(`/v1/circuit-breakers${query}`);
+    },
   };
 
   /**

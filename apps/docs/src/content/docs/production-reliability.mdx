@@ -61,6 +61,18 @@ Default policy:
 
 When a worker dies mid-delivery, the dispatch lease expires and reconciliation makes the job retryable again.
 
+## Destination protection
+
+Cronlet tracks per-destination circuit breaker state for retryable webhook failures.
+
+- a destination opens after repeated retryable failures
+- open destinations stop leasing new deliveries until the cooldown window expires
+- after cooldown, Cronlet half-opens the destination and allows one probe attempt
+- a successful probe closes the breaker
+- a failed probe re-opens the breaker and defers sibling deliveries for that destination
+
+Operators can inspect current breaker state with `GET /v1/circuit-breakers`.
+
 ## Cancellation
 
 `tasks.cancel(taskId)` cancels pending and retry-wait dispatches, clears `nextRunAt`, and prevents new attempts from starting after the API returns.

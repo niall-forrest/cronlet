@@ -24,6 +24,8 @@ import type {
   BulkRunReplayInput,
   BulkRunReplayResult,
   RunReplayResult,
+  CircuitBreakerListInput,
+  CircuitBreakerRecord,
   SecretCreateInput,
   SecretPatchInput,
   SecretRecord,
@@ -98,6 +100,7 @@ export interface CloudStore {
   listTaskEvents(orgId: string, taskId: string, limit?: number): Promise<TaskEventRecord[]> | TaskEventRecord[];
   listRunEvents(orgId: string, runId: string, limit?: number): Promise<RunEventRecord[]> | RunEventRecord[];
   listDispatchEvents(orgId: string, dispatchJobId: string, limit?: number): Promise<DispatchEventRecord[]> | DispatchEventRecord[];
+  listCircuitBreakers(orgId: string, input?: CircuitBreakerListInput): Promise<CircuitBreakerRecord[]> | CircuitBreakerRecord[];
   createAuditEvent(input: {
     organizationId: string;
     actorType?: string;

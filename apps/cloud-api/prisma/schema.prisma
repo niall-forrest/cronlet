@@ -115,6 +115,7 @@ model Organization {
   tasks         Task[]
   runs          Run[]
   dispatchJobs  DispatchJob[]
+  circuitBreakers CircuitBreaker[]
   runAttempts   RunAttempt[]
   secrets       Secret[]
   alerts        Alert[]
@@ -300,6 +301,26 @@ model DispatchJob {
   @@index([organizationId, status, availableAt])
   @@index([destinationKey, status, availableAt])
   @@index([leasedUntil])
+}
+
+model CircuitBreaker {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  destinationKey      String
+  state               String   @default("closed")
+  consecutiveFailures Int      @default(0)
+  openedAt            DateTime?
+  cooldownUntil       DateTime?
+  lastFailureAt       DateTime?
+  lastFailureReason   String?
+  probeInFlight       Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, destinationKey])
+  @@index([organizationId, state, updatedAt])
 }
 
 model TaskEvent {

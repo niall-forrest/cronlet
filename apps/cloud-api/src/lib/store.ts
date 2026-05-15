@@ -2,6 +2,8 @@ import {
   type AuditEventListInput,
   type AuditEventRecord,
   type CallbackSigningSecretRecord,
+  type CircuitBreakerListInput,
+  type CircuitBreakerRecord,
   type BulkRunReplayInput,
   type BulkRunReplayResult,
   type BulkTaskCancelInput,
@@ -87,6 +89,9 @@ interface InternalDispatchJobRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
 
 interface InternalOrganizationRecord {
   orgId: string;
@@ -206,6 +211,7 @@ export class InMemoryCloudStore implements CloudStore {
   private readonly taskEvents = new Map<string, TaskEventRecord>();
   private readonly runEvents = new Map<string, RunEventRecord>();
   private readonly dispatchEvents = new Map<string, DispatchEventRecord>();
+  private readonly circuitBreakers = new Map<string, CircuitBreakerRecord>();
   private readonly secrets = new Map<string, InternalSecretRecord>();
   private readonly alerts = new Map<string, AlertRecord>();
   private readonly apiKeys = new Map<string, ApiKeyRecord & { keyHash: string }>();
@@ -215,6 +221,143 @@ export class InMemoryCloudStore implements CloudStore {
 
   private usageKey(orgId: string, yearMonth: string): string {
     return `${orgId}:${yearMonth}`;
+  }
+
+  private circuitBreakerKey(orgId: string, destinationKey: string): string {
+    return `${orgId}:${destinationKey}`;
+  }
+
+  private getCircuitBreaker(orgId: string, destinationKey: string | null): CircuitBreakerRecord | null {
+    if (!destinationKey) {
+      return null;
+    }
+    return this.circuitBreakers.get(this.circuitBreakerKey(orgId, destinationKey)) ?? null;
+  }
+
+  private upsertCircuitBreaker(record: CircuitBreakerRecord): void {
+    this.circuitBreakers.set(this.circuitBreakerKey(record.orgId, record.destinationKey), record);
+  }
+
+  private closeCircuitBreaker(orgId: string, destinationKey: string | null): void {
+    if (!destinationKey) {
+      return;
+    }
+    const existing = this.getCircuitBreaker(orgId, destinationKey);
+    if (!existing) {
+      return;
+    }
+    this.upsertCircuitBreaker({
+      ...existing,
+      state: "closed",
+      consecutiveFailures: 0,
+      openedAt: null,
+      cooldownUntil: null,
+      probeInFlight: false,
+      updatedAt: nowIso(),
+    });
+  }
+
+  private markCircuitBreakerFailure(
+    orgId: string,
+    destinationKey: string | null,
+    reason: string,
+  ): CircuitBreakerRecord | null {
+    if (!destinationKey) {
+      return null;
+    }
+
+    const existing = this.getCircuitBreaker(orgId, destinationKey);
+    const now = nowIso();
+    const shouldOpenImmediately = existing?.state === "half_open";
+    const consecutiveFailures = shouldOpenImmediately
+      ? existing?.consecutiveFailures ?? CIRCUIT_BREAKER_FAILURE_THRESHOLD
+      : (existing?.consecutiveFailures ?? 0) + 1;
+    const shouldOpen = shouldOpenImmediately || consecutiveFailures >= CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+    const next: CircuitBreakerRecord = {
+      orgId,
+      destinationKey,
+      state: shouldOpen ? "open" : "closed",
+      consecutiveFailures,
+      openedAt: shouldOpen ? now : existing?.openedAt ?? null,
+      cooldownUntil: shouldOpen ? new Date(Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS).toISOString() : null,
+      lastFailureAt: now,
+      lastFailureReason: reason,
+      probeInFlight: false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.upsertCircuitBreaker(next);
+    return next;
+  }
+
+  private maybeEnterHalfOpen(orgId: string, destinationKey: string | null): CircuitBreakerRecord | null {
+    if (!destinationKey) {
+      return null;
+    }
+    const existing = this.getCircuitBreaker(orgId, destinationKey);
+    if (!existing || existing.state !== "open" || !existing.cooldownUntil) {
+      return existing;
+    }
+    if (new Date(existing.cooldownUntil).getTime() > Date.now()) {
+      return existing;
+    }
+
+    const next: CircuitBreakerRecord = {
+      ...existing,
+      state: "half_open",
+      probeInFlight: false,
+      updatedAt: nowIso(),
+    };
+    this.upsertCircuitBreaker(next);
+    return next;
+  }
+
+  private canLeaseForDestination(orgId: string, destinationKey: string | null): boolean {
+    if (!destinationKey) {
+      return true;
+    }
+    const breaker = this.maybeEnterHalfOpen(orgId, destinationKey);
+    if (!breaker || breaker.state === "closed") {
+      return true;
+    }
+    if (breaker.state === "open") {
+      return false;
+    }
+    return !breaker.probeInFlight;
+  }
+
+  private markProbeInFlight(orgId: string, destinationKey: string | null): void {
+    if (!destinationKey) {
+      return;
+    }
+    const breaker = this.getCircuitBreaker(orgId, destinationKey);
+    if (!breaker || breaker.state !== "half_open") {
+      return;
+    }
+    this.upsertCircuitBreaker({
+      ...breaker,
+      probeInFlight: true,
+      updatedAt: nowIso(),
+    });
+  }
+
+  private deferDestinationJobs(orgId: string, destinationKey: string, availableAt: string): void {
+    for (const [id, job] of this.dispatchJobs.entries()) {
+      if (job.orgId !== orgId || job.destinationKey !== destinationKey) {
+        continue;
+      }
+      if (job.status !== "pending" && job.status !== "retry_wait") {
+        continue;
+      }
+      if (new Date(job.availableAt).getTime() >= new Date(availableAt).getTime()) {
+        continue;
+      }
+      this.dispatchJobs.set(id, {
+        ...job,
+        availableAt,
+        updatedAt: nowIso(),
+      });
+    }
   }
 
   private appendTaskEvent(input: Omit<TaskEventRecord, "id" | "createdAt"> & { createdAt?: string }): void {
@@ -1460,6 +1603,22 @@ export class InMemoryCloudStore implements CloudStore {
       .slice(0, limit);
   }
 
+  listCircuitBreakers(orgId: string, input: CircuitBreakerListInput = {}): CircuitBreakerRecord[] {
+    return Array.from(this.circuitBreakers.values())
+      .filter((breaker) => breaker.orgId === orgId)
+      .filter((breaker) => {
+        if (input.state && breaker.state !== input.state) {
+          return false;
+        }
+        if (input.destinationKey && breaker.destinationKey !== input.destinationKey) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, input.limit ?? 100);
+  }
+
   listAuditEvents(orgId: string, input: AuditEventListInput): AuditEventRecord[] {
     const fromTime = input.from ? new Date(input.from).getTime() : null;
     const toTime = input.to ? new Date(input.to).getTime() : null;
@@ -1676,6 +1835,9 @@ export class InMemoryCloudStore implements CloudStore {
       if ((job.status !== "pending" && job.status !== "retry_wait") || new Date(job.availableAt).getTime() > nowMs) {
         continue;
       }
+      if (!this.canLeaseForDestination(job.orgId, job.destinationKey)) {
+        continue;
+      }
       const task = this.tasks.get(job.taskId);
       const run = this.runs.get(job.runId);
       if (!task || !run || !task.active && task.kind === "scheduled") {
@@ -1719,6 +1881,7 @@ export class InMemoryCloudStore implements CloudStore {
         status: "leased",
         attempt: attemptNumber,
       });
+      this.markProbeInFlight(job.orgId, job.destinationKey);
       this.appendDispatchEvent({
         orgId: job.orgId,
         dispatchJobId: job.id,
@@ -1825,15 +1988,26 @@ export class InMemoryCloudStore implements CloudStore {
 
     if (shouldRetry) {
       const policy = retryPolicyForTask(task);
+      const breaker = this.markCircuitBreakerFailure(
+        job.orgId,
+        job.destinationKey,
+        input.errorMessage ?? input.errorClass ?? "delivery failed",
+      );
+      const nextAvailableAt = breaker?.state === "open" && breaker.cooldownUntil
+        ? breaker.cooldownUntil
+        : new Date(Date.now() + computeRetryDelayMs(policy, job.attemptCount)).toISOString();
       this.dispatchJobs.set(job.id, {
         ...job,
         status: "retry_wait",
         leaseOwner: null,
         leasedUntil: null,
-        availableAt: new Date(Date.now() + computeRetryDelayMs(policy, job.attemptCount)).toISOString(),
+        availableAt: nextAvailableAt,
         lastError: input.errorMessage ?? input.errorClass ?? "delivery failed",
         updatedAt: now,
       });
+      if (breaker?.state === "open" && breaker.cooldownUntil) {
+        this.deferDestinationJobs(job.orgId, breaker.destinationKey, breaker.cooldownUntil);
+      }
       this.appendDispatchEvent({
         orgId: job.orgId,
         dispatchJobId: job.id,
@@ -1876,6 +2050,20 @@ export class InMemoryCloudStore implements CloudStore {
       lastError: input.errorMessage ?? null,
       updatedAt: now,
     });
+    if (terminalSuccess) {
+      this.closeCircuitBreaker(job.orgId, job.destinationKey);
+    } else if (input.status !== "terminal_client_error") {
+      const breaker = this.markCircuitBreakerFailure(
+        job.orgId,
+        job.destinationKey,
+        input.errorMessage ?? input.errorClass ?? finalStatus,
+      );
+      if (breaker?.state === "open" && breaker.cooldownUntil) {
+        this.deferDestinationJobs(job.orgId, breaker.destinationKey, breaker.cooldownUntil);
+      }
+    } else if (this.getCircuitBreaker(job.orgId, job.destinationKey)?.state === "half_open") {
+      this.closeCircuitBreaker(job.orgId, job.destinationKey);
+    }
     this.appendDispatchEvent({
       orgId: job.orgId,
       dispatchJobId: job.id,

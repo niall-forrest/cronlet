@@ -38,6 +38,7 @@ export type RunAttemptStatus =
   | "timeout"
   | "cancelled"
   | "terminal_client_error";
+export type CircuitBreakerStatus = "closed" | "open" | "half_open";
 
 export type AuditActorType = "user" | "api_key" | "agent" | "internal" | "webhook";
 
@@ -276,6 +277,26 @@ export interface BulkRunReplayInput {
 export interface BulkRunReplayResult {
   count: number;
   results: RunReplayResult[];
+}
+
+export interface CircuitBreakerRecord {
+  orgId: string;
+  destinationKey: string;
+  state: CircuitBreakerStatus;
+  consecutiveFailures: number;
+  openedAt: string | null;
+  cooldownUntil: string | null;
+  lastFailureAt: string | null;
+  lastFailureReason: string | null;
+  probeInFlight: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CircuitBreakerListInput {
+  state?: CircuitBreakerStatus;
+  destinationKey?: string;
+  limit?: number;
 }
 
 export interface ReconciliationCompareInput {

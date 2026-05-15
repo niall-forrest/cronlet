@@ -18,6 +18,7 @@ import { registerApiKeyRoutes } from "./routes/api-keys.js";
 import { registerAuditEventRoutes } from "./routes/audit-events.js";
 import { registerOrgStatusRoutes } from "./routes/org-status.js";
 import { registerCallbackSigningRoutes } from "./routes/callback-signing.js";
+import { registerCircuitBreakerRoutes } from "./routes/circuit-breakers.js";
 import { registerReconciliationRoutes } from "./routes/reconciliation.js";
 
 const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
@@ -98,6 +99,7 @@ export async function buildServer() {
   await registerApiKeyRoutes(app);
   await registerOrgStatusRoutes(app);
   await registerAuditEventRoutes(app);
+  await registerCircuitBreakerRoutes(app);
   await registerReconciliationRoutes(app);
   await registerInternalRoutes(app);
 

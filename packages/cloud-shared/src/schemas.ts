@@ -367,6 +367,12 @@ export const timelineQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 
+export const circuitBreakerListQuerySchema = z.object({
+  state: z.enum(["closed", "open", "half_open"]).optional(),
+  destinationKey: z.string().min(1).max(255).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
 // ============================================
 // INFERRED TYPES
 // ============================================

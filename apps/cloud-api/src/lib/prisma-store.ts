@@ -3,6 +3,8 @@ import {
   type AuditEventListInput,
   type AuditEventRecord,
   type CallbackSigningSecretRecord,
+  type CircuitBreakerListInput,
+  type CircuitBreakerRecord,
   type BulkRunReplayInput,
   type BulkRunReplayResult,
   type BulkTaskCancelInput,
@@ -486,6 +488,37 @@ function auditTimelineEntry(event: AuditEventRecord): TimelineEntryRecord {
   };
 }
 
+function toCircuitBreakerRecord(value: {
+  organizationId: string;
+  destinationKey: string;
+  state: string;
+  consecutiveFailures: number;
+  openedAt: Date | null;
+  cooldownUntil: Date | null;
+  lastFailureAt: Date | null;
+  lastFailureReason: string | null;
+  probeInFlight: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): CircuitBreakerRecord {
+  return {
+    orgId: value.organizationId,
+    destinationKey: value.destinationKey,
+    state: value.state as CircuitBreakerRecord["state"],
+    consecutiveFailures: value.consecutiveFailures,
+    openedAt: isoNullable(value.openedAt),
+    cooldownUntil: isoNullable(value.cooldownUntil),
+    lastFailureAt: isoNullable(value.lastFailureAt),
+    lastFailureReason: value.lastFailureReason,
+    probeInFlight: value.probeInFlight,
+    createdAt: iso(value.createdAt),
+    updatedAt: iso(value.updatedAt),
+  };
+}
+
+const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
+
 interface BillingState {
   tier: UsageSnapshot["tier"];
   delinquent: boolean;
@@ -496,6 +529,202 @@ export class PrismaCloudStore implements CloudStore {
   private readonly claimLockId = "cronlet_claim_due_tasks";
 
   constructor(private readonly prisma: PrismaClient) {}
+
+  private async getCircuitBreaker(orgId: string, destinationKey: string | null, tx: Prisma.TransactionClient | PrismaClient = this.prisma): Promise<CircuitBreakerRecord | null> {
+    if (!destinationKey) {
+      return null;
+    }
+    const breaker = await tx.circuitBreaker.findUnique({
+      where: {
+        organizationId_destinationKey: {
+          organizationId: orgId,
+          destinationKey,
+        },
+      },
+    });
+    return breaker ? toCircuitBreakerRecord(breaker) : null;
+  }
+
+  private async setCircuitBreakerState(
+    orgId: string,
+    destinationKey: string,
+    data: Omit<CircuitBreakerRecord, "orgId" | "destinationKey" | "createdAt" | "updatedAt">,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<CircuitBreakerRecord> {
+    const updated = await tx.circuitBreaker.upsert({
+      where: {
+        organizationId_destinationKey: {
+          organizationId: orgId,
+          destinationKey,
+        },
+      },
+      update: {
+        state: data.state,
+        consecutiveFailures: data.consecutiveFailures,
+        openedAt: data.openedAt ? new Date(data.openedAt) : null,
+        cooldownUntil: data.cooldownUntil ? new Date(data.cooldownUntil) : null,
+        lastFailureAt: data.lastFailureAt ? new Date(data.lastFailureAt) : null,
+        lastFailureReason: data.lastFailureReason,
+        probeInFlight: data.probeInFlight,
+      },
+      create: {
+        organizationId: orgId,
+        destinationKey,
+        state: data.state,
+        consecutiveFailures: data.consecutiveFailures,
+        openedAt: data.openedAt ? new Date(data.openedAt) : null,
+        cooldownUntil: data.cooldownUntil ? new Date(data.cooldownUntil) : null,
+        lastFailureAt: data.lastFailureAt ? new Date(data.lastFailureAt) : null,
+        lastFailureReason: data.lastFailureReason,
+        probeInFlight: data.probeInFlight,
+      },
+    });
+    return toCircuitBreakerRecord(updated);
+  }
+
+  private async closeCircuitBreaker(
+    orgId: string,
+    destinationKey: string | null,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<void> {
+    if (!destinationKey) {
+      return;
+    }
+    const existing = await this.getCircuitBreaker(orgId, destinationKey, tx);
+    if (!existing) {
+      return;
+    }
+    await this.setCircuitBreakerState(orgId, destinationKey, {
+      state: "closed",
+      consecutiveFailures: 0,
+      openedAt: null,
+      cooldownUntil: null,
+      lastFailureAt: existing.lastFailureAt,
+      lastFailureReason: existing.lastFailureReason,
+      probeInFlight: false,
+    }, tx);
+  }
+
+  private async markCircuitBreakerFailure(
+    orgId: string,
+    destinationKey: string | null,
+    reason: string,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<CircuitBreakerRecord | null> {
+    if (!destinationKey) {
+      return null;
+    }
+
+    const existing = await this.getCircuitBreaker(orgId, destinationKey, tx);
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const shouldOpenImmediately = existing?.state === "half_open";
+    const consecutiveFailures = shouldOpenImmediately
+      ? existing?.consecutiveFailures ?? CIRCUIT_BREAKER_FAILURE_THRESHOLD
+      : (existing?.consecutiveFailures ?? 0) + 1;
+    const shouldOpen = shouldOpenImmediately || consecutiveFailures >= CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+
+    return this.setCircuitBreakerState(orgId, destinationKey, {
+      state: shouldOpen ? "open" : "closed",
+      consecutiveFailures,
+      openedAt: shouldOpen ? nowIso : existing?.openedAt ?? null,
+      cooldownUntil: shouldOpen ? new Date(now.getTime() + CIRCUIT_BREAKER_COOLDOWN_MS).toISOString() : null,
+      lastFailureAt: nowIso,
+      lastFailureReason: reason,
+      probeInFlight: false,
+    }, tx);
+  }
+
+  private async maybeEnterHalfOpen(
+    orgId: string,
+    destinationKey: string | null,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<CircuitBreakerRecord | null> {
+    if (!destinationKey) {
+      return null;
+    }
+
+    const existing = await this.getCircuitBreaker(orgId, destinationKey, tx);
+    if (!existing || existing.state !== "open" || !existing.cooldownUntil) {
+      return existing;
+    }
+    if (new Date(existing.cooldownUntil).getTime() > Date.now()) {
+      return existing;
+    }
+
+    return this.setCircuitBreakerState(orgId, destinationKey, {
+      state: "half_open",
+      consecutiveFailures: existing.consecutiveFailures,
+      openedAt: existing.openedAt,
+      cooldownUntil: existing.cooldownUntil,
+      lastFailureAt: existing.lastFailureAt,
+      lastFailureReason: existing.lastFailureReason,
+      probeInFlight: false,
+    }, tx);
+  }
+
+  private async canLeaseForDestination(
+    orgId: string,
+    destinationKey: string | null,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<boolean> {
+    if (!destinationKey) {
+      return true;
+    }
+
+    const breaker = await this.maybeEnterHalfOpen(orgId, destinationKey, tx);
+    if (!breaker || breaker.state === "closed") {
+      return true;
+    }
+    if (breaker.state === "open") {
+      return false;
+    }
+    return !breaker.probeInFlight;
+  }
+
+  private async markProbeInFlight(
+    orgId: string,
+    destinationKey: string | null,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<void> {
+    if (!destinationKey) {
+      return;
+    }
+
+    const breaker = await this.getCircuitBreaker(orgId, destinationKey, tx);
+    if (!breaker || breaker.state !== "half_open") {
+      return;
+    }
+
+    await this.setCircuitBreakerState(orgId, destinationKey, {
+      state: breaker.state,
+      consecutiveFailures: breaker.consecutiveFailures,
+      openedAt: breaker.openedAt,
+      cooldownUntil: breaker.cooldownUntil,
+      lastFailureAt: breaker.lastFailureAt,
+      lastFailureReason: breaker.lastFailureReason,
+      probeInFlight: true,
+    }, tx);
+  }
+
+  private async deferDestinationJobs(
+    orgId: string,
+    destinationKey: string,
+    availableAt: string,
+    tx: Prisma.TransactionClient | PrismaClient = this.prisma,
+  ): Promise<void> {
+    await tx.dispatchJob.updateMany({
+      where: {
+        organizationId: orgId,
+        destinationKey,
+        status: { in: ["pending", "retry_wait"] },
+        availableAt: { lt: new Date(availableAt) },
+      },
+      data: {
+        availableAt: new Date(availableAt),
+      },
+    });
+  }
 
   private async tryClaimDispatchLock(): Promise<boolean> {
     const rows = await this.prisma.$queryRaw<Array<{ locked: boolean }>>`
@@ -1836,6 +2065,19 @@ export class PrismaCloudStore implements CloudStore {
     return events.map(toDispatchEventRecord);
   }
 
+  async listCircuitBreakers(orgId: string, input: CircuitBreakerListInput = {}): Promise<CircuitBreakerRecord[]> {
+    const breakers = await this.prisma.circuitBreaker.findMany({
+      where: {
+        organizationId: orgId,
+        ...(input.state ? { state: input.state } : {}),
+        ...(input.destinationKey ? { destinationKey: input.destinationKey } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      take: input.limit ?? 100,
+    });
+    return breakers.map(toCircuitBreakerRecord);
+  }
+
   async listAuditEvents(orgId: string, input: AuditEventListInput): Promise<AuditEventRecord[]> {
     const where = {
       organizationId: orgId,
@@ -2087,6 +2329,9 @@ export class PrismaCloudStore implements CloudStore {
         });
         const leased: string[] = [];
         for (const job of candidates) {
+          if (!await this.canLeaseForDestination(job.organizationId, job.destinationKey, tx)) {
+            continue;
+          }
           const attemptNumber = job.attemptCount + 1;
           let attempt = await tx.runAttempt.findFirst({
             where: {
@@ -2129,6 +2374,7 @@ export class PrismaCloudStore implements CloudStore {
               attempt: attemptNumber,
             },
           });
+          await this.markProbeInFlight(job.organizationId, job.destinationKey, tx);
           await tx.dispatchEvent.create({
             data: {
               organizationId: job.organizationId,
@@ -2250,16 +2496,28 @@ export class PrismaCloudStore implements CloudStore {
       });
 
       if (shouldRetry) {
+        const breaker = await this.markCircuitBreakerFailure(
+          job.organizationId,
+          job.destinationKey,
+          input.errorMessage ?? input.errorClass ?? "delivery failed",
+          tx,
+        );
+        const nextAvailableAt = breaker?.state === "open" && breaker.cooldownUntil
+          ? new Date(breaker.cooldownUntil)
+          : new Date(Date.now() + computeRetryDelayMs(policy, job.attemptCount));
         await tx.dispatchJob.update({
           where: { id: job.id },
           data: {
             status: "retry_wait",
             leaseOwner: null,
             leasedUntil: null,
-            availableAt: new Date(Date.now() + computeRetryDelayMs(policy, job.attemptCount)),
+            availableAt: nextAvailableAt,
             lastError: input.errorMessage ?? input.errorClass ?? "delivery failed",
           },
         });
+        if (breaker?.state === "open" && breaker.cooldownUntil) {
+          await this.deferDestinationJobs(job.organizationId, breaker.destinationKey, breaker.cooldownUntil, tx);
+        }
         await tx.dispatchEvent.create({
           data: {
             organizationId: job.organizationId,
@@ -2321,6 +2579,21 @@ export class PrismaCloudStore implements CloudStore {
           lastError: input.errorMessage ?? null,
         },
       });
+      if (success) {
+        await this.closeCircuitBreaker(job.organizationId, job.destinationKey, tx);
+      } else if (input.status !== "terminal_client_error") {
+        const breaker = await this.markCircuitBreakerFailure(
+          job.organizationId,
+          job.destinationKey,
+          input.errorMessage ?? input.errorClass ?? finalStatus,
+          tx,
+        );
+        if (breaker?.state === "open" && breaker.cooldownUntil) {
+          await this.deferDestinationJobs(job.organizationId, breaker.destinationKey, breaker.cooldownUntil, tx);
+        }
+      } else if ((await this.getCircuitBreaker(job.organizationId, job.destinationKey, tx))?.state === "half_open") {
+        await this.closeCircuitBreaker(job.organizationId, job.destinationKey, tx);
+      }
       await tx.dispatchEvent.create({
         data: {
           organizationId: job.organizationId,
