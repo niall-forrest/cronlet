@@ -74,28 +74,30 @@ interface TaskCallbackPayload {
 }
 ```
 
-## Current implementation caveats
+## Callback headers
 
-The worker currently sends:
+Cronlet callback requests include:
 
-- `task.id`
-- `task.metadata`
-- `run.id`
-- `run.status`
-- `run.output`
-- `run.errorMessage`
-- `run.durationMs`
-- `run.attempt`
-- `stats.totalRuns`
-- `stats.remainingRuns`
+- `x-cronlet-event`
+- `x-cronlet-timestamp`
+- `x-cronlet-signature`
 
-But right now:
+Use the SDK helper to verify the raw request body before you parse it:
 
-- `task.name` is sent as an empty string
-- `stats.expiresAt` is sent as `null`
-- callback delivery has an `x-cronlet-event` header, but there is no request signature or HMAC verification yet
+```ts
+import { verifyCallbackSignature } from "@cronlet/sdk";
 
-Design your callback code around `task.id`, `task.metadata`, and `run.id`.
+const rawBody = await req.text();
+const verification = verifyCallbackSignature({
+  rawBody,
+  headers: req.headers,
+  secret: process.env.CRONLET_CALLBACK_SECRET!,
+});
+
+if (!verification.ok) {
+  return new Response(verification.error ?? "Invalid signature", { status: 401 });
+}
+```
 
 ## Minimal callback handler
 
@@ -210,10 +212,9 @@ Do not make the callback handler itself do expensive fan-out work if you can avo
 
 ## Security note
 
-Because callback signing is not implemented yet, the safest current pattern is:
+Callback signing is now part of the default Cloud flow. You should still:
 
-- use a hard-to-guess callback URL
-- only accept JSON
+- validate the signed request before parsing JSON
 - validate task ownership against stored `task.id`
 - validate metadata against expected internal IDs
 - keep the endpoint private to server-side infrastructure

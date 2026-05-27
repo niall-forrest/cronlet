@@ -1,0 +1,416 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-15T00:00:00Z",
+  "title": "Design System: Cronlet",
+  "extensions": {
+    "colorMeta": {
+      "bg-deep": {
+        "role": "neutral",
+        "displayName": "Background Deep",
+        "canonical": "oklch(11% 0.018 260)",
+        "tonalRamp": [
+          "#020308",
+          "#040611",
+          "#050810",
+          "#0a0f1a",
+          "#111827",
+          "#151c2c",
+          "#1a2235",
+          "#252e44"
+        ]
+      },
+      "bg-card": {
+        "role": "neutral",
+        "displayName": "Card Surface",
+        "canonical": "oklch(20% 0.024 260)",
+        "tonalRamp": [
+          "#050810",
+          "#0a0f1a",
+          "#111827",
+          "#151c2c",
+          "#1a2235",
+          "#252e44",
+          "#384259",
+          "#4a5470"
+        ]
+      },
+      "primary-teal": {
+        "role": "primary",
+        "displayName": "Primary Teal",
+        "canonical": "oklch(75.6% 0.157 168)",
+        "tonalRamp": [
+          "#021e15",
+          "#04392a",
+          "#066f53",
+          "#06a07a",
+          "#06d6a0",
+          "#3ee0b3",
+          "#7eecc9",
+          "#cdf7e7"
+        ]
+      },
+      "primary-teal-glow": {
+        "role": "primary",
+        "displayName": "Teal Glow",
+        "canonical": "oklch(89.4% 0.176 175)",
+        "tonalRamp": [
+          "#003329",
+          "#005c4e",
+          "#008f7a",
+          "#00c1a6",
+          "#00f5d4",
+          "#42f7dd",
+          "#85fae9",
+          "#d3fcf5"
+        ]
+      },
+      "accent-violet": {
+        "role": "secondary",
+        "displayName": "Accent Violet",
+        "canonical": "oklch(62% 0.222 296)",
+        "tonalRamp": [
+          "#1c1042",
+          "#2f1a73",
+          "#4a2eb0",
+          "#6b46e0",
+          "#8b5cf6",
+          "#a884f8",
+          "#c5acfb",
+          "#e6dafc"
+        ]
+      },
+      "accent-amber": {
+        "role": "tertiary",
+        "displayName": "Accent Amber",
+        "canonical": "oklch(74% 0.155 70)",
+        "tonalRamp": [
+          "#3a2202",
+          "#664006",
+          "#9c6608",
+          "#cc830a",
+          "#f59e0b",
+          "#fab549",
+          "#fcca7e",
+          "#fde6c2"
+        ]
+      },
+      "status-success": {
+        "role": "tertiary",
+        "displayName": "Status Success",
+        "canonical": "oklch(72% 0.190 145)",
+        "tonalRamp": [
+          "#04200f",
+          "#063f1d",
+          "#0b6e34",
+          "#159948",
+          "#22c55e",
+          "#52d984",
+          "#88e6ab",
+          "#cef4d8"
+        ]
+      },
+      "status-error": {
+        "role": "tertiary",
+        "displayName": "Status Error",
+        "canonical": "oklch(64% 0.208 25)",
+        "tonalRamp": [
+          "#2e0606",
+          "#5b0c0c",
+          "#8a1414",
+          "#bc2929",
+          "#ef4444",
+          "#f37272",
+          "#f7a0a0",
+          "#fbd6d6"
+        ]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Text Primary",
+        "canonical": "oklch(98% 0.005 260)",
+        "tonalRamp": [
+          "#2c333d",
+          "#41495a",
+          "#5a657a",
+          "#7a8597",
+          "#9aa4b5",
+          "#bcc4d2",
+          "#d8dde6",
+          "#f8fafc"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "canonical": "oklch(72% 0.018 250)",
+        "tonalRamp": [
+          "#0f1722",
+          "#1b2533",
+          "#36465f",
+          "#586580",
+          "#7c89a4",
+          "#94a3b8",
+          "#b5c2d2",
+          "#d9e0e9"
+        ]
+      },
+      "border-subtle": {
+        "role": "neutral",
+        "displayName": "Border Subtle",
+        "canonical": "oklch(28% 0.018 250)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#141a28",
+          "#1f2937",
+          "#2d3849",
+          "#3a4659",
+          "#4a576e",
+          "#5e6c83",
+          "#7c8aa1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero h1 and section h2. The only place Syne appears at scale."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Card section headers, modal titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, handler card names."
+      },
+      "body": {
+        "displayName": "Body (Mono)",
+        "purpose": "Default UI text in IBM Plex Mono — tables, descriptions, button labels, navigation. The system's resting voice."
+      },
+      "label": {
+        "displayName": "Meta Label",
+        "purpose": "Uppercase mono with 0.08em tracking — timestamps, run states, section eyebrows, schedule strings."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-ambient",
+        "value": "0 16px 44px -24px rgba(0,0,0,0.85)",
+        "purpose": "Default panel surface shadow — establishes a card sitting on the page."
+      },
+      {
+        "name": "window-depth",
+        "value": "0 0 0 1px rgba(255,255,255,0.05), 0 20px 50px -20px rgba(0,0,0,0.5)",
+        "purpose": "Dashboard preview window and large content shells. Includes a hairline highlight at the top."
+      },
+      {
+        "name": "accent-glow",
+        "value": "0 0 80px -40px hsl(160 84% 43% / 0.2)",
+        "purpose": "Soft teal glow under the primary action card or button. Signals focus, not depth."
+      },
+      {
+        "name": "status-pulse",
+        "value": "0 0 8px hsl(160 84% 43% / 0.5)",
+        "purpose": "Small halo on active status dots. Signals liveness — current state, not historical."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Default easing for transitions and entrance animations."
+      },
+      {
+        "name": "ease-out-back",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "purpose": "Rare — used only when a small overshoot is the right feedback signal."
+      },
+      {
+        "name": "duration-fast",
+        "value": "0.2s",
+        "purpose": "Hover / focus state transitions."
+      },
+      {
+        "name": "duration-default",
+        "value": "0.3s",
+        "purpose": "Card hover translations, section entrances."
+      },
+      {
+        "name": "duration-entrance",
+        "value": "0.6s",
+        "purpose": "Page-load fade-up entrances (hero, page-hero)."
+      },
+      {
+        "name": "pulse-running",
+        "value": "2s ease-in-out infinite",
+        "purpose": "Status dot pulse for active / running state only. Suppressed under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The primary call-to-action. Sharp 0px corners, teal fill on near-black text. Used at most once per primary region.",
+      "html": "<button class=\"ds-btn-primary\">Create task</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; background: #06d6a0; color: #050810; border: 1px solid transparent; border-radius: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.01em; cursor: pointer; transition: background 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s cubic-bezier(0.16,1,0.3,1), transform 0.2s cubic-bezier(0.16,1,0.3,1); } .ds-btn-primary:hover { background: #00f5d4; box-shadow: 0 0 80px -40px rgba(6,214,160,0.4); transform: translateY(-1px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 1px #06d6a0, 0 0 0 3px rgba(6,214,160,0.25); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Default secondary action. Transparent fill, subtle border, primary text. Used for the bulk of dashboard actions.",
+      "html": "<button class=\"ds-btn-outline\">View runs</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; background: transparent; color: #f8fafc; border: 1px solid #1f2937; border-radius: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: border-color 0.2s, background 0.2s, color 0.2s; } .ds-btn-outline:hover { border-color: rgba(6,214,160,0.4); background: rgba(6,214,160,0.05); color: #06d6a0; } .ds-btn-outline:focus-visible { outline: none; border-color: #06d6a0; box-shadow: 0 0 0 1px rgba(6,214,160,0.3); }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Destructive confirms. Red text on a 10%-alpha red surface — never a full red fill until the irreversible final step.",
+      "html": "<button class=\"ds-btn-destructive\">Delete task</button>",
+      "css": ".ds-btn-destructive { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid transparent; border-radius: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: background 0.2s, border-color 0.2s; } .ds-btn-destructive:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); } .ds-btn-destructive:focus-visible { outline: none; border-color: rgba(239,68,68,0.6); box-shadow: 0 0 0 1px rgba(239,68,68,0.3); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Sharp 0px corners matching buttons. Transparent on parent surface; border shifts on focus.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"task-id\" />",
+      "css": ".ds-input { height: 32px; width: 100%; padding: 0 10px; background: transparent; color: #f8fafc; border: 1px solid #1f2937; border-radius: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; outline: none; transition: border-color 0.15s, box-shadow 0.15s; } .ds-input::placeholder { color: #64748b; } .ds-input:focus-visible { border-color: #06d6a0; box-shadow: 0 0 0 1px rgba(6,214,160,0.3); } .ds-input[aria-invalid='true'] { border-color: #ef4444; box-shadow: 0 0 0 1px rgba(239,68,68,0.2); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "20px soft corners on tinted-neutral surface. Counterweight to the sharp interactive controls.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">weekly-digest</div><div class=\"ds-card-meta\">Every Friday · 09:00 UTC · 12 runs</div></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #151c2c; color: #f8fafc; border: 1px solid rgba(31,41,55,0.5); border-radius: 20px; box-shadow: 0 16px 44px -24px rgba(0,0,0,0.85); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.8125rem; transition: border-color 0.2s, transform 0.2s; } .ds-card:hover { border-color: rgba(6,214,160,0.3); transform: translateY(-2px); } .ds-card-title { font-family: 'Syne', ui-sans-serif, system-ui, sans-serif; font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; color: #f8fafc; } .ds-card-meta { font-size: 0.6875rem; color: #94a3b8; letter-spacing: 0.02em; }"
+    },
+    {
+      "name": "Status Badge — Success",
+      "kind": "chip",
+      "refersTo": "badge-success",
+      "description": "Status reads from status colors at 10%-alpha background with full-saturation text. Status color carries semantic meaning only.",
+      "html": "<span class=\"ds-badge-success\"><span class=\"ds-badge-dot\"></span>Success</span>",
+      "css": ".ds-badge-success { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; background: rgba(34,197,94,0.1); color: #22c55e; border: none; border-radius: 6px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight: 500; } .ds-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }"
+    },
+    {
+      "name": "Type Badge — MCP",
+      "kind": "chip",
+      "refersTo": "badge-mcp",
+      "description": "Violet-tinted pill marking MCP / AI / agent affordances. Fully rounded to differentiate from the status family.",
+      "html": "<span class=\"ds-badge-mcp\">MCP</span>",
+      "css": ".ds-badge-mcp { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(139,92,246,0.15); color: #8b5cf6; border-radius: 100px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }"
+    },
+    {
+      "name": "Status Dot",
+      "kind": "custom",
+      "refersTo": "status-dot",
+      "description": "Tiny but load-bearing. Halo signals liveness — current state, not historical.",
+      "html": "<div class=\"ds-status-row\"><span class=\"ds-status-dot ds-status-running\"></span><span class=\"ds-status-label\">Running</span></div>",
+      "css": ".ds-status-row { display: inline-flex; align-items: center; gap: 8px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; color: #f8fafc; } .ds-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; } .ds-status-running { background: #06d6a0; box-shadow: 0 0 8px rgba(6,214,160,0.5); animation: ds-pulse 2s ease-in-out infinite; } @keyframes ds-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(6,214,160,0.5); } 50% { opacity: 0.6; box-shadow: 0 0 12px rgba(6,214,160,0.8); } } @media (prefers-reduced-motion: reduce) { .ds-status-running { animation: none; } } .ds-status-label { color: #94a3b8; }"
+    },
+    {
+      "name": "Section Label",
+      "kind": "custom",
+      "refersTo": "section-label",
+      "description": "The signature ornament — a 24px teal rule + uppercase mono eyebrow. Used to mark section breaks across product and marketing.",
+      "html": "<div class=\"ds-section-label\">Schedules</div>",
+      "css": ".ds-section-label { display: inline-flex; align-items: center; gap: 8px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.6875rem; color: #06d6a0; text-transform: uppercase; letter-spacing: 0.1em; } .ds-section-label::before { content: ''; display: block; width: 24px; height: 1px; background: #06d6a0; }"
+    },
+    {
+      "name": "Table Row",
+      "kind": "custom",
+      "refersTo": "table-row",
+      "description": "Compact, scannable, subtle hover. Mono throughout. Tables are for scanning, not for wrapped prose.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Task</th><th>Schedule</th><th>Last run</th><th>Status</th></tr></thead><tbody><tr><td>weekly-digest</td><td>Fri 09:00 UTC</td><td>3h ago</td><td><span class=\"ds-table-status ds-table-status-ok\"></span>OK</td></tr><tr><td>cleanup-sessions</td><td>Every 6h</td><td>42m ago</td><td><span class=\"ds-table-status ds-table-status-ok\"></span>OK</td></tr></tbody></table>",
+      "css": ".ds-table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.75rem; color: #f8fafc; } .ds-table thead th { padding: 8px; text-align: left; font-weight: 500; color: #f8fafc; border-bottom: 1px solid rgba(31,41,55,0.6); white-space: nowrap; } .ds-table tbody td { padding: 8px; border-bottom: 1px solid rgba(31,41,55,0.4); white-space: nowrap; color: #94a3b8; } .ds-table tbody tr { transition: background 0.15s; } .ds-table tbody tr:hover { background: rgba(31,41,55,0.5); } .ds-table tbody tr:hover td { color: #f8fafc; } .ds-table-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; } .ds-table-status-ok { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Control Room",
+    "overview": "Cronlet looks like the second monitor of a senior operator at 2am — dim, dense, deliberate. The screen is dark not for fashion but because it is read in a dim room, after an alert, by someone who needs to know within ten seconds whether their organization is healthy. Information has weight: tables are compact, labels are monospace, status is unambiguous. There is no decoration competing with state. The visual language sits in the lineage of BetterStack, Linear, and Vercel — dev-tool dark, dense but calm, structured by typography and alignment rather than ornament. Sharp 0px corners on interactive controls give the system its operator-grade edge; softer 20px corners on cards provide breathing rhythm so the density does not feel hostile.",
+    "keyCharacteristics": [
+      "Dark, tinted-neutral palette anchored on near-black #050810",
+      "Mono-as-body (IBM Plex Mono) with geometric sans (Syne) for display only",
+      "Sharp 0px corners for interactive controls, soft 20px for surfaces",
+      "One accent (teal #06d6a0) carrying state and primary action; violet reserved for AI/MCP affordances",
+      "Compact density: 32px button height, 8px gutters, no decorative whitespace",
+      "Motion as feedback only: state changes, no choreography"
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "The primary teal #06d6a0 appears on no more than 10% of any given screen. Its rarity is what makes it read as signal rather than decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status-Color Lockdown",
+        "body": "Emerald, amber, and red are reserved for run state. They never appear as decorative accents, never carry brand voice, never appear in copy or links.",
+        "section": "colors"
+      },
+      {
+        "name": "The Violet-Means-Agent Rule",
+        "body": "Violet #8b5cf6 only appears when the surface is talking about AI, MCP, or agent affordances. Used decoratively, it becomes the AI-startup-neon anti-reference; used semantically, it teaches the user a real signal.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono-First Rule",
+        "body": "Body text is monospace. This is the system's resting voice. Mono-as-body is what makes Cronlet read as operator-grade rather than consumer-SaaS.",
+        "section": "typography"
+      },
+      {
+        "name": "The Syne-Earns-Its-Place Rule",
+        "body": "Syne is reserved for display and titles only. Never for body, table headers, button labels, or labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The All-Caps Meta Rule",
+        "body": "All-caps + 0.08em tracking + mono is the signal for meta — timestamps, run states, section eyebrows, schedule strings. Anywhere else, it reads as shouty.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. Depth comes from tinted-neutral layering, not shadows. Shadows are responses — to focus, to state, to 'this is a window, not a card.'",
+        "section": "elevation"
+      },
+      {
+        "name": "The No-Decorative-Glow Rule",
+        "body": "Glows that do not encode state are decoration. A glow on a button is allowed because it tells the user this is the primary action. A glow under a heading is decoration.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the primary teal #06d6a0 to ≤10% of any given screen.",
+      "Do use IBM Plex Mono for all body, table, navigation, and label copy.",
+      "Do keep interactive controls (buttons, inputs, tabs) on sharp 0px corners, and surfaces (cards, panels) on 20px corners.",
+      "Do convey state with both color and a glyph or text label — never color alone.",
+      "Do stack tinted neutrals to convey depth: bg-deep → bg-elevated → bg-card → bg-hover.",
+      "Do reserve violet #8b5cf6 for AI / MCP / agent affordances.",
+      "Do make every primary flow keyboard-reachable, with visible focus rings on dark surfaces.",
+      "Do respect prefers-reduced-motion — pulses, fades, and entrance animations collapse to instant."
+    ],
+    "donts": [
+      "Don't use the Tailwind/shadcn purple-gradient SaaS template.",
+      "Don't apply AI-startup neon-on-black aesthetics — no glow text, no animated gradients, no decorative neon.",
+      "Don't use glassmorphism (backdrop-filter + translucent fill) as a decorative pattern.",
+      "Don't build a gradient-hero-with-giant-number landing template.",
+      "Don't drown the dashboard in unprioritized panels — Datadog/Grafana sprawl is the anti-reference.",
+      "Don't hide state behind multi-step wizards.",
+      "Don't mix proportional sans into body copy.",
+      "Don't use Syne below 1.125rem.",
+      "Don't use border-left greater than 1px as a colored stripe accent.",
+      "Don't use gradient text — background-clip:text gradients are decorative, never meaningful.",
+      "Don't mix status colors and action colors.",
+      "Don't use em dashes in UI copy."
+    ]
+  }
+}

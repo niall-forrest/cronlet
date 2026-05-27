@@ -42,6 +42,10 @@ function routeSpecificRule(request: FastifyRequest): RateLimitRule | null {
     return RATE_LIMITS.taskTrigger;
   }
 
+  if (request.method === "POST" && path === "/v1/dispatch") {
+    return RATE_LIMITS.taskTrigger;
+  }
+
   return null;
 }
 
@@ -51,7 +55,7 @@ function rateLimitMessage(rule: RateLimitRule): string {
   }
 
   if (rule.key === RATE_LIMITS.taskTrigger.key) {
-    return "Manual trigger rate limit exceeded. Max 120 per hour.";
+    return "Manual run rate limit exceeded. Max 120 per hour.";
   }
 
   return "API request rate limit exceeded. Max 600 per minute.";

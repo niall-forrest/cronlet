@@ -1,5 +1,6 @@
 import { secretCreateSchema, secretPatchSchema } from "@cronlet/shared";
 import type { FastifyInstance } from "fastify";
+import { recordAuditEvent } from "../lib/audit.js";
 import { handleError, ok } from "../lib/http.js";
 import { authorize } from "../lib/permissions.js";
 
@@ -21,6 +22,19 @@ export async function registerSecretRoutes(app: FastifyInstance): Promise<void> 
       authorize(request.auth, { minimumRole: "admin", requiredScope: "secrets:write" });
       const input = secretCreateSchema.parse(request.body);
       const created = await app.cloudStore.createSecret(request.auth.orgId, input);
+
+      await recordAuditEvent(app, {
+        organizationId: request.auth.orgId,
+        actorType: request.auth.actorType ?? "user",
+        actorId: request.auth.userId,
+        action: "secret.created",
+        targetType: "secret",
+        targetId: created.name,
+        metadata: {
+          name: created.name,
+        },
+      });
+
       return ok(reply, created, 201);
     } catch (error) {
       return handleError(reply, error);
@@ -33,7 +47,45 @@ export async function registerSecretRoutes(app: FastifyInstance): Promise<void> 
       authorize(request.auth, { minimumRole: "admin", requiredScope: "secrets:write" });
       const input = secretPatchSchema.parse(request.body);
       const updated = await app.cloudStore.patchSecret(request.auth.orgId, request.params.name, input);
+
+      await recordAuditEvent(app, {
+        organizationId: request.auth.orgId,
+        actorType: request.auth.actorType ?? "user",
+        actorId: request.auth.userId,
+        action: "secret.updated",
+        targetType: "secret",
+        targetId: updated.name,
+        metadata: {
+          name: updated.name,
+        },
+      });
+
       return ok(reply, updated);
+    } catch (error) {
+      return handleError(reply, error);
+    }
+  });
+
+  app.post<{ Params: { name: string } }>("/v1/secrets/:name/rotate", async (request, reply) => {
+    try {
+      authorize(request.auth, { minimumRole: "admin", requiredScope: "secrets:write" });
+      const rotated = await app.cloudStore.rotateSecret(request.auth.orgId, request.params.name);
+
+      await recordAuditEvent(app, {
+        organizationId: request.auth.orgId,
+        actorType: request.auth.actorType ?? "user",
+        actorId: request.auth.userId,
+        action: "secret.rotated",
+        targetType: "secret",
+        targetId: rotated.name,
+        metadata: {
+          name: rotated.name,
+          keyVersion: rotated.keyVersion,
+          lastRotatedAt: rotated.lastRotatedAt,
+        },
+      });
+
+      return ok(reply, rotated);
     } catch (error) {
       return handleError(reply, error);
     }
@@ -44,6 +96,19 @@ export async function registerSecretRoutes(app: FastifyInstance): Promise<void> 
     try {
       authorize(request.auth, { minimumRole: "admin", requiredScope: "secrets:write" });
       await app.cloudStore.deleteSecret(request.auth.orgId, request.params.name);
+
+      await recordAuditEvent(app, {
+        organizationId: request.auth.orgId,
+        actorType: request.auth.actorType ?? "user",
+        actorId: request.auth.userId,
+        action: "secret.deleted",
+        targetType: "secret",
+        targetId: request.params.name,
+        metadata: {
+          name: request.params.name,
+        },
+      });
+
       return ok(reply, { deleted: true });
     } catch (error) {
       return handleError(reply, error);

@@ -8,8 +8,15 @@ export {
   type RateLimitInfo,
   type ScheduleInput,
   type TaskCreateRequest,
+  type TaskDispatchRequest,
   type TaskPatchRequest,
 } from "./client.js";
+export {
+  DEFAULT_CALLBACK_TOLERANCE_SECONDS,
+  verifyCallbackSignature,
+  type CallbackVerificationResult,
+  type VerifyCallbackSignatureInput,
+} from "./callbacks.js";
 export {
   parseSchedule,
   resolveSchedule,

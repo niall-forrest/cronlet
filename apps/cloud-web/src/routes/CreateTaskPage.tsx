@@ -236,7 +236,7 @@ console.log("Created task:", task.id);`;
         <div>
           <h1 className="display-title">Create Task</h1>
           <p className="mt-1 text-muted-foreground">
-            Set up a new scheduled task
+            Set up a one-off, recurring task, or heartbeat
           </p>
         </div>
       </div>

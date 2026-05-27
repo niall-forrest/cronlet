@@ -1,5 +1,4 @@
-import { Queue, Worker, type Job } from "bullmq";
-import IORedis from "ioredis";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import type {
   DispatchInstruction,
   HandlerConfig,
@@ -9,91 +8,64 @@ import type {
   TaskCallbackEventType,
 } from "@cronlet/shared";
 import type { CloudApiClient } from "./api.js";
-import { parseDurationToMs } from "./time.js";
+import {
+  assertSafeOutboundUrl,
+  createOutboundPolicyFromEnv,
+  createScopedOutboundPolicy,
+  type OutboundPolicy,
+} from "./outbound.js";
 import { executeTool, type ToolContext } from "./tools/index.js";
 import { SecretsCache } from "./secrets.js";
-
-interface DispatchJobData {
-  instruction: DispatchInstruction;
-}
 
 interface HandlerResult {
   output: Record<string, unknown> | null;
   logs: string;
+  httpStatus?: number | null;
+  responseBodyPreview?: string | null;
+  responseBodyHash?: string | null;
+}
+
+class DeliveryError extends Error {
+  constructor(
+    message: string,
+    readonly classification: "retryable" | "terminal_client_error",
+    readonly httpStatus?: number,
+    readonly responseBodyPreview?: string,
+    readonly responseBodyHash?: string,
+  ) {
+    super(message);
+    this.name = "DeliveryError";
+  }
+}
+
+function signCallbackPayload(timestamp: string, body: string, secret: string): string {
+  const hmac = createHmac("sha256", secret);
+  hmac.update(`${timestamp}.${body}`);
+  return `v1=${hmac.digest("hex")}`;
 }
 
 export class DispatchQueueRuntime {
-  readonly queue: Queue<DispatchJobData, unknown, string, DispatchJobData>;
-  readonly worker: Worker<DispatchJobData>;
   private readonly secretsCache: SecretsCache;
-  private redisUnavailableWarned = false;
+  private readonly outboundPolicy = createOutboundPolicyFromEnv();
 
   constructor(
-    redisUrl: string,
-    queueName: string,
+    _redisUrl: string,
+    _queueName: string,
     private readonly api: CloudApiClient
   ) {
-    const connection = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      retryStrategy: (attempts) => Math.min(attempts * 1000, 15000),
-    });
-
-    connection.on("ready", () => {
-      if (this.redisUnavailableWarned) {
-        this.redisUnavailableWarned = false;
-        console.info("redis connection restored for cloud worker");
-      }
-    });
-
-    // ioredis can emit frequent connection errors during local startup; keep logs concise.
-    connection.on("error", (error: unknown) => {
-      if (this.redisUnavailableWarned) {
-        return;
-      }
-      this.redisUnavailableWarned = true;
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`redis unavailable at ${redisUrl}; worker queue paused until connection recovers (${message})`);
-    });
-
-    this.queue = new Queue<DispatchJobData>(queueName, { connection });
-
-    this.worker = new Worker<DispatchJobData>(
-      queueName,
-      async (job) => this.process(job),
-      { connection }
-    );
-
     // Initialize secrets cache with 5 minute TTL
     this.secretsCache = new SecretsCache(api, 5 * 60 * 1000);
     this.secretsCache.start();
   }
 
-  async enqueue(instruction: DispatchInstruction): Promise<void> {
-    const initialDelayMs = parseDurationToMs(instruction.retryDelay);
-    await this.queue.add(
-      "dispatch-run",
-      { instruction },
-      {
-        jobId: instruction.runId,
-        removeOnComplete: true,
-        removeOnFail: false,
-        attempts: instruction.retryAttempts,
-        backoff: {
-          type: instruction.retryBackoff,
-          delay: initialDelayMs,
-        },
-      }
-    );
-  }
-
-  private async process(job: Job<DispatchJobData>): Promise<void> {
-    const { instruction } = job.data;
+  async processInstruction(instruction: DispatchInstruction): Promise<void> {
     const startedAt = Date.now();
-    const attempt = job.attemptsMade + 1;
+    const attempt = instruction.attemptNumber;
 
-    await this.api.updateRunStatus(instruction.runId, {
-      status: "running",
-      attempt,
+    await this.api.startDispatchAttempt({
+      dispatchJobId: instruction.dispatchJobId,
+      attemptId: instruction.attemptId,
+      attemptNumber: attempt,
     });
 
     const controller = new AbortController();
@@ -103,12 +75,17 @@ export class DispatchQueueRuntime {
       const result = await this.executeHandler(instruction, controller.signal);
       const durationMs = Date.now() - startedAt;
 
-      await this.api.updateRunStatus(instruction.runId, {
+      await this.api.completeDispatchAttempt({
+        dispatchJobId: instruction.dispatchJobId,
+        attemptId: instruction.attemptId,
+        attemptNumber: attempt,
         status: "success",
-        attempt,
         durationMs,
         output: result.output,
         logs: result.logs || null,
+        httpStatus: result.httpStatus ?? null,
+        responseBodyPreview: result.responseBodyPreview ?? null,
+        responseBodyHash: result.responseBodyHash ?? null,
       });
 
       // Send callback if configured (task.run.completed)
@@ -124,43 +101,91 @@ export class DispatchQueueRuntime {
       await this.checkTaskExpiration(instruction);
     } catch (error) {
       const isTimeout = error instanceof Error && error.name === "AbortError";
-      const attempts = job.opts.attempts ?? 1;
-      const isFinalAttempt = attempt >= attempts;
       const message = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
+      const deliveryError = error instanceof DeliveryError ? error : null;
+      const status = isTimeout
+        ? "timeout"
+        : deliveryError?.classification === "terminal_client_error"
+          ? "terminal_client_error"
+          : "failure";
 
-      if (isFinalAttempt) {
-        await this.api.updateRunStatus(instruction.runId, {
-          status: isTimeout ? "timeout" : "failure",
-          attempt,
-          durationMs,
-          errorMessage: message,
-        });
+      await this.api.completeDispatchAttempt({
+        dispatchJobId: instruction.dispatchJobId,
+        attemptId: instruction.attemptId,
+        attemptNumber: attempt,
+        status,
+        durationMs,
+        httpStatus: deliveryError?.httpStatus ?? null,
+        errorClass: error instanceof Error ? error.name : "Error",
+        errorMessage: message,
+        responseBodyPreview: deliveryError?.responseBodyPreview ?? null,
+        responseBodyHash: deliveryError?.responseBodyHash ?? null,
+      });
 
-        // Send callback for final failure (task.run.failed)
-        await this.sendCallback(instruction, "task.run.failed", {
-          status: isTimeout ? "timeout" : "failure",
-          output: null,
-          errorMessage: message,
-          durationMs,
-          attempt,
-        });
+      await this.sendCallback(instruction, "task.run.failed", {
+        status: isTimeout ? "timeout" : "failure",
+        output: null,
+        errorMessage: message,
+        durationMs,
+        attempt,
+      });
 
-        // Check if task should expire after this run
-        await this.checkTaskExpiration(instruction);
-      } else {
-        await this.api.updateRunStatus(instruction.runId, {
-          status: "queued",
-          attempt,
-          durationMs,
-          errorMessage: `Retrying: ${message}`,
-        });
-      }
-
-      throw error;
+      await this.checkTaskExpiration(instruction);
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async fetchWithValidatedRedirects(
+    url: string,
+    init: RequestInit,
+    options: {
+      followRedirects: boolean;
+      maxRedirects: number;
+    },
+    outboundPolicy: OutboundPolicy,
+  ): Promise<Response> {
+    let currentUrl = url;
+    let requestInit: RequestInit = {
+      ...init,
+      headers: new Headers(init.headers),
+      redirect: "manual",
+    };
+    let remainingRedirects = options.followRedirects ? options.maxRedirects : 0;
+
+    while (true) {
+      await assertSafeOutboundUrl(currentUrl, outboundPolicy);
+      const response = await fetch(currentUrl, requestInit);
+      const location = response.headers.get("location");
+      const isRedirect = response.status >= 300 && response.status < 400 && location;
+      if (!isRedirect || remainingRedirects <= 0) {
+        return response;
+      }
+
+      const nextUrl = new URL(location, currentUrl).toString();
+      const currentMethod = (requestInit.method ?? "GET").toUpperCase();
+      if (
+        response.status === 303
+        || ((response.status === 301 || response.status === 302) && currentMethod !== "GET" && currentMethod !== "HEAD")
+      ) {
+        const headers = new Headers(requestInit.headers);
+        headers.delete("content-type");
+        requestInit = {
+          ...requestInit,
+          method: "GET",
+          body: undefined,
+          headers,
+        };
+      }
+
+      currentUrl = nextUrl;
+      remainingRedirects -= 1;
+    }
+  }
+
+  private outboundPolicyForInstruction(instruction: DispatchInstruction): OutboundPolicy {
+    return createScopedOutboundPolicy(this.outboundPolicy, instruction.outboundAllowedHosts);
   }
 
   private async sendCallback(
@@ -189,13 +214,14 @@ export class DispatchQueueRuntime {
       timestamp: new Date().toISOString(),
       task: {
         id: instruction.taskId,
-        name: "", // We don't have task name in instruction, but taskId is sufficient
+        name: instruction.taskName,
+        externalId: instruction.taskExternalId,
         metadata: instruction.metadata,
       },
       stats: {
         totalRuns: newRunCount,
         remainingRuns,
-        expiresAt: null, // We don't track expiresAt in instruction currently
+        expiresAt: instruction.expiresAt,
       },
     };
 
@@ -203,26 +229,47 @@ export class DispatchQueueRuntime {
       payload.run = {
         id: instruction.runId,
         status: runInfo.status,
+        scheduledAt: null,
         output: runInfo.output,
         errorMessage: runInfo.errorMessage,
         durationMs: runInfo.durationMs,
         attempt: runInfo.attempt,
+      };
+      payload.attempt = {
+        id: instruction.attemptId,
+        number: runInfo.attempt,
       };
     }
 
     if (expirationReason) {
       payload.reason = expirationReason;
     }
+    payload.callbackDeliveryId = randomUUID();
+    payload.signature = { version: "v1" };
 
     try {
-      const response = await fetch(instruction.callbackUrl, {
+      const outboundPolicy = this.outboundPolicyForInstruction(instruction);
+      await assertSafeOutboundUrl(instruction.callbackUrl, outboundPolicy);
+
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const body = JSON.stringify(payload);
+      const response = await this.fetchWithValidatedRedirects(instruction.callbackUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-cronlet-event": event,
+          "x-cronlet-timestamp": timestamp,
+          "x-cronlet-delivery-id": payload.callbackDeliveryId,
+          "x-cronlet-signature-version": "v1",
+          "x-cronlet-signature": instruction.callbackSigningSecret
+            ? signCallbackPayload(timestamp, body, instruction.callbackSigningSecret)
+            : "",
         },
-        body: JSON.stringify(payload),
-      });
+        body,
+      }, {
+        followRedirects: false,
+        maxRedirects: 0,
+      }, outboundPolicy);
 
       if (!response.ok) {
         console.warn(`Callback to ${instruction.callbackUrl} failed with status ${response.status}`);
@@ -234,22 +281,24 @@ export class DispatchQueueRuntime {
   }
 
   private async checkTaskExpiration(instruction: DispatchInstruction): Promise<void> {
-    if (instruction.maxRuns === null) {
-      return;
-    }
-
     const newRunCount = instruction.runCount + 1;
-    if (newRunCount >= instruction.maxRuns) {
-      // Task has reached max runs, send expiration callback
+    if (instruction.maxRuns !== null && newRunCount >= instruction.maxRuns) {
       await this.sendCallback(
         instruction,
         "task.expired",
         undefined,
         "max_runs_reached"
       );
+      return;
+    }
 
-      // Note: The API should handle pausing the task when runCount reaches maxRuns
-      // The worker just sends the callback to notify the agent
+    if (instruction.expiresAt && new Date(instruction.expiresAt).getTime() <= Date.now()) {
+      await this.sendCallback(
+        instruction,
+        "task.expired",
+        undefined,
+        "expired_at_reached"
+      );
     }
   }
 
@@ -273,6 +322,7 @@ export class DispatchQueueRuntime {
     config: WebhookHandlerConfig,
     signal: AbortSignal
   ): Promise<HandlerResult> {
+    const outboundPolicy = this.outboundPolicyForInstruction(instruction);
     const headers: Record<string, string> = {
       "content-type": "application/json",
       ...config.headers,
@@ -303,14 +353,19 @@ export class DispatchQueueRuntime {
       config.body ?? { runId: instruction.runId, taskId: instruction.taskId }
     );
 
-    const response = await fetch(config.url, {
+    const response = await this.fetchWithValidatedRedirects(config.url, {
       method,
       headers,
       body,
       signal,
-    });
+    }, {
+      followRedirects: config.followRedirects ?? false,
+      maxRedirects: config.maxRedirects ?? 0,
+    }, outboundPolicy);
 
     const responseText = await response.text();
+    const responseBodyPreview = responseText.slice(0, 400);
+    const responseBodyHash = createHash("sha256").update(responseText).digest("hex");
     let responseJson: Record<string, unknown> | null = null;
 
     try {
@@ -320,12 +375,41 @@ export class DispatchQueueRuntime {
     }
 
     if (!response.ok) {
-      throw new Error(`Webhook responded ${response.status}: ${responseText.slice(0, 400)}`);
+      const terminalStatusCodes = new Set([
+        400,
+        401,
+        403,
+        404,
+        410,
+        422,
+        ...instruction.retryPolicy.terminalStatusCodes,
+      ]);
+      const retryStatusCodes = new Set([
+        408,
+        409,
+        425,
+        429,
+        ...Array.from({ length: 100 }, (_, index) => 500 + index),
+        ...instruction.retryPolicy.retryOnStatusCodes,
+      ]);
+      const classification = terminalStatusCodes.has(response.status) && !retryStatusCodes.has(response.status)
+        ? "terminal_client_error"
+        : "retryable";
+      throw new DeliveryError(
+        `Webhook responded ${response.status}: ${responseBodyPreview}`,
+        classification,
+        response.status,
+        responseBodyPreview,
+        responseBodyHash,
+      );
     }
 
     return {
       output: responseJson,
       logs: `${method} ${config.url} -> ${response.status}`,
+      httpStatus: response.status,
+      responseBodyPreview,
+      responseBodyHash,
     };
   }
 
@@ -400,7 +484,5 @@ export class DispatchQueueRuntime {
 
   async close(): Promise<void> {
     this.secretsCache.stop();
-    await this.worker.close();
-    await this.queue.close();
   }
 }

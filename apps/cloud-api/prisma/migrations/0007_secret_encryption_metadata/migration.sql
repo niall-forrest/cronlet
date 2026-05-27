@@ -1,0 +1,3 @@
+ALTER TABLE "Secret"
+ADD COLUMN "keyVersion" TEXT NOT NULL DEFAULT 'legacy',
+ADD COLUMN "lastRotatedAt" TIMESTAMP(3);

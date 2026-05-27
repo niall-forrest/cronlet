@@ -17,6 +17,12 @@ import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerApiKeyRoutes } from "./routes/api-keys.js";
 import { registerAuditEventRoutes } from "./routes/audit-events.js";
 import { registerOrgStatusRoutes } from "./routes/org-status.js";
+import { registerOpsSummaryRoutes } from "./routes/ops-summary.js";
+import { registerCallbackSigningRoutes } from "./routes/callback-signing.js";
+import { registerCircuitBreakerRoutes } from "./routes/circuit-breakers.js";
+import { registerOutboundPolicyRoutes } from "./routes/outbound-policy.js";
+import { registerReconciliationRoutes } from "./routes/reconciliation.js";
+import { registerDemoRoutes } from "./routes/demo.js";
 
 const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const CORS_ALLOWED_HEADERS = [
@@ -90,11 +96,17 @@ export async function buildServer() {
   await registerTaskRoutes(app);
   await registerRunRoutes(app);
   await registerSecretRoutes(app);
+  await registerCallbackSigningRoutes(app);
+  await registerOutboundPolicyRoutes(app);
   await registerAlertRoutes(app);
   await registerUsageRoutes(app);
   await registerApiKeyRoutes(app);
   await registerOrgStatusRoutes(app);
+  await registerOpsSummaryRoutes(app);
   await registerAuditEventRoutes(app);
+  await registerCircuitBreakerRoutes(app);
+  await registerReconciliationRoutes(app);
+  await registerDemoRoutes(app);
   await registerInternalRoutes(app);
 
   return app;

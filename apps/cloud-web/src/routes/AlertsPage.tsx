@@ -90,7 +90,7 @@ export function AlertsPage() {
 
       <Card className="border-border/70 bg-card/80">
         <CardHeader>
-          <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">Create Alert</CardTitle>
+          <CardTitle className="text-sm font-medium tracking-[0.04em] text-muted-foreground">Create Alert</CardTitle>
           <CardDescription>Add destination and failure policy.</CardDescription>
         </CardHeader>
         <CardContent>

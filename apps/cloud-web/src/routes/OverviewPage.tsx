@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { TaskRecord, RunRecord } from "@cronlet/shared";
 import {
   ArrowRight,
@@ -14,9 +14,7 @@ import {
   Globe,
   Lightning,
   Plus,
-  Pulse,
   Robot,
-  Timer,
   Warning,
   Wrench,
   X,
@@ -38,7 +36,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Skeleton, SkeletonCard, SkeletonRow } from "@/components/Skeleton";
-import { listRuns, listTasks, getUsage } from "@/lib/api";
+import { listRuns, listTasks, seedDemoData } from "@/lib/api";
+import { formatCreatedBy, formatRelativeTime, getTaskIntentSummary, getTaskNextActionSummary, getTaskPatternLabel } from "@/lib/format";
 import { isGettingStartedDismissed, setGettingStartedDismissed } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +66,8 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function OverviewPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [gettingStartedOpen, setGettingStartedOpen] = useState(false);
   const [gettingStartedDismissed, setGettingStartedDismissedState] = useState(false);
 
@@ -79,20 +80,22 @@ export function OverviewPage() {
     queryFn: () => listRuns(undefined, 50),
     refetchInterval: 3000,
   });
-  const usageQuery = useQuery({
-    queryKey: ["usage"],
-    queryFn: getUsage,
-  });
-
   useEffect(() => {
     const dismissed = isGettingStartedDismissed();
     setGettingStartedDismissedState(dismissed);
     setGettingStartedOpen(!dismissed);
   }, []);
 
+  const demoSeedMutation = useMutation({
+    mutationFn: () => seedDemoData(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      navigate({ to: "/upcoming" });
+    },
+  });
+
   const tasks = tasksQuery.data ?? [];
   const runs = runsQuery.data ?? [];
-  const usage = usageQuery.data;
   const hasTasks = tasks.length > 0;
 
   const lastRunByTask = useMemo(() => {
@@ -106,20 +109,57 @@ export function OverviewPage() {
   }, [runs]);
 
   const activeTasks = tasks.filter((task) => task.active).length;
-  const pausedTasks = tasks.filter((task) => !task.active).length;
-  const runningNow = runs.filter((run) => run.status === "running" || run.status === "queued").length;
   const successCount = runs.filter((run) => run.status === "success").length;
-  const failureCount = runs.filter((run) => run.status === "failure" || run.status === "timeout").length;
   const successRate = runs.length > 0 ? Math.round((successCount / runs.length) * 100) : null;
   const recentRuns = runs.slice(0, 6);
-  const upcomingTasks = tasks
+  const next24Hours = Date.now() + 24 * 60 * 60 * 1000;
+  const upcoming24Hours = tasks
     .filter((task) => task.active && task.nextRunAt)
+    .filter((task) => new Date(task.nextRunAt!).getTime() <= next24Hours)
     .sort((a, b) => new Date(a.nextRunAt!).getTime() - new Date(b.nextRunAt!).getTime())
-    .slice(0, 5);
+    .slice(0, 6);
+  const overdueTasks = tasks
+    .filter((task) => task.active && task.nextRunAt)
+    .filter((task) => new Date(task.nextRunAt!).getTime() < Date.now())
+    .sort((a, b) => new Date(a.nextRunAt!).getTime() - new Date(b.nextRunAt!).getTime())
+    .slice(0, 6);
   const failingTasks = tasks.filter((task) => {
     const lastRun = lastRunByTask.get(task.id);
     return lastRun?.status === "failure" || lastRun?.status === "timeout";
   });
+  const agentCreatedTasks = tasks.filter((task) => task.createdBy?.type === "agent");
+  const humanCreatedTasks = tasks.filter((task) => task.createdBy?.type === "user");
+  const agentTaskIds = new Set(agentCreatedTasks.map((task) => task.id));
+  const agentRuns = runs.filter((run) => agentTaskIds.has(run.taskId));
+  const agentFailures = agentRuns.filter((run) =>
+    ["failure", "timeout", "dead_lettered", "terminal_client_error", "retry_window_expired"].includes(run.status)
+  );
+  const recentAgentSchedules = [...agentCreatedTasks]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+  const topActiveAgents = Array.from(
+    agentCreatedTasks.reduce((map, task) => {
+      const key = task.createdBy?.id ?? task.id;
+      const existing = map.get(key) ?? {
+        id: key,
+        name: task.createdBy?.name?.trim() || task.createdBy?.id || "Unknown agent",
+        taskCount: 0,
+        runCount: 0,
+      };
+      existing.taskCount += 1;
+      map.set(key, existing);
+      return map;
+    }, new Map<string, { id: string; name: string; taskCount: number; runCount: number }>())
+  )
+    .map(([id, agent]) => ({
+      ...agent,
+      runCount: agentRuns.filter((run) => {
+        const task = tasks.find((candidate) => candidate.id === run.taskId);
+        return task?.createdBy?.id === id;
+      }).length,
+    }))
+    .sort((a, b) => b.runCount - a.runCount || b.taskCount - a.taskCount)
+    .slice(0, 5);
 
   if (tasksQuery.isLoading) {
     return (
@@ -165,66 +205,122 @@ export function OverviewPage() {
   if (!hasTasks) {
     return (
       <div className="space-y-10">
-        <section className="space-y-3">
-          <p className="meta-label">Overview</p>
-          <h1 className="font-display text-4xl font-semibold tracking-tight text-foreground">
-            What do you want to build?
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Choose your path to get started in under a minute.
-          </p>
+        <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <h1 className="font-display text-4xl font-semibold tracking-tight text-foreground">
+              Overview
+            </h1>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              See future commitments, who created them, and what needs follow-through.
+            </p>
+          </div>
+          <div className="flex max-w-sm flex-col items-start gap-2">
+            <Button
+              variant="outline"
+              onClick={() => demoSeedMutation.mutate()}
+              disabled={demoSeedMutation.isPending}
+            >
+              {demoSeedMutation.isPending ? "Loading demo data..." : "Load demo data"}
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Populate this org with sample schedules, runs, retries, and agent-created work.
+            </p>
+            {demoSeedMutation.error instanceof Error ? (
+              <p className="text-sm text-destructive">
+                {demoSeedMutation.error.message}
+              </p>
+            ) : null}
+          </div>
         </section>
 
         <section className="grid gap-4 xl:grid-cols-3">
-          <PathCard
-            title="Connect your personal agents"
-            description="Your AI agent schedules tasks for you — monitoring, follow-ups, reports — autonomously through MCP"
-            whatYouDo="Paste one config into Claude Desktop and start chatting"
-            timeEstimate="~30 seconds"
+          <EmptyOverviewCard
+            icon={CalendarBlank}
+            title="Future commitments"
+            description="One-offs, recurring wake-ups, retries, callbacks, and overdue work will all show in the same future timeline."
+            bullets={[
+              "See what is scheduled to happen next",
+              "Track one-offs, retries, and recurring wake-ups",
+              "Understand what is drifting before it is missed",
+            ]}
+          />
+          <EmptyOverviewCard
             icon={Robot}
-            action={
-              <Button asChild className="w-full">
-                <Link to="/agent-connect">
-                  Connect Agent
-                  <ArrowRight size={14} className="ml-2" />
-                </Link>
-              </Button>
-            }
+            title="Ownership"
+            description="Cronlet keeps human-created and agent-created work in the same model, so you can see who owns each commitment."
+            bullets={[
+              "Separate agent-created and user-created schedules",
+              "See whether work came from MCP, SDK, or dashboard",
+              "Understand which actor is waiting on the next wake-up",
+            ]}
           />
-          <PathCard
-            title="Build an automation"
-            description="You set up the scheduled task — pick a template, customize it, deploy. Uptime checks, AI content pipelines, Slack digests, and more."
-            whatYouDo="Pick a template, fill in the details, hit create"
-            timeEstimate="~1 minute"
-            icon={Lightning}
-            action={
-              <Button asChild className="w-full">
-                <Link to="/tasks/create/templates">
-                  Browse Templates
-                  <ArrowRight size={14} className="ml-2" />
-                </Link>
-              </Button>
-            }
-          />
-          <PathCard
-            title="Give your agents scheduling"
-            description="Your product's AI agents schedule tasks on behalf of your users — follow-ups, reports, alerts — through the SDK"
-            whatYouDo="Add the SDK to your app, your agents handle the rest"
-            timeEstimate="~2 minutes"
-            icon={Code}
-            featured
-            action={
-              <Button asChild className="w-full">
-                <a href="/agent-connect#sdk">
-                  View SDK Setup
-                  <ArrowRight size={14} className="ml-2" />
-                </a>
-              </Button>
-            }
+          <EmptyOverviewCard
+            icon={Warning}
+            title="Needs attention"
+            description="Paused, overdue, failed, and dead-lettered commitments will surface together when they need follow-through."
+            bullets={[
+              "Spot wake-ups that are overdue or stuck",
+              "See failures and retries tied back to their owner",
+              "Know what needs intervention without digging first",
+            ]}
           />
         </section>
 
-        <QuickReferenceCard usage={usage?.runAttempts ?? 0} />
+        <section className="space-y-4">
+          <SectionHeader label="Start with" />
+          <div className="grid gap-4 xl:grid-cols-3">
+            <PathCard
+              title="Connect your personal agents"
+              description="Your AI agent schedules tasks for you through MCP."
+              whatYouDo="Paste one config into Claude Desktop and start chatting"
+              timeEstimate="~30 seconds"
+              icon={Robot}
+              compact
+              action={
+                <Button asChild className="w-full">
+                  <Link to="/agent-connect">
+                    Connect Agent
+                    <ArrowRight size={14} className="ml-2" />
+                  </Link>
+                </Button>
+              }
+            />
+            <PathCard
+              title="Build an automation"
+              description="Create a scheduled task directly in Cronlet."
+              whatYouDo="Pick a template, fill in the details, hit create"
+              timeEstimate="~1 minute"
+              icon={Lightning}
+              compact
+              action={
+                <Button asChild className="w-full">
+                  <Link to="/tasks/create/templates">
+                    Browse Templates
+                    <ArrowRight size={14} className="ml-2" />
+                  </Link>
+                </Button>
+              }
+            />
+            <PathCard
+              title="Give your agents scheduling"
+              description="Add the SDK so your product agents can schedule work on behalf of users."
+              whatYouDo="Install the SDK and wire Cronlet into your app"
+              timeEstimate="~2 minutes"
+              icon={Code}
+              compact
+              action={
+                <Button asChild className="w-full">
+                  <a href="/agent-connect#sdk">
+                    View SDK Setup
+                    <ArrowRight size={14} className="ml-2" />
+                  </a>
+                </Button>
+              }
+            />
+          </div>
+        </section>
+
+        <QuickReferenceCard />
       </div>
     );
   }
@@ -233,12 +329,11 @@ export function OverviewPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <p className="meta-label">Overview</p>
           <div>
-            <h1 className="display-title">Dashboard</h1>
+            <h1 className="display-title">Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {runningNow > 0
-                ? `${runningNow} task${runningNow !== 1 ? "s" : ""} running now`
+              {upcoming24Hours.length > 0
+                ? `${upcoming24Hours.length} scheduled wake-up${upcoming24Hours.length !== 1 ? "s" : ""} in the next 24 hours`
                 : `${activeTasks} active task${activeTasks !== 1 ? "s" : ""} with ${successRate ?? 0}% recent success`}
             </p>
           </div>
@@ -267,38 +362,246 @@ export function OverviewPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
-          title="Active Tasks"
-          value={String(activeTasks)}
-          subtitle={`${pausedTasks} paused`}
+          title="Upcoming in 24h"
+          value={String(upcoming24Hours.length)}
+          subtitle={upcoming24Hours.length > 0 ? "Committed wake-ups" : "No near-term wake-ups"}
           icon={<Clock size={20} className="text-primary" />}
           iconClassName="bg-primary/10"
-          to="/tasks"
+          to="/upcoming"
         />
         <SummaryCard
-          title="Recent Runs"
-          value={String(runs.length)}
-          subtitle={runningNow > 0 ? `${runningNow} in flight` : "Last 50 executions"}
-          icon={<Pulse size={20} className="text-[hsl(var(--accent))]" />}
+          title="Overdue"
+          value={String(overdueTasks.length)}
+          subtitle={overdueTasks.length > 0 ? "Needs attention" : "Nothing drifting"}
+          icon={<Warning size={20} className="text-red-400" />}
+          iconClassName="bg-red-500/10"
+          to="/upcoming"
+        />
+        <SummaryCard
+          title="Agent-created"
+          value={String(agentCreatedTasks.length)}
+          subtitle={`${humanCreatedTasks.length} created by users`}
+          icon={<Robot size={20} className="text-[hsl(var(--accent))]" />}
           iconClassName="bg-[hsl(var(--accent)/0.15)]"
-          to="/runs"
+          to="/agent-activity"
         />
         <SummaryCard
-          title="Success Rate"
-          value={successRate !== null ? `${successRate}%` : "—"}
-          subtitle={`${successCount} succeeded`}
-          icon={<CheckCircle size={20} weight="fill" className="text-emerald-400" />}
-          iconClassName="bg-emerald-500/10"
-          to="/runs"
-        />
-        <SummaryCard
-          title="Failures"
-          value={String(failureCount)}
-          subtitle={failureCount > 0 ? "Needs attention" : "All clear"}
+          title="Agent Failures"
+          value={String(agentFailures.length)}
+          subtitle={agentFailures.length > 0 ? "Follow-through needed" : "All clear"}
           icon={<XCircle size={20} weight="fill" className="text-red-400" />}
           iconClassName="bg-red-500/10"
-          to="/runs"
+          to="/agent-activity"
         />
       </div>
+
+      {failingTasks.length > 0 ? (
+        <Card className="border-red-500/30 bg-red-500/5">
+          <CardContent className="flex items-start gap-4 py-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
+              <Warning size={20} weight="fill" className="text-red-500" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-red-400">
+                {failingTasks.length} task{failingTasks.length !== 1 ? "s" : ""} failing right now
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {failingTasks.map((task) => task.name).join(", ")}
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/runs">View runs</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-4">
+          <SectionHeader
+            label="Upcoming in the next 24 hours"
+            action={
+              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                <Link to="/upcoming">
+                  Open upcoming
+                  <ArrowRight size={12} className="ml-1" />
+                </Link>
+              </Button>
+            }
+          />
+          <Card variant="flat">
+            <CardContent className="p-0">
+              {upcoming24Hours.length > 0 ? (
+                <div className="divide-y divide-border/30">
+                  {upcoming24Hours.map((task) => (
+                    <UpcomingCommitmentRow key={task.id} task={task} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={CalendarBlank}
+                  title="No wake-ups scheduled soon"
+                  description="The next 24 hours are clear."
+                />
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-4">
+          <SectionHeader
+            label="Agent activity"
+            action={
+              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                <Link to="/agent-activity">
+                  View all
+                  <ArrowRight size={12} className="ml-1" />
+                </Link>
+              </Button>
+            }
+          />
+          <Card variant="flat">
+            <CardContent className="p-0">
+              {topActiveAgents.length > 0 ? (
+                <div className="divide-y divide-border/30">
+                  {topActiveAgents.map((agent) => (
+                    <AgentActivityRow key={agent.id} id={agent.id} name={agent.name} taskCount={agent.taskCount} runCount={agent.runCount} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Robot}
+                  title="No active agents yet"
+                  description="Agent-created schedules will appear here."
+                />
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+
+      <section className="space-y-4">
+        <SectionHeader
+          label="Recent runs"
+          action={
+            <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+              <Link to="/runs">
+                View all
+                <ArrowRight size={12} className="ml-1" />
+              </Link>
+            </Button>
+          }
+        />
+        <Card variant="flat">
+          <CardContent className="p-0">
+            <div className="divide-y divide-border/30">
+              {recentRuns.length > 0 ? (
+                recentRuns.map((run) => (
+                  <RecentRunRow
+                    key={run.id}
+                    run={run}
+                    taskName={tasks.find((task) => task.id === run.taskId)?.name ?? "Unknown"}
+                  />
+                ))
+              ) : (
+                <EmptyState
+                  icon={Clock}
+                  title="No recent runs"
+                  description="Scheduled deliveries and manual triggers will appear here."
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-4">
+          <SectionHeader
+            label="Recent autonomous commitments"
+            action={
+              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                <Link to="/agent-activity">
+                  View agent activity
+                  <ArrowRight size={12} className="ml-1" />
+                </Link>
+              </Button>
+            }
+          />
+          <Card variant="flat">
+            <CardContent className="p-0">
+              {recentAgentSchedules.length > 0 ? (
+                <div className="divide-y divide-border/30">
+                  {recentAgentSchedules.map((task) => (
+                    <UpcomingCommitmentRow key={task.id} task={task} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Robot}
+                  title="No recent agent schedules"
+                  description="Agent-created schedules will show up here."
+                />
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-4">
+          <SectionHeader
+            label="Needs attention"
+            action={
+              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                <Link to="/upcoming">
+                  View upcoming
+                  <ArrowRight size={12} className="ml-1" />
+                </Link>
+              </Button>
+            }
+          />
+          <Card variant="flat">
+            <CardContent className="p-0">
+              {overdueTasks.length > 0 ? (
+                <div className="divide-y divide-border/30">
+                  {overdueTasks.map((task) => (
+                    <UpcomingCommitmentRow key={task.id} task={task} attention="Overdue" />
+                  ))}
+                </div>
+              ) : agentFailures.length > 0 ? (
+                <div className="divide-y divide-border/30">
+                  {agentFailures.slice(0, 5).map((run) => {
+                    const task = tasks.find((candidate) => candidate.id === run.taskId);
+                    return (
+                      <Link
+                        key={run.id}
+                        to="/runs/$runId"
+                        params={{ runId: run.id }}
+                        className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/30"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
+                            {task?.name ?? run.taskId}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {task ? getTaskIntentSummary(task) : "No task summary available"}
+                          </p>
+                        </div>
+                        <Badge variant="error">{run.status.replaceAll("_", " ")}</Badge>
+                      </Link>
+                    );
+                  })}
+                </div>
+                ) : (
+                  <EmptyState
+                    icon={CheckCircle}
+                    title="Nothing needs attention"
+                    description="No overdue wake-ups or recent agent-originated failures."
+                  />
+                )}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
 
       {!gettingStartedDismissed ? (
         <Collapsible open={gettingStartedOpen} onOpenChange={setGettingStartedOpen}>
@@ -306,9 +609,9 @@ export function OverviewPage() {
             <CardContent className="py-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="meta-label">Getting Started</p>
+                  <p className="text-sm font-medium text-foreground">Getting started</p>
                   <p className="text-sm text-foreground">
-                    Keep exploring the other two paths as you onboard more use cases.
+                    Setup stays here once you’re ready. The top of the page is now about what is already committed next.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -391,98 +694,9 @@ export function OverviewPage() {
         </Collapsible>
       ) : null}
 
-      {failingTasks.length > 0 ? (
-        <Card className="border-red-500/30 bg-red-500/5">
-          <CardContent className="flex items-start gap-4 py-5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
-              <Warning size={20} weight="fill" className="text-red-500" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-red-400">
-                {failingTasks.length} task{failingTasks.length !== 1 ? "s" : ""} failing right now
-              </p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                {failingTasks.map((task) => task.name).join(", ")}
-              </p>
-            </div>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/runs">View runs</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-4">
-          <SectionHeader
-            label="Recent Runs"
-            action={
-              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
-                <Link to="/runs">
-                  View all
-                  <ArrowRight size={12} className="ml-1" />
-                </Link>
-              </Button>
-            }
-          />
-          <Card variant="flat">
-            <CardContent className="p-0">
-              {recentRuns.length > 0 ? (
-                <div className="divide-y divide-border/30">
-                  {recentRuns.map((run) => (
-                    <RecentRunRow
-                      key={run.id}
-                      run={run}
-                      taskName={tasks.find((task) => task.id === run.taskId)?.name ?? "Unknown"}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon={Clock}
-                  title="No runs yet"
-                  description="Trigger a task or wait for the schedule."
-                />
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="space-y-4">
-          <SectionHeader
-            label="Coming Up"
-            action={
-              <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
-                <Link to="/tasks">
-                  View tasks
-                  <ArrowRight size={12} className="ml-1" />
-                </Link>
-              </Button>
-            }
-          />
-          <Card variant="flat">
-            <CardContent className="p-0">
-              {upcomingTasks.length > 0 ? (
-                <div className="divide-y divide-border/30">
-                  {upcomingTasks.map((task) => (
-                    <UpcomingTaskRow key={task.id} task={task} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon={CalendarBlank}
-                  title="No upcoming runs"
-                  description={pausedTasks > 0 ? `${pausedTasks} task${pausedTasks !== 1 ? "s" : ""} paused` : "Create another scheduled task."}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      </div>
-
       <section className="space-y-4">
         <SectionHeader
-          label="All Tasks"
+          label="All tasks"
           action={
             <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
               <Link to="/tasks">
@@ -503,7 +717,7 @@ export function OverviewPage() {
         </Card>
       </section>
 
-      <QuickReferenceCard usage={usage?.runAttempts ?? 0} />
+      <QuickReferenceCard />
     </div>
   );
 }
@@ -575,6 +789,40 @@ function PathCard({
   );
 }
 
+function EmptyOverviewCard({
+  icon: Icon,
+  title,
+  description,
+  bullets,
+}: {
+  icon: typeof CalendarBlank;
+  title: string;
+  description: string;
+  bullets: string[];
+}) {
+  return (
+    <Card variant="flat" className="h-full">
+      <CardHeader className="pb-2">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <Icon size={18} className="text-primary" />
+        </div>
+        <div className="space-y-2 pt-3">
+          <CardTitle className="font-display text-lg">{title}</CardTitle>
+          <CardDescription className="text-sm">{description}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-1">
+        {bullets.map((bullet) => (
+          <div key={bullet} className="flex items-start gap-2 text-sm text-muted-foreground">
+            <span className="mt-[7px] h-1 w-1 rounded-full bg-muted-foreground/60" />
+            <span>{bullet}</span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SummaryCard({
   title,
   value,
@@ -610,23 +858,16 @@ function SummaryCard({
   );
 }
 
-function QuickReferenceCard({ usage }: { usage: number }) {
+function QuickReferenceCard() {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="font-display text-lg">For Developers & Agents</CardTitle>
+        <CardTitle className="font-display text-lg">For developers and agents</CardTitle>
         <CardDescription>
-          Quick reference for the MCP server and SDK, plus a live usage snapshot.
+          Quick setup for the SDK and MCP server.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Connect Claude via MCP</p>
-          <div className="flex items-center rounded-lg border border-border/50 bg-muted/30 px-4 py-3 font-mono text-sm">
-            <code className="flex-1">npx @cronlet/mcp</code>
-            <CopyButton text="npx @cronlet/mcp" />
-          </div>
-        </div>
+      <CardContent className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Install the SDK</p>
           <div className="flex items-center rounded-lg border border-border/50 bg-muted/30 px-4 py-3 font-mono text-sm">
@@ -634,12 +875,12 @@ function QuickReferenceCard({ usage }: { usage: number }) {
             <CopyButton text="npm install @cronlet/sdk" />
           </div>
         </div>
-        <div className="rounded-xl border border-border/40 bg-card/30 p-4">
-          <p className="meta-label mb-1.5">Usage This Month</p>
-          <p className="text-lg font-semibold tabular-nums">{usage} run attempts</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Keep an eye on volume as you expand beyond the first task.
-          </p>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Connect Claude via MCP</p>
+          <div className="flex items-center rounded-lg border border-border/50 bg-muted/30 px-4 py-3 font-mono text-sm">
+            <code className="flex-1">npx @cronlet/mcp</code>
+            <CopyButton text="npx @cronlet/mcp" />
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -647,7 +888,7 @@ function QuickReferenceCard({ usage }: { usage: number }) {
 }
 
 function RecentRunRow({ run, taskName }: { run: RunRecord; taskName: string }) {
-  const statusConfig = {
+  const statusConfig: Partial<Record<RunRecord["status"], { dot: string }>> = {
     success: {
       dot: "status-dot-success",
     },
@@ -662,6 +903,24 @@ function RecentRunRow({ run, taskName }: { run: RunRecord; taskName: string }) {
     },
     queued: {
       dot: "status-dot-idle",
+    },
+    leased: {
+      dot: "status-dot-running",
+    },
+    retry_wait: {
+      dot: "status-dot-idle",
+    },
+    cancelled: {
+      dot: "status-dot-idle",
+    },
+    dead_lettered: {
+      dot: "status-dot-failed",
+    },
+    terminal_client_error: {
+      dot: "status-dot-failed",
+    },
+    retry_window_expired: {
+      dot: "status-dot-failed",
     },
   };
 
@@ -683,32 +942,63 @@ function RecentRunRow({ run, taskName }: { run: RunRecord; taskName: string }) {
   );
 }
 
-function UpcomingTaskRow({ task }: { task: TaskRecord }) {
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => setTick((value) => value + 1), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const Icon = task.handlerType === "webhook" ? Globe : Wrench;
-
+function UpcomingCommitmentRow({
+  task,
+  attention,
+}: {
+  task: TaskRecord;
+  attention?: string;
+}) {
   return (
     <Link
       to="/tasks/$taskId"
       params={{ taskId: task.id }}
-      className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/30"
+      className="group grid gap-2 px-4 py-3 transition-colors hover:bg-muted/30 md:grid-cols-[minmax(0,1fr)_180px_220px]"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-        <Icon size={16} className="text-primary" />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">{task.name}</p>
+          <Badge variant={attention ? "error" : "outline"}>{attention ?? getTaskPatternLabel(task)}</Badge>
+        </div>
+        <p className="truncate text-xs text-muted-foreground">
+          {formatCreatedBy(task.createdBy)} · {getTaskIntentSummary(task)}
+        </p>
       </div>
-      <span className="flex-1 truncate text-sm font-medium transition-colors group-hover:text-primary">
-        {task.name}
-      </span>
-      <Badge variant="outline" className="shrink-0 gap-1 font-mono text-xs">
-        <Timer size={12} />
-        {formatCountdown(task.nextRunAt!)}
-      </Badge>
+      <div>
+        <p className="text-sm text-foreground">{formatRelativeTime(task.nextRunAt)}</p>
+        <p className="text-xs text-muted-foreground">{task.externalId ?? "No external ID"}</p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm text-foreground">{getTaskNextActionSummary(task)}</p>
+      </div>
+    </Link>
+  );
+}
+
+function AgentActivityRow({
+  id,
+  name,
+  taskCount,
+  runCount,
+}: {
+  id: string;
+  name: string;
+  taskCount: number;
+  runCount: number;
+}) {
+  return (
+    <Link
+      to="/agent-activity"
+      className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/30"
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">{name}</p>
+        <p className="truncate text-xs text-muted-foreground">{id}</p>
+      </div>
+      <div className="shrink-0 text-right text-xs text-muted-foreground">
+        <p>{taskCount} task{taskCount !== 1 ? "s" : ""}</p>
+        <p>{runCount} run{runCount !== 1 ? "s" : ""}</p>
+      </div>
     </Link>
   );
 }
@@ -821,20 +1111,4 @@ function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return "—";
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatCountdown(targetDate: string): string {
-  const now = Date.now();
-  const target = new Date(targetDate).getTime();
-  const diff = target - now;
-
-  if (diff <= 0) return "now";
-
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
 }

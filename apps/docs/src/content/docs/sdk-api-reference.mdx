@@ -126,6 +126,44 @@ await cronlet.tasks.delete(taskId);
 const run = await cronlet.tasks.trigger(taskId);
 ```
 
+## `dispatch`
+
+### `dispatch(input)`
+
+Runs a handler immediately without creating a visible scheduled task.
+
+```ts
+const run = await cronlet.dispatch({
+  name: "Enrich this prospect now",
+  handler: {
+    type: "webhook",
+    url: "https://api.example.com/enrich",
+    method: "POST",
+  },
+  retryAttempts: 2,
+  retryBackoff: "linear",
+  retryDelay: "5s",
+  timeout: "30s",
+  callbackUrl: "https://app.example.com/api/cronlet/callback",
+  metadata: {
+    prospectId: "prospect_123",
+  },
+});
+```
+
+```ts
+interface TaskDispatchRequest {
+  name?: string;
+  handler: HandlerConfigInput;
+  retryAttempts?: number;
+  retryBackoff?: "linear" | "exponential";
+  retryDelay?: string;
+  timeout?: string;
+  callbackUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
 ### `tasks.pause(taskId)`
 
 Equivalent to `patch(taskId, { active: false })`.
@@ -147,6 +185,21 @@ const taskRuns = await cronlet.runs.list(taskId, 20);
 
 ```ts
 const run = await cronlet.runs.get(runId);
+```
+
+## Callback verification
+
+### `verifyCallbackSignature(input)`
+
+```ts
+import { verifyCallbackSignature } from "@cronlet/sdk";
+
+const rawBody = await request.text();
+const verification = verifyCallbackSignature({
+  rawBody,
+  headers: request.headers,
+  secret: process.env.CRONLET_CALLBACK_SECRET!,
+});
 ```
 
 ## `secrets`

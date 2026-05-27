@@ -35,12 +35,30 @@ const metadataSchema = z.record(z.unknown()).superRefine((metadata, ctx) => {
   }
 });
 
+function parseMetadataFilter(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  if (!value.trim()) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
 const webhookHandlerConfigSchema = z.object({
   type: z.literal("webhook"),
   url: z.string().url(),
   method: z.enum(["GET", "POST"]).default("POST"),
   headers: z.record(z.string()).optional(),
   body: z.unknown().optional(),
+  followRedirects: z.boolean().default(false).optional(),
+  maxRedirects: z.number().int().min(0).max(10).default(0).optional(),
   auth: z
     .object({
       type: z.enum(["bearer", "basic", "header"]),
@@ -125,12 +143,20 @@ export const scheduleConfigSchema = z.discriminatedUnion("type", [
 export const taskCreateSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional(),
+  externalId: z.string().min(1).max(200).optional(),
   handler: handlerConfigSchema,
   schedule: scheduleConfigSchema,
   timezone: z.string().min(2).max(80).default("UTC"),
   retryAttempts: z.number().int().min(1).max(10).default(1),
   retryBackoff: z.enum(["linear", "exponential"]).default("linear"),
   retryDelay: durationSchema.default("1s"),
+  retryMaxAttempts: z.number().int().min(1).max(100).default(10),
+  retryInitialDelay: durationSchema.default("10s"),
+  retryMaxDelay: durationSchema.default("15m"),
+  retryJitter: z.boolean().default(true),
+  retryWindow: durationSchema.default("24h"),
+  retryOnStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
+  terminalStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
   timeout: durationSchema.default("30s"),
   active: z.boolean().default(true),
   source: taskSourceSchema.default("dashboard"),
@@ -145,12 +171,20 @@ export const taskCreateSchema = z.object({
 export const taskPatchSchema = z.object({
   name: z.string().min(2).max(120).optional(),
   description: z.string().max(500).nullable().optional(),
+  externalId: z.string().min(1).max(200).nullable().optional(),
   handler: handlerConfigSchema.optional(),
   schedule: scheduleConfigSchema.optional(),
   timezone: z.string().min(2).max(80).optional(),
   retryAttempts: z.number().int().min(1).max(10).optional(),
   retryBackoff: z.enum(["linear", "exponential"]).optional(),
   retryDelay: durationSchema.optional(),
+  retryMaxAttempts: z.number().int().min(1).max(100).optional(),
+  retryInitialDelay: durationSchema.optional(),
+  retryMaxDelay: durationSchema.optional(),
+  retryJitter: z.boolean().optional(),
+  retryWindow: durationSchema.optional(),
+  retryOnStatusCodes: z.array(z.number().int().min(100).max(599)).optional(),
+  terminalStatusCodes: z.array(z.number().int().min(100).max(599)).optional(),
   timeout: durationSchema.optional(),
   active: z.boolean().optional(),
   // Agent callback
@@ -159,6 +193,24 @@ export const taskPatchSchema = z.object({
   // Conditional scheduling
   maxRuns: z.number().int().min(1).max(10000).nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
+});
+
+export const taskDispatchSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  handler: handlerConfigSchema,
+  retryAttempts: z.number().int().min(1).max(10).default(1),
+  retryBackoff: z.enum(["linear", "exponential"]).default("linear"),
+  retryDelay: durationSchema.default("1s"),
+  retryMaxAttempts: z.number().int().min(1).max(100).default(10),
+  retryInitialDelay: durationSchema.default("10s"),
+  retryMaxDelay: durationSchema.default("15m"),
+  retryJitter: z.boolean().default(true),
+  retryWindow: durationSchema.default("24h"),
+  retryOnStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
+  terminalStatusCodes: z.array(z.number().int().min(100).max(599)).default([]),
+  timeout: durationSchema.default("30s"),
+  callbackUrl: z.string().url().max(500).optional(),
+  metadata: metadataSchema.optional(),
 });
 
 // ============================================
@@ -176,6 +228,20 @@ export const secretCreateSchema = z.object({
 
 export const secretPatchSchema = z.object({
   value: z.string().min(1).max(10000),
+});
+
+const outboundHostnameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(255)
+  .regex(/^[a-z0-9.-]+$/i, "Hostnames may contain letters, numbers, dots, and hyphens")
+  .transform((value) => value.toLowerCase().replace(/\.$/, ""))
+  .refine((value) => !value.includes(".."), "Hostnames cannot contain empty labels")
+  .refine((value) => value !== "localhost" && !value.endsWith(".localhost"), "Localhost cannot be allowlisted");
+
+export const outboundPolicyPatchSchema = z.object({
+  allowedHosts: z.array(outboundHostnameSchema).max(200),
 });
 
 // ============================================
@@ -211,6 +277,8 @@ export const auditEventListSchema = z.object({
   actorType: z.enum(["user", "api_key", "agent", "internal", "webhook"]).optional(),
   action: z.string().min(1).max(120).optional(),
   actionPrefix: z.string().min(1).max(120).optional(),
+  targetType: z.string().min(1).max(120).optional(),
+  targetId: z.string().min(1).max(200).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
@@ -231,12 +299,96 @@ export const auditEventCreateSchema = z.object({
 // ============================================
 
 export const internalRunStatusSchema = z.object({
-  status: z.enum(["queued", "running", "success", "failure", "timeout"]),
+  status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]),
   attempt: z.number().int().min(1),
   durationMs: z.number().int().min(0).optional(),
   output: z.record(z.unknown()).nullable().optional(),
   logs: z.string().max(100000).nullable().optional(),
   errorMessage: z.string().max(1000).optional(),
+});
+
+export const internalDispatchStartSchema = z.object({
+  dispatchJobId: z.string().min(1),
+  attemptId: z.string().min(1),
+  attemptNumber: z.number().int().min(1),
+});
+
+export const internalDispatchCompleteSchema = z.object({
+  dispatchJobId: z.string().min(1),
+  attemptId: z.string().min(1),
+  attemptNumber: z.number().int().min(1),
+  status: z.enum(["success", "failure", "timeout", "terminal_client_error"]),
+  durationMs: z.number().int().min(0),
+  output: z.record(z.unknown()).nullable().optional(),
+  logs: z.string().max(100000).nullable().optional(),
+  httpStatus: z.number().int().min(100).max(599).nullable().optional(),
+  errorClass: z.string().max(120).nullable().optional(),
+  errorMessage: z.string().max(1000).nullable().optional(),
+  responseBodyPreview: z.string().max(400).nullable().optional(),
+  responseBodyHash: z.string().max(128).nullable().optional(),
+});
+
+export const taskListQuerySchema = z.object({
+  status: z.enum(["active", "paused"]).optional(),
+  scheduleType: z.enum(["every", "daily", "weekly", "monthly", "once", "cron"]).optional(),
+  externalId: z.string().min(1).max(200).optional(),
+  metadata: z.preprocess(parseMetadataFilter, metadataSchema.optional()),
+  nextRunAfter: z.string().datetime().optional(),
+  nextRunBefore: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export const runListQuerySchema = z.object({
+  taskId: z.string().optional(),
+  status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]).optional(),
+  externalId: z.string().min(1).max(200).optional(),
+  metadata: z.preprocess(parseMetadataFilter, metadataSchema.optional()),
+  scheduledAfter: z.string().datetime().optional(),
+  scheduledBefore: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export const bulkTaskCancelSchema = z.object({
+  taskIds: z.array(z.string().min(1)).max(500).optional(),
+  externalIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+  metadata: metadataSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(100).optional(),
+}).refine((value) => Boolean(value.taskIds?.length || value.externalIds?.length || value.metadata), {
+  message: "Provide at least one task selector",
+});
+
+export const bulkRunReplaySchema = z.object({
+  runIds: z.array(z.string().min(1)).max(500).optional(),
+  taskId: z.string().optional(),
+  status: z.enum(["queued", "leased", "running", "retry_wait", "success", "failure", "timeout", "cancelled", "dead_lettered", "terminal_client_error", "retry_window_expired"]).optional(),
+  externalId: z.string().min(1).max(200).optional(),
+  metadata: metadataSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(100).optional(),
+}).refine(
+  (value) => Boolean(value.runIds?.length || value.taskId || value.status || value.externalId || value.metadata),
+  { message: "Provide at least one run selector" },
+);
+
+export const reconciliationCompareSchema = z.object({
+  externalIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+  metadata: metadataSchema.optional(),
+  includePendingOnce: z.boolean().default(true).optional(),
+  includeOverdue: z.boolean().default(true).optional(),
+  limit: z.number().int().min(1).max(500).default(100).optional(),
+});
+
+export const timelineQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export const circuitBreakerListQuerySchema = z.object({
+  state: z.enum(["closed", "open", "half_open"]).optional(),
+  destinationKey: z.string().min(1).max(255).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export const retentionCleanupQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 
 // ============================================
@@ -245,8 +397,10 @@ export const internalRunStatusSchema = z.object({
 
 export type TaskCreateInput = z.input<typeof taskCreateSchema>;
 export type TaskPatchInput = z.infer<typeof taskPatchSchema>;
+export type TaskDispatchInput = z.input<typeof taskDispatchSchema>;
 export type SecretCreateInput = z.infer<typeof secretCreateSchema>;
 export type SecretPatchInput = z.infer<typeof secretPatchSchema>;
+export type OutboundPolicyPatchInput = z.infer<typeof outboundPolicyPatchSchema>;
 export type AlertCreateInput = z.infer<typeof alertCreateSchema>;
 export type ApiKeyCreateInput = z.infer<typeof apiKeyCreateSchema>;
 export type ApiKeyRotateInput = z.infer<typeof apiKeyRotateSchema>;

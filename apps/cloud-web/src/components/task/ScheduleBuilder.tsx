@@ -37,6 +37,8 @@ const INTERVALS = [
   { value: "1d", label: "24 hours" },
 ];
 
+const HEARTBEAT_INTERVAL = "30m";
+
 const COMMON_TIMEZONES = [
   "UTC",
   "America/New_York",
@@ -146,9 +148,64 @@ export function ScheduleBuilder({
 
   return (
     <div className="space-y-6">
+      <div className="space-y-3">
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">
+          Common patterns
+        </Label>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={scheduleType === "every" && interval === HEARTBEAT_INTERVAL ? "default" : "outline"}
+            size="sm"
+            className={cn(
+              "transition-all",
+              scheduleType === "every" && interval === HEARTBEAT_INTERVAL && "ring-2 ring-primary/20"
+            )}
+            onClick={() => {
+              setScheduleType("every");
+              setInterval(HEARTBEAT_INTERVAL);
+              setShowAdvanced(false);
+            }}
+          >
+            Heartbeat
+          </Button>
+          <Button
+            type="button"
+            variant={scheduleType === "once" ? "default" : "outline"}
+            size="sm"
+            className={cn("transition-all", scheduleType === "once" && "ring-2 ring-primary/20")}
+            onClick={() => {
+              setScheduleType("once");
+              setShowAdvanced(false);
+            }}
+          >
+            One-off
+          </Button>
+          <Button
+            type="button"
+            variant={scheduleType === "daily" && dailyTimes.length === 1 && dailyTimes[0] === "09:00" ? "default" : "outline"}
+            size="sm"
+            className={cn(
+              "transition-all",
+              scheduleType === "daily" && dailyTimes.length === 1 && dailyTimes[0] === "09:00" && "ring-2 ring-primary/20"
+            )}
+            onClick={() => {
+              setScheduleType("daily");
+              setDailyTimes(["09:00"]);
+              setShowAdvanced(false);
+            }}
+          >
+            Daily check
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Heartbeat runs a short recurring check. Use it for agents, monitors, and follow-up loops.
+        </p>
+      </div>
+
       {/* Schedule Type Selection */}
       <div className="space-y-3">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">
           Frequency
         </Label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -352,7 +409,7 @@ export function ScheduleBuilder({
 
       {/* Timezone */}
       <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">
           Timezone
         </Label>
         <Select value={timezone} onValueChange={onTimezoneChange}>

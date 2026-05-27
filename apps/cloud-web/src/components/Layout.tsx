@@ -76,7 +76,7 @@ export function Layout() {
         <CommandPalette />
 
         {/* Main content area */}
-        <div className="lg:pl-64">
+        <div className="lg:pl-72">
           {/* Top bar */}
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur lg:px-6">
             <MobileMenuButton onClick={() => setSidebarOpen(true)} />
@@ -84,11 +84,11 @@ export function Layout() {
             <div className="ml-auto flex items-center gap-3">
               <button
                 onClick={() => document.dispatchEvent(new CustomEvent("openCommandPalette"))}
-                className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/50 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="hidden h-9 sm:inline-flex items-center gap-2 rounded-md border border-border/50 bg-secondary/50 px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 <MagnifyingGlass size={16} />
                 <span>Search...</span>
-                <kbd className="ml-1 inline-flex items-center gap-0.5 rounded border border-border/50 bg-muted/50 px-1.5 py-0.5 text-[10px] font-medium">
+                <kbd className="ml-1 inline-flex h-5 items-center gap-0.5 rounded-md border border-border/50 bg-muted/50 px-1.5 text-[10px] font-medium">
                   <Command size={10} />K
                 </kbd>
               </button>
@@ -97,7 +97,7 @@ export function Layout() {
                   elements: {
                     rootBox: "flex items-center",
                     organizationSwitcherTrigger:
-                      "rounded-lg border border-border/50 bg-secondary/50 px-3 py-1.5 text-sm hover:bg-secondary outline-none focus:outline-none focus:ring-0",
+                      "h-9 rounded-md border border-border/50 bg-secondary/50 px-3 text-sm hover:bg-secondary outline-none focus:outline-none focus:ring-0",
                     organizationSwitcherTriggerIcon: "text-muted-foreground",
                   },
                 }}
@@ -105,7 +105,7 @@ export function Layout() {
               <UserButton
                 appearance={{
                   elements: {
-                    avatarBox: "h-8 w-8",
+                    avatarBox: "h-9 w-9",
                   },
                 }}
               />
