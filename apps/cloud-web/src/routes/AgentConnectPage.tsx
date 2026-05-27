@@ -12,8 +12,9 @@ import {
   ArrowSquareOut,
   Lightning,
 } from "@phosphor-icons/react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader, SectionCard } from "@/components/operator-ui";
 import { cn } from "@/lib/utils";
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
@@ -204,55 +205,42 @@ export function AgentConnectPage() {
   }, []);
 
   return (
-    <div className="space-y-10">
-      {/* Header */}
-      <div className="space-y-2">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight">
-              Agent Connect
-            </h1>
-            <p className="text-muted-foreground">
-              Connect AI agents to schedule and manage tasks
-            </p>
-          </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Agent Connect"
+        description="Connect AI agents to schedule and manage tasks."
+        actions={
           <Button asChild variant="outline" size="sm">
-            <a
-              href="https://docs.cronlet.dev"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href="https://docs.cronlet.dev" target="_blank" rel="noreferrer">
               View Docs
               <ArrowSquareOut size={14} className="ml-2" />
             </a>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Quick start banner */}
       <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="flex items-center gap-6">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+        <CardContent className="flex items-center gap-4 p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
             <Lightning size={28} weight="duotone" className="text-primary" />
           </div>
           <div className="flex-1">
-            <p className="font-medium text-foreground">Quick Start</p>
+            <p className="text-sm font-medium text-foreground">Quick start</p>
             <p className="text-sm text-muted-foreground">
               Using Claude? Run the MCP server and start scheduling tasks with natural language.
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-3 font-mono text-sm">
+          <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/50 px-3 py-2 font-mono text-sm">
             <code>npx @cronlet/mcp</code>
             <CopyButton text="npx @cronlet/mcp" />
           </div>
         </CardContent>
       </Card>
 
-      {/* MCP Server */}
-      <section id="sdk" className="space-y-4 scroll-mt-24">
+      <section id="sdk" className="space-y-3 scroll-mt-24">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-            <Terminal size={20} className="text-primary" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+            <Terminal size={18} className="text-primary" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">MCP Server</h2>
@@ -262,8 +250,8 @@ export function AgentConnectPage() {
           </div>
         </div>
 
-        <Card>
-          <CardContent className="space-y-6 p-6">
+        <SectionCard title="Claude Desktop setup" description="Use the MCP server with Claude Desktop or another MCP-compatible client.">
+          <div className="space-y-5 px-4 py-4">
             <div className="space-y-3">
               <p className="text-sm font-medium">1. Get an API key</p>
               <p className="text-sm text-muted-foreground">
@@ -295,19 +283,18 @@ export function AgentConnectPage() {
               <p className="text-sm text-muted-foreground">
                 Restart Claude Desktop and ask it to schedule tasks:
               </p>
-              <div className="rounded-xl border border-border/50 bg-muted/30 p-4 text-sm italic text-muted-foreground">
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-sm italic text-muted-foreground">
                 "Create a task that checks my API health every 5 minutes and notifies me if it's down"
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       </section>
 
-      {/* SDK Integration */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--accent)/0.15)]">
-            <Code size={20} className="text-[hsl(var(--accent))]" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--accent)/0.15)]">
+            <Code size={18} className="text-[hsl(var(--accent))]" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">SDK Integration</h2>
@@ -317,25 +304,23 @@ export function AgentConnectPage() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader className="pb-0">
-            <div className="flex items-center gap-4">
+        <SectionCard title="SDK setup" description="Add Cronlet tools to your agent runtime and handle tool calls from model responses.">
+          <div className="space-y-4 px-4 py-4">
+            <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm font-medium">Install the SDK:</p>
               <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-1.5 font-mono text-sm">
                 <code>npm install @cronlet/sdk</code>
                 <CopyButton text="npm install @cronlet/sdk" />
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            {/* Framework tabs */}
+
             <div className="flex gap-1 rounded-lg border border-border/50 bg-muted/30 p-1">
               {(Object.keys(sdkExamples) as SdkTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setSdkTab(tab)}
                   className={cn(
-                    "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                    "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                     sdkTab === tab
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -351,15 +336,14 @@ export function AgentConnectPage() {
             <p className="text-xs text-muted-foreground">
               The SDK provides pre-formatted tool definitions and a handler to execute tool calls from any LLM response.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       </section>
 
-      {/* Callbacks */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-            <ArrowsClockwise size={20} className="text-emerald-500" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
+            <ArrowsClockwise size={18} className="text-emerald-500" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">Callbacks & Feedback Loops</h2>
@@ -369,8 +353,8 @@ export function AgentConnectPage() {
           </div>
         </div>
 
-        <Card>
-          <CardContent className="space-y-6 p-6">
+        <SectionCard title="Callback delivery" description="Receive task results in your application and continue autonomous workflows.">
+          <div className="space-y-5 px-4 py-4">
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 When creating a task, provide a <code className="rounded bg-muted px-1.5 py-0.5 text-xs">callbackUrl</code> to receive results when the task completes.
@@ -389,39 +373,37 @@ export function AgentConnectPage() {
             <div className="space-y-3">
               <p className="text-sm font-medium">Event types</p>
               <div className="grid gap-2">
-                <div className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-4 py-2.5 text-sm">
+                <div className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-sm">
                   <code className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400">task.run.completed</code>
                   <span className="text-muted-foreground">Task ran successfully</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-4 py-2.5 text-sm">
+                <div className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-sm">
                   <code className="rounded bg-red-500/10 px-2 py-0.5 text-xs text-red-400">task.run.failed</code>
                   <span className="text-muted-foreground">Task failed after all retries</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-4 py-2.5 text-sm">
+                <div className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-sm">
                   <code className="rounded bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400">task.expired</code>
                   <span className="text-muted-foreground">Task hit maxRuns or expiresAt limit</span>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5">
               <p className="text-sm">
-                <span className="font-medium text-primary">Pro tip:</span>{" "}
+                <span className="font-medium text-primary">Tip:</span>{" "}
                 <span className="text-muted-foreground">
                   Store agent context in the task's <code className="rounded bg-muted px-1 text-xs">metadata</code> field.
                   It's returned in every callback, letting your agent remember why it created the task.
                 </span>
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       </section>
 
-      {/* Available tools reference */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Available Tools</h2>
-        <Card variant="flat">
-          <CardContent className="p-0">
+      <section className="space-y-3">
+        <SectionCard title="Available tools" description="Reference names exposed by the MCP server.">
+          <div>
             <div className="divide-y divide-border/30">
               {[
                 { name: "cronlet_list_tasks", desc: "List all scheduled tasks" },
@@ -434,7 +416,7 @@ export function AgentConnectPage() {
                 { name: "cronlet_list_runs", desc: "List recent task runs" },
                 { name: "cronlet_get_run", desc: "Get details of a specific run" },
               ].map((tool) => (
-                <div key={tool.name} className="flex items-center gap-4 px-5 py-3">
+                <div key={tool.name} className="flex items-center gap-4 px-4 py-2.5">
                   <code className="shrink-0 rounded bg-muted/50 px-2 py-1 font-mono text-xs">
                     {tool.name}
                   </code>
@@ -442,8 +424,8 @@ export function AgentConnectPage() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       </section>
     </div>
   );

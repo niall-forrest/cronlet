@@ -8,6 +8,7 @@ import {
   type BulkRunReplayResult,
   type BulkTaskCancelInput,
   type BulkTaskCancelResult,
+  type DispatchJobStatus,
   getTaskLimitForTier,
   PLAN_LIMITS,
   type ApiKeyCreateInput,
@@ -20,7 +21,6 @@ import {
   type CreatedBy,
   type DispatchEventRecord,
   type DispatchInstruction,
-  type DispatchJobStatus,
   type InternalDispatchCompleteInput,
   type InternalDispatchStartInput,
   type HandlerType,
@@ -61,6 +61,14 @@ import { AppError } from "./errors.js";
 import { computeNextRun, nowIso } from "./clock.js";
 import type { CloudStore, EntitlementUpdateInput, OrganizationUpsertInput } from "./store-contract.js";
 import { createApiKeyToken, hashApiKey, keyPreviewFromHash } from "./api-keys.js";
+import {
+  buildDemoTasks,
+  demoId,
+  dispatchLifecycleEvents,
+  runAttemptStatusForRun,
+  runLifecycleEvents,
+  type DemoSeedResult,
+} from "./demo-seed.js";
 import { currentSecretKeyVersion, decryptSecretValue, encryptSecretValue } from "./secret-crypto.js";
 
 interface OrgEntitlement {
@@ -1846,6 +1854,317 @@ export class InMemoryCloudStore implements CloudStore {
       retentionDays: limits.retentionDays,
       delinquent: entitlement.delinquent,
       graceEndsAt: entitlement.graceEndsAt,
+    };
+  }
+
+  seedDemoData(orgId: string, userId: string): DemoSeedResult {
+    const now = new Date();
+    const tasks = buildDemoTasks(now, userId);
+    const currentMonth = formatYearMonth(now);
+
+    this.ensureOrganization(orgId);
+    if (!this.entitlements.has(orgId)) {
+      this.entitlements.set(orgId, {
+        tier: "free",
+        delinquent: false,
+        graceEndsAt: null,
+      });
+    }
+
+    const existingDemoTasks = Array.from(this.tasks.values()).filter(
+      (task) => task.orgId === orgId && task.kind === "scheduled" && task.externalId?.startsWith("demo_"),
+    );
+    const existingTaskIds = new Set(existingDemoTasks.map((task) => task.id));
+    const existingRunIds = new Set(
+      Array.from(this.runs.values())
+        .filter((run) => run.orgId === orgId && existingTaskIds.has(run.taskId))
+        .map((run) => run.id),
+    );
+    const existingDispatchJobIds = new Set(
+      Array.from(this.dispatchJobs.values())
+        .filter((job) => job.orgId === orgId && existingTaskIds.has(job.taskId))
+        .map((job) => job.id),
+    );
+
+    for (const taskId of existingTaskIds) {
+      this.tasks.delete(taskId);
+    }
+    for (const runId of existingRunIds) {
+      this.runs.delete(runId);
+    }
+    for (const dispatchJobId of existingDispatchJobIds) {
+      this.dispatchJobs.delete(dispatchJobId);
+    }
+
+    for (const [id, attempt] of this.runAttempts.entries()) {
+      if (attempt.orgId === orgId && (existingTaskIds.has(attempt.taskId) || (attempt.dispatchJobId && existingDispatchJobIds.has(attempt.dispatchJobId)))) {
+        this.runAttempts.delete(id);
+      }
+    }
+    for (const [id, event] of this.taskEvents.entries()) {
+      if (event.orgId === orgId && existingTaskIds.has(event.taskId)) {
+        this.taskEvents.delete(id);
+      }
+    }
+    for (const [id, event] of this.runEvents.entries()) {
+      if (event.orgId === orgId && existingRunIds.has(event.runId)) {
+        this.runEvents.delete(id);
+      }
+    }
+    for (const [id, event] of this.dispatchEvents.entries()) {
+      if (event.orgId === orgId && existingDispatchJobIds.has(event.dispatchJobId)) {
+        this.dispatchEvents.delete(id);
+      }
+    }
+    for (const [id, event] of this.auditEvents.entries()) {
+      if (event.orgId !== orgId) {
+        continue;
+      }
+      if (
+        (event.targetType === "task" && existingTaskIds.has(event.targetId))
+        || (event.targetType === "run" && existingRunIds.has(event.targetId))
+        || event.action === "demo.seeded"
+      ) {
+        this.auditEvents.delete(id);
+      }
+    }
+
+    for (const definition of tasks) {
+      const taskId = demoId(orgId, definition.idSuffix);
+      const task: InternalTaskRecord = {
+        id: taskId,
+        orgId,
+        kind: "scheduled",
+        name: definition.name,
+        description: definition.description,
+        externalId: definition.externalId,
+        handlerType: definition.handlerType,
+        handlerConfig: definition.handlerConfig,
+        scheduleType: definition.scheduleType,
+        scheduleConfig: definition.scheduleConfig,
+        timezone: "UTC",
+        nextRunAt: definition.nextRunAt?.toISOString() ?? null,
+        retryAttempts: definition.retryAttempts,
+        retryBackoff: "exponential",
+        retryDelay: definition.retryInitialDelay,
+        retryPolicy: {
+          maxAttempts: definition.retryAttempts,
+          backoff: "exponential",
+          initialDelay: definition.retryInitialDelay,
+          maxDelay: definition.retryMaxDelay,
+          jitter: true,
+          retryWindow: definition.retryWindow,
+          retryOnStatusCodes: [],
+          terminalStatusCodes: [],
+        },
+        timeout: definition.timeout,
+        active: definition.active,
+        source: definition.source,
+        createdBy: definition.createdBy,
+        callbackUrl: definition.callbackUrl,
+        metadata: definition.metadata,
+        maxRuns: definition.maxRuns,
+        expiresAt: definition.expiresAt?.toISOString() ?? null,
+        runCount: definition.runs.length,
+        createdAt: definition.createdAt.toISOString(),
+        updatedAt: definition.updatedAt.toISOString(),
+      };
+      this.tasks.set(task.id, task);
+
+      this.appendTaskEvent({
+        orgId,
+        taskId,
+        action: "task.created",
+        previousState: null,
+        nextState: definition.active ? "active" : "paused",
+        reason: definition.source,
+        metadata: {
+          externalId: definition.externalId,
+          callbackUrl: definition.callbackUrl,
+        },
+        createdAt: definition.createdAt.toISOString(),
+      });
+
+      if (!definition.active) {
+        this.appendTaskEvent({
+          orgId,
+          taskId,
+          action: "task.updated",
+          previousState: "active",
+          nextState: "paused",
+          reason: "manual",
+          metadata: {
+            lifecycle: "paused",
+          },
+          createdAt: definition.updatedAt.toISOString(),
+        });
+      }
+
+      this.createAuditEvent({
+        organizationId: orgId,
+        actorType: definition.createdBy.type,
+        actorId: definition.createdBy.id,
+        action: "task.created",
+        targetType: "task",
+        targetId: taskId,
+        metadata: {
+          demoSeed: true,
+          source: definition.source,
+        },
+        createdAt: definition.createdAt.toISOString(),
+      });
+
+      for (const runDefinition of definition.runs) {
+        const runId = demoId(orgId, `${definition.idSuffix}_${runDefinition.idSuffix}`);
+        const dispatchJobId = demoId(orgId, `${definition.idSuffix}_${runDefinition.idSuffix}_dispatch`);
+        const runAttemptId = demoId(orgId, `${definition.idSuffix}_${runDefinition.idSuffix}_attempt`);
+        const destinationKey = task.handlerConfig.type === "webhook"
+          ? new URL(task.handlerConfig.url).host
+          : task.handlerType;
+        const dispatchStatus = runDefinition.dispatchStatus === "succeeded"
+          ? "succeeded"
+          : runDefinition.dispatchStatus === "failed"
+            ? "failed"
+            : runDefinition.dispatchStatus;
+
+        const run: RunRecord = {
+          id: runId,
+          orgId,
+          taskId,
+          status: runDefinition.status,
+          trigger: runDefinition.trigger,
+          attempt: runDefinition.attempt,
+          scheduledAt: runDefinition.scheduledAt.toISOString(),
+          startedAt: runDefinition.startedAt?.toISOString() ?? null,
+          completedAt: runDefinition.completedAt?.toISOString() ?? null,
+          durationMs: runDefinition.durationMs,
+          output: runDefinition.output,
+          logs: runDefinition.logs,
+          errorMessage: runDefinition.errorMessage,
+          createdAt: runDefinition.scheduledAt.toISOString(),
+        };
+        this.runs.set(run.id, run);
+
+        this.dispatchJobs.set(dispatchJobId, {
+          id: dispatchJobId,
+          orgId,
+          taskId,
+          runId,
+          status: dispatchStatus as DispatchJobStatus,
+          availableAt: runDefinition.dispatchAvailableAt.toISOString(),
+          leaseOwner: runDefinition.dispatchStatus === "pending" ? null : "demo-worker",
+          leasedUntil: runDefinition.dispatchStatus === "pending"
+            ? null
+            : new Date(runDefinition.dispatchAvailableAt.getTime() + 60_000).toISOString(),
+          attemptCount: runDefinition.attempt,
+          maxAttempts: definition.retryAttempts,
+          retryWindowEndsAt: new Date(runDefinition.scheduledAt.getTime() + 12 * 60 * 60 * 1000).toISOString(),
+          lastError: runDefinition.dispatchLastError,
+          destinationKey,
+          createdAt: runDefinition.scheduledAt.toISOString(),
+          updatedAt: (runDefinition.completedAt ?? runDefinition.dispatchAvailableAt).toISOString(),
+        });
+
+        this.runAttempts.set(runAttemptId, {
+          id: runAttemptId,
+          orgId,
+          runId,
+          taskId,
+          dispatchJobId,
+          attemptNumber: runDefinition.attempt,
+          status: runAttemptStatusForRun(runDefinition.status),
+          startedAt: runDefinition.startedAt?.toISOString() ?? null,
+          completedAt: runDefinition.completedAt?.toISOString() ?? null,
+          durationMs: runDefinition.durationMs,
+          httpStatus: runDefinition.httpStatus,
+          errorClass: runDefinition.errorMessage ? "DemoError" : null,
+          errorMessage: runDefinition.errorMessage,
+          responseBodyPreview: runDefinition.responseBodyPreview,
+          responseBodyHash: runDefinition.responseBodyHash,
+          output: runDefinition.output,
+          logs: runDefinition.logs,
+          createdAt: runDefinition.scheduledAt.toISOString(),
+        });
+
+        for (const event of runLifecycleEvents(runDefinition)) {
+          this.appendRunEvent({
+            orgId,
+            runId,
+            action: event.action,
+            previousState: event.previousState,
+            nextState: event.nextState,
+            reason: event.reason,
+            metadata: event.metadata ?? null,
+            createdAt: event.createdAt.toISOString(),
+          });
+        }
+
+        for (const event of dispatchLifecycleEvents(runDefinition)) {
+          this.appendDispatchEvent({
+            orgId,
+            dispatchJobId,
+            action: event.action,
+            previousState: event.previousState,
+            nextState: event.nextState,
+            reason: event.reason,
+            metadata: event.metadata ?? null,
+            createdAt: event.createdAt.toISOString(),
+          });
+        }
+
+        this.createAuditEvent({
+          organizationId: orgId,
+          actorType: definition.createdBy.type,
+          actorId: definition.createdBy.id,
+          action: runDefinition.status === "success" ? "run.completed" : "run.created",
+          targetType: "run",
+          targetId: runId,
+          metadata: {
+            demoSeed: true,
+            taskId,
+            status: runDefinition.status,
+          },
+          createdAt: runDefinition.scheduledAt.toISOString(),
+        });
+      }
+    }
+
+    const runCount = tasks.reduce((sum, task) => sum + task.runs.length, 0);
+    this.usage.set(this.usageKey(orgId, currentMonth), Math.max(this.usage.get(this.usageKey(orgId, currentMonth)) ?? 0, runCount));
+    this.createAuditEvent({
+      organizationId: orgId,
+      actorType: "user",
+      actorId: userId,
+      action: "demo.seeded",
+      targetType: "organization",
+      targetId: orgId,
+      metadata: {
+        demoSeed: true,
+        taskCount: tasks.length,
+        runCount,
+      },
+      createdAt: now.toISOString(),
+    });
+
+    const breakerNow = now.toISOString();
+    this.upsertCircuitBreaker({
+      orgId,
+      destinationKey: "demo.cronlet.dev",
+      state: "open",
+      consecutiveFailures: 3,
+      openedAt: breakerNow,
+      cooldownUntil: new Date(now.getTime() + 5 * 60 * 1000).toISOString(),
+      lastFailureAt: breakerNow,
+      lastFailureReason: "Demo retryable delivery failures opened this circuit.",
+      probeInFlight: false,
+      createdAt: breakerNow,
+      updatedAt: breakerNow,
+    });
+
+    return {
+      taskCount: tasks.length,
+      runCount,
+      seededAt: now.toISOString(),
     };
   }
 

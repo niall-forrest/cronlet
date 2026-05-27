@@ -1,820 +1,327 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import type { OrgStatusSnapshot, RunRecord, ScheduleConfig, TaskRecord } from "@cronlet/shared";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useRouterState } from "@tanstack/react-router";
+import type { RunRecord, ScheduleType, TaskSource } from "@cronlet/shared";
+import { Pause, Play, Plus } from "@phosphor-icons/react";
+import { listRunsWithFilters, listTasksWithFilters, patchTask, triggerTask } from "@/lib/api";
 import {
-  CaretDown,
-  DotsThree,
-  Pause,
-  PencilSimple,
-  Play,
-  Plus,
-  Spinner,
-  Trash,
-  Clock,
-  X,
-  Broadcast,
-} from "@phosphor-icons/react";
-import {
-  getOrgStatus,
-  listRuns,
-  listTasks,
-  patchTask,
-  deleteTask,
-  triggerTask,
-} from "@/lib/api";
-import { hasSeenFirstTaskSuccess, isFirstTaskPending, markFirstTaskSuccessSeen } from "@/lib/onboarding";
+  formatCreatedBy,
+  formatDateTime,
+  formatHandlerSummary,
+  formatSchedule,
+  formatTaskSource,
+  getCreatedByTypeLabel,
+  getTaskDestination,
+  getTaskStatusTone,
+  summarizeMetadata,
+} from "@/lib/format";
+import { CopyButton, FilterMenu, MetricTile, PageHeader, SectionCard, StatusBadge } from "@/components/operator-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/Skeleton";
-import { SectionHeader } from "@/components/ui/section-header";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+const scheduleTypes: Array<{ label: string; value: ScheduleType | "all" }> = [
+  { label: "All", value: "all" },
+  { label: "Once", value: "once" },
+  { label: "Every", value: "every" },
+  { label: "Daily", value: "daily" },
+  { label: "Weekly", value: "weekly" },
+  { label: "Cron", value: "cron" },
+];
+
+const savedViews: Array<{ label: string; value: SavedTaskView }> = [
+  { label: "All tasks", value: "all" },
+  { label: "Agent-created", value: "agent-created" },
+  { label: "Human-created", value: "human-created" },
+  { label: "MCP", value: "mcp" },
+  { label: "SDK", value: "sdk" },
+];
+
+const stateOptions: Array<{ label: string; value: "all" | "active" | "paused" }> = [
+  { label: "All states", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Paused", value: "paused" },
+];
+
+const originOptions: Array<{ label: string; value: TaskSource | "all" }> = [
+  { label: "All origins", value: "all" },
+  { label: "Dashboard", value: "dashboard" },
+  { label: "MCP", value: "mcp" },
+  { label: "SDK", value: "sdk" },
+];
+
+const actorOptions: Array<{ label: string; value: ActorFilter }> = [
+  { label: "All actors", value: "all" },
+  { label: "Agents", value: "agent" },
+  { label: "Users", value: "user" },
+];
+
+type SavedTaskView = "all" | "agent-created" | "human-created" | "mcp" | "sdk";
+type ActorFilter = "all" | "agent" | "user";
 
 export function TasksPage() {
+  const locationSearch = useRouterState({ select: (state) => state.location.search });
+  const searchParams = useMemo(() => new URLSearchParams(locationSearch), [locationSearch]);
   const queryClient = useQueryClient();
-  const [deleteTarget, setDeleteTarget] = useState<TaskRecord | null>(null);
-  const [pendingRunByTask, setPendingRunByTask] = useState<Record<string, string>>({});
-  const [resultOpenByTask, setResultOpenByTask] = useState<Record<string, boolean>>({});
-  const [celebrationVisible, setCelebrationVisible] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"all" | TaskRecord["source"]>("all");
-  const [highlightedTaskIds, setHighlightedTaskIds] = useState<Record<string, boolean>>({});
-  const hasHydratedTaskIdsRef = useRef(false);
-  const knownTaskIdsRef = useRef<Set<string>>(new Set());
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [scheduleType, setScheduleType] = useState<ScheduleType | "all">(
+    (searchParams.get("schedule") as ScheduleType | "all" | null) ?? "all"
+  );
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "paused">(
+    (searchParams.get("status") as "all" | "active" | "paused" | null) ?? "all"
+  );
+  const [savedView, setSavedView] = useState<SavedTaskView>("all");
+  const [sourceFilter, setSourceFilter] = useState<TaskSource | "all">(
+    (searchParams.get("origin") as TaskSource | "all" | null) ?? "all"
+  );
+  const [actorFilter, setActorFilter] = useState<ActorFilter>(
+    (searchParams.get("actor") as ActorFilter | null) ?? "all"
+  );
 
-  const { data: tasks = [], isLoading: loadingTasks } = useQuery({
-    queryKey: ["tasks"],
-    queryFn: () => listTasks(),
+  const tasksQuery = useQuery({
+    queryKey: ["tasks", "table", scheduleType, activeFilter],
+    queryFn: () =>
+      listTasksWithFilters({
+        scheduleType: scheduleType === "all" ? undefined : scheduleType,
+        status: activeFilter === "all" ? undefined : activeFilter,
+        limit: 200,
+      }),
     refetchInterval: 5000,
   });
-
-  const orgStatusQuery = useQuery<OrgStatusSnapshot>({
-    queryKey: ["org-status"],
-    queryFn: () => getOrgStatus(),
+  const runsQuery = useQuery({
+    queryKey: ["tasks", "latest-runs"],
+    queryFn: () => listRunsWithFilters({ limit: 100 }),
+    refetchInterval: 3000,
   });
 
-  const { data: allRuns = [] } = useQuery({
-    queryKey: ["runs"],
-    queryFn: () => listRuns(undefined, 100),
-    refetchInterval: Object.keys(pendingRunByTask).length > 0 ? 1500 : 3000,
+  const patchMutation = useMutation({
+    mutationFn: ({ taskId, active }: { taskId: string; active: boolean }) => patchTask(taskId, { active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+  const triggerMutation = useMutation({
+    mutationFn: (taskId: string) => triggerTask(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
   });
 
-  const lastRunByTask = useMemo(() => {
+  const latestRunByTask = useMemo(() => {
     const map = new Map<string, RunRecord>();
-    for (const run of allRuns) {
+    for (const run of runsQuery.data ?? []) {
       const current = map.get(run.taskId);
       if (!current || new Date(run.createdAt) > new Date(current.createdAt)) {
         map.set(run.taskId, run);
       }
     }
     return map;
-  }, [allRuns]);
+  }, [runsQuery.data]);
 
-  useEffect(() => {
-    if (loadingTasks) {
-      return;
+  const applySavedView = (view: SavedTaskView) => {
+    setSavedView(view);
+
+    switch (view) {
+      case "agent-created":
+        setActorFilter("agent");
+        setSourceFilter("all");
+        break;
+      case "human-created":
+        setActorFilter("user");
+        setSourceFilter("all");
+        break;
+      case "mcp":
+        setActorFilter("all");
+        setSourceFilter("mcp");
+        break;
+      case "sdk":
+        setActorFilter("all");
+        setSourceFilter("sdk");
+        break;
+      default:
+        setActorFilter("all");
+        setSourceFilter("all");
+        break;
     }
+  };
 
-    const currentTaskIds = new Set(tasks.map((task) => task.id));
-    if (!hasHydratedTaskIdsRef.current) {
-      knownTaskIdsRef.current = currentTaskIds;
-      hasHydratedTaskIdsRef.current = true;
-      return;
-    }
+  const visibleTasks = (tasksQuery.data ?? []).filter((task) => {
+    if (sourceFilter !== "all" && task.source !== sourceFilter) return false;
+    if (actorFilter !== "all" && task.createdBy?.type !== actorFilter) return false;
 
-    const newTaskIds = tasks
-      .map((task) => task.id)
-      .filter((taskId) => !knownTaskIdsRef.current.has(taskId));
-
-    knownTaskIdsRef.current = currentTaskIds;
-
-    if (newTaskIds.length === 0) {
-      return;
-    }
-
-    setHighlightedTaskIds((current) => ({
-      ...current,
-      ...Object.fromEntries(newTaskIds.map((taskId) => [taskId, true])),
-    }));
-
-    const timeout = window.setTimeout(() => {
-      setHighlightedTaskIds((current) => {
-        const next = { ...current };
-        for (const taskId of newTaskIds) {
-          delete next[taskId];
-        }
-        return next;
-      });
-    }, 2000);
-
-    return () => window.clearTimeout(timeout);
-  }, [loadingTasks, tasks]);
-
-  useEffect(() => {
-    setPendingRunByTask((current) => {
-      let changed = false;
-      const next = { ...current };
-
-      for (const [taskId, runId] of Object.entries(current)) {
-        const run = allRuns.find((candidate) => candidate.id === runId);
-        if (run && isTerminalRun(run)) {
-          delete next[taskId];
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
-  }, [allRuns]);
-
-  useEffect(() => {
-    if (!isFirstTaskPending() || hasSeenFirstTaskSuccess()) {
-      return;
-    }
-
-    if (tasks.length !== 1) {
-      return;
-    }
-
-    const firstTaskId = tasks[0]?.id;
-    const firstSuccess = allRuns.find(
-      (run) => run.taskId === firstTaskId && run.status === "success"
-    );
-
-    if (!firstSuccess) {
-      return;
-    }
-
-    markFirstTaskSuccessSeen();
-    setCelebrationVisible(true);
-
-    const timeout = window.setTimeout(() => {
-      setCelebrationVisible(false);
-    }, 6000);
-
-    return () => window.clearTimeout(timeout);
-  }, [allRuns, tasks]);
-
-  const patchMutation = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { active?: boolean } }) =>
-      patchTask(id, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    },
+    if (!query.trim()) return true;
+    const haystack = [
+      task.id,
+      task.name,
+      task.externalId ?? "",
+      task.source,
+      task.createdBy?.type ?? "",
+      task.createdBy?.name ?? "",
+      getTaskDestination(task) ?? "",
+      summarizeMetadata(task.metadata),
+    ].join(" ").toLowerCase();
+    return haystack.includes(query.toLowerCase());
   });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteTask,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      setDeleteTarget(null);
-    },
-  });
-
-  const triggerMutation = useMutation({
-    mutationFn: triggerTask,
-    onSuccess: (run, taskId) => {
-      setPendingRunByTask((current) => ({ ...current, [taskId]: run.id }));
-      setResultOpenByTask((current) => ({ ...current, [taskId]: true }));
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-    },
-  });
-
-  const visibleTasks = sourceFilter === "all"
-    ? tasks
-    : tasks.filter((task) => task.source === sourceFilter);
-  const activeVisibleTasks = visibleTasks.filter((task) => task.active);
-  const pausedVisibleTasks = visibleTasks.filter((task) => !task.active);
-  const isListeningState = tasks.length === 0 && orgStatusQuery.data?.hasApiKeys === true;
-
-  const handleToggleActive = (task: TaskRecord) => {
-    patchMutation.mutate({ id: task.id, input: { active: !task.active } });
-  };
-
-  const handleDelete = (task: TaskRecord) => {
-    setDeleteTarget(task);
-  };
-
-  const handleTrigger = (taskId: string) => {
-    triggerMutation.mutate(taskId);
-  };
-
-  const confirmDelete = () => {
-    if (deleteTarget) {
-      deleteMutation.mutate(deleteTarget.id);
-    }
-  };
 
   return (
-    <div className="space-y-8">
-      {celebrationVisible ? (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="flex items-start justify-between gap-4 py-5">
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">Your first task is running.</p>
-              <p className="text-sm text-muted-foreground">
-                Next: connect an agent so Claude or another MCP client can create tasks automatically.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button asChild size="sm">
-                <Link to="/agent-connect">Connect an Agent</Link>
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => setCelebrationVisible(false)}>
-                <X size={14} />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+    <div className="space-y-6">
+      <PageHeader
+        title="Tasks"
+        description="Create, inspect, and control scheduled tasks."
+        actions={
+          <Button asChild>
+            <Link to="/tasks/create">
+              <Plus size={14} className="mr-2" />
+              Create Task
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="display-title">Tasks</h1>
-          <p className="mt-1 text-muted-foreground">Manage your scheduled tasks</p>
-        </div>
-        <Button asChild>
-          <Link to="/tasks/create">
-            <Plus size={16} weight="bold" className="mr-2" />
-            Create Task
-          </Link>
-        </Button>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile label="Visible tasks" value={visibleTasks.length} />
+        <MetricTile label="Active" value={visibleTasks.filter((task) => task.active).length} />
+        <MetricTile label="Paused" value={visibleTasks.filter((task) => !task.active).length} />
+        <MetricTile label="Agent-created" value={visibleTasks.filter((task) => task.createdBy?.type === "agent").length}/>
       </div>
 
-      {tasks.length > 0 ? (
-        <div className="flex justify-end">
-          <Select value={sourceFilter} onValueChange={(value) => setSourceFilter(value as typeof sourceFilter)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Source" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All sources</SelectItem>
-              <SelectItem value="dashboard">Dashboard</SelectItem>
-              <SelectItem value="mcp">MCP</SelectItem>
-              <SelectItem value="sdk">SDK</SelectItem>
-            </SelectContent>
-          </Select>
+      <SectionCard
+        title="Task inventory"
+        description="Scheduling state, destinations, and external identifiers."
+      >
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/40 px-4 py-3">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search task, external ID, actor, destination, or metadata"
+            className="h-8 min-w-[280px] flex-1 bg-secondary/40"
+          />
+          <FilterMenu
+            label="View"
+            value={savedView}
+            options={savedViews}
+            onChange={applySavedView}
+            widthClassName="w-[170px]"
+          />
+          <FilterMenu
+            label="State"
+            value={activeFilter}
+            options={stateOptions}
+            onChange={setActiveFilter}
+            widthClassName="w-[150px]"
+          />
+          <FilterMenu
+            label="Origin"
+            value={sourceFilter}
+            options={originOptions}
+            onChange={(value) => {
+              setSourceFilter(value);
+              setSavedView(value === "mcp" || value === "sdk" ? value : "all");
+            }}
+            widthClassName="w-[160px]"
+          />
+          <FilterMenu
+            label="Actor"
+            value={actorFilter}
+            options={actorOptions}
+            onChange={(value) => {
+              setActorFilter(value);
+              setSavedView(value === "agent" ? "agent-created" : value === "user" ? "human-created" : "all");
+            }}
+            widthClassName="w-[160px]"
+          />
+          <FilterMenu
+            label="Schedule"
+            value={scheduleType}
+            options={scheduleTypes}
+            onChange={setScheduleType}
+            widthClassName="w-[165px]"
+          />
         </div>
-      ) : null}
 
-      {loadingTasks ? (
-        <div className="space-y-6">
-          <SectionHeader label="Active Tasks" />
-          <div className="grid gap-4 md:grid-cols-2">
-            {[1, 2, 3, 4].map((index) => (
-              <Card key={index} variant="flat">
-                <CardContent>
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-2.5 w-2.5 rounded-full" />
-                      <Skeleton className="h-5 w-40" />
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>ID</TableHead>
+              <TableHead>Task</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Origin</TableHead>
+              <TableHead>Created by</TableHead>
+              <TableHead>Schedule</TableHead>
+              <TableHead>Destination</TableHead>
+              <TableHead>External ID</TableHead>
+              <TableHead>Next run</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visibleTasks.map((task) => {
+              const latestRun = latestRunByTask.get(task.id);
+              return (
+                <TableRow key={task.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
+                      <CopyButton value={task.id} />
                     </div>
-                    <Skeleton className="h-5 w-16 rounded-md" />
-                  </div>
-                  <Skeleton className="mb-5 h-4 w-48" />
-                  <div className="mb-4 grid grid-cols-2 gap-4">
+                  </TableCell>
+                  <TableCell className="max-w-[220px]">
                     <div className="space-y-1">
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-4 w-20" />
+                      <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="truncate text-sm font-medium text-foreground hover:text-primary">
+                        {task.name}
+                      </Link>
+                      <p className="truncate text-xs text-muted-foreground">{formatHandlerSummary(task.handlerConfig)}</p>
                     </div>
-                    <div className="space-y-1">
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-4 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge
+                      label={task.active ? "active" : "paused"}
+                      variant={getTaskStatusTone(task, latestRun)}
+                    />
+                  </TableCell>
+                  <TableCell>{formatTaskSource(task.source)}</TableCell>
+                  <TableCell className="max-w-[180px]">
+                    <div className="space-y-0.5">
+                      <p className="truncate text-sm text-foreground">{formatCreatedBy(task.createdBy)}</p>
+                      <p className="text-xs text-muted-foreground">{getCreatedByTypeLabel(task.createdBy)}</p>
                     </div>
-                  </div>
-                  <Skeleton className="h-9 w-full rounded-lg" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ) : tasks.length === 0 ? (
-        <Card variant="flat" className="border-dashed border-border/30">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            {isListeningState ? (
-              <>
-                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                  <Broadcast size={28} weight="duotone" className="text-primary" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold">Listening for tasks...</h3>
-                <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
-                  Your agent connection is ready. Ask your agent to create a task and it&apos;ll appear here in real time.
-                </p>
-                <Button asChild variant="outline">
-                  <Link to="/tasks/create">
-                    Or create a task manually
-                    <span className="ml-2">→</span>
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                  <Clock size={28} weight="duotone" className="text-primary" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold">No tasks yet</h3>
-                <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
-                  Create your first scheduled task to automate HTTP calls, Slack messages, emails, and more.
-                </p>
-                <Button asChild>
-                  <Link to="/tasks/create">
-                    <Plus size={16} weight="bold" className="mr-2" />
-                    Create your first task
-                  </Link>
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-8">
-          {activeVisibleTasks.length > 0 ? (
-            <section className="space-y-4">
-              <SectionHeader label="Active Tasks" />
-              <div className="grid gap-4 md:grid-cols-2">
-                {activeVisibleTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    lastRun={lastRunByTask.get(task.id)}
-                    pendingRunId={pendingRunByTask[task.id]}
-                    hasInlineResult={task.id in resultOpenByTask}
-                    resultOpen={!!resultOpenByTask[task.id]}
-                    onResultOpenChange={(open) =>
-                      setResultOpenByTask((current) => ({ ...current, [task.id]: open }))
-                    }
-                    onToggleActive={() => handleToggleActive(task)}
-                    onTrigger={() => handleTrigger(task.id)}
-                    onDelete={() => handleDelete(task)}
-                    isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
-                    isNew={!!highlightedTaskIds[task.id]}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
+                  </TableCell>
+                  <TableCell>{formatSchedule(task.scheduleConfig)}</TableCell>
+                  <TableCell>{getTaskDestination(task) ?? "internal"}</TableCell>
+                  <TableCell>{task.externalId ?? "—"}</TableCell>
+                  <TableCell>{task.nextRunAt ? formatDateTime(task.nextRunAt) : "—"}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => triggerMutation.mutate(task.id)}
+                        disabled={triggerMutation.isPending}
+                      >
+                        <Play size={14} className="mr-1" />
+                        Run
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => patchMutation.mutate({ taskId: task.id, active: !task.active })}
+                        disabled={patchMutation.isPending}
+                      >
+                        {task.active ? <Pause size={14} className="mr-1" /> : <Play size={14} className="mr-1" />}
+                        {task.active ? "Pause" : "Resume"}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
 
-          {pausedVisibleTasks.length > 0 ? (
-            <section className="space-y-4">
-              <SectionHeader label="Paused Tasks" />
-              <div className="grid gap-4 md:grid-cols-2">
-                {pausedVisibleTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    lastRun={lastRunByTask.get(task.id)}
-                    pendingRunId={pendingRunByTask[task.id]}
-                    hasInlineResult={task.id in resultOpenByTask}
-                    resultOpen={!!resultOpenByTask[task.id]}
-                    onResultOpenChange={(open) =>
-                      setResultOpenByTask((current) => ({ ...current, [task.id]: open }))
-                    }
-                    onToggleActive={() => handleToggleActive(task)}
-                    onTrigger={() => handleTrigger(task.id)}
-                    onDelete={() => handleDelete(task)}
-                    isTriggering={triggerMutation.isPending && triggerMutation.variables === task.id}
-                    isNew={!!highlightedTaskIds[task.id]}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {visibleTasks.length === 0 ? (
-            <Card variant="flat" className="border-dashed border-border/30">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-base font-medium text-foreground">No tasks match this source.</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Clear the source filter to see all tasks again.
-                </p>
-              </CardContent>
-            </Card>
-          ) : null}
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Task"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone. All run history for this task will also be deleted.`}
-        confirmLabel="Delete Task"
-        variant="danger"
-        onConfirm={confirmDelete}
-        isLoading={deleteMutation.isPending}
-      />
+        {visibleTasks.length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-muted-foreground">No tasks match this view.</div>
+        ) : null}
+      </SectionCard>
     </div>
   );
-}
-
-interface TaskCardProps {
-  task: TaskRecord;
-  lastRun?: RunRecord;
-  pendingRunId?: string;
-  hasInlineResult: boolean;
-  resultOpen: boolean;
-  onResultOpenChange: (open: boolean) => void;
-  onToggleActive: () => void;
-  onTrigger: () => void;
-  onDelete: () => void;
-  isTriggering: boolean;
-  isNew: boolean;
-}
-
-function TaskCard({
-  task,
-  lastRun,
-  pendingRunId,
-  hasInlineResult,
-  resultOpen,
-  onResultOpenChange,
-  onToggleActive,
-  onTrigger,
-  onDelete,
-  isTriggering,
-  isNew,
-}: TaskCardProps) {
-  const isRunning = lastRun?.status === "running" || lastRun?.status === "queued" || (!!pendingRunId && !isTerminalRun(lastRun));
-  const taskStatus = getTaskStatus(task, lastRun);
-  const inlineResult = lastRun ? buildInlineResult(lastRun) : null;
-  const canShowInlineResult = !!inlineResult && hasInlineResult && isTerminalRun(lastRun);
-
-  return (
-    <Card
-      variant="interactive"
-      className={cn(
-        "p-0 transition-[border-color,box-shadow] duration-700",
-        !task.active && "opacity-60",
-        isNew && "border-emerald-400/40 shadow-[0_0_0_1px_rgba(52,211,153,0.35),0_0_0_8px_rgba(16,185,129,0.08)]"
-      )}
-    >
-      <CardHeader className="border-b border-border/30 px-5 py-4">
-        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="group/link flex min-w-0 items-center gap-2.5">
-          <StatusDot status={taskStatus} />
-          <h2 className="truncate font-display text-base font-semibold text-foreground transition-colors group-hover/link:text-primary">
-            {task.name}
-          </h2>
-        </Link>
-        <CardAction className="flex items-center gap-2">
-          <SourceBadge source={task.source} />
-          <HandlerBadge type={task.handlerType} />
-        </CardAction>
-      </CardHeader>
-
-      <CardContent className="space-y-4 px-5 py-4">
-        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="block">
-          <p className="text-sm text-muted-foreground">
-            {formatScheduleSummary(task.scheduleConfig)}
-          </p>
-        </Link>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <span className="meta-label">Last Run</span>
-            <p className="mt-0.5 text-sm text-foreground">
-              {lastRun ? formatTimeAgo(lastRun.createdAt) : "Never"}
-            </p>
-          </div>
-          <div>
-            <span className="meta-label">Duration</span>
-            <p className="mt-0.5 text-sm text-foreground">
-              {lastRun?.durationMs !== null && lastRun?.durationMs !== undefined
-                ? formatDuration(lastRun.durationMs)
-                : "—"}
-            </p>
-          </div>
-        </div>
-
-        {task.description ? (
-          <p className="line-clamp-2 text-xs text-muted-foreground">
-            {task.description}
-          </p>
-        ) : null}
-
-        {canShowInlineResult ? (
-          <Collapsible open={resultOpen} onOpenChange={onResultOpenChange}>
-            <div className="rounded-xl border border-border/40 bg-card/40">
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">View Result</p>
-                    <p className="text-xs text-muted-foreground">
-                      {inlineResult.statusLabel ? `${inlineResult.statusLabel} • ` : ""}
-                      {inlineResult.durationLabel}
-                    </p>
-                  </div>
-                  <CaretDown
-                    size={14}
-                    className={cn("text-muted-foreground transition-transform", resultOpen && "rotate-180")}
-                  />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="space-y-3 border-t border-border/40 px-4 py-4">
-                  {inlineResult.statusLabel ? (
-                    <InlineResultRow label="Status" value={inlineResult.statusLabel} />
-                  ) : null}
-                  <InlineResultRow label="Response time" value={inlineResult.durationLabel} />
-                  {inlineResult.preview ? (
-                    <div className="space-y-1">
-                      <span className="meta-label">Output</span>
-                      <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-zinc-950 p-3 font-mono text-xs text-zinc-300">
-                        {inlineResult.preview}
-                      </pre>
-                    </div>
-                  ) : null}
-                  <Button asChild variant="link" className="h-auto p-0">
-                    <Link to="/runs/$runId" params={{ runId: lastRun!.id }}>
-                      View full run
-                      <span className="ml-1">→</span>
-                    </Link>
-                  </Button>
-                </div>
-              </CollapsibleContent>
-            </div>
-          </Collapsible>
-        ) : null}
-      </CardContent>
-
-      <CardFooter className="gap-2">
-        <Button
-          className="flex-1"
-          onClick={onTrigger}
-          disabled={isTriggering || isRunning || !task.active}
-        >
-          {isTriggering || isRunning ? (
-            <>
-              <Spinner size={14} className="mr-2 animate-spin" />
-              Running...
-            </>
-          ) : (
-            <>
-              <Play size={14} weight="fill" className="mr-2" />
-              Run Now
-            </>
-          )}
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <DotsThree size={18} weight="bold" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <Link to="/tasks/$taskId/edit" params={{ taskId: task.id }}>
-                <PencilSimple size={14} className="mr-2" />
-                Edit task
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onToggleActive}>
-              {task.active ? (
-                <>
-                  <Pause size={14} className="mr-2" />
-                  Pause task
-                </>
-              ) : (
-                <>
-                  <Play size={14} className="mr-2" />
-                  Resume task
-                </>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-              <Trash size={14} className="mr-2" />
-              Delete task
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function SourceBadge({ source }: { source: TaskRecord["source"] }) {
-  const labelMap: Record<TaskRecord["source"], string> = {
-    dashboard: "Dashboard",
-    mcp: "MCP",
-    sdk: "SDK",
-  };
-
-  return (
-    <Badge
-      variant="outline"
-      className="rounded-full border-border/40 bg-background/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
-    >
-      {labelMap[source]}
-    </Badge>
-  );
-}
-
-function InlineResultRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="meta-label">{label}</span>
-      <p className="mt-0.5 text-sm text-foreground">{value}</p>
-    </div>
-  );
-}
-
-type TaskStatus = "idle" | "running" | "success" | "failed" | "paused";
-
-function getTaskStatus(task: TaskRecord, lastRun?: RunRecord): TaskStatus {
-  if (!task.active) return "paused";
-  if (!lastRun) return "idle";
-  if (lastRun.status === "running" || lastRun.status === "queued") return "running";
-  if (lastRun.status === "success") return "success";
-  if (lastRun.status === "failure" || lastRun.status === "timeout") return "failed";
-  return "idle";
-}
-
-function StatusDot({ status }: { status: TaskStatus }) {
-  const statusClasses: Record<TaskStatus, string> = {
-    idle: "status-dot-idle",
-    running: "status-dot-running",
-    success: "status-dot-success",
-    failed: "status-dot-failed",
-    paused: "status-dot-paused",
-  };
-
-  return <span className={cn("status-dot", statusClasses[status])} />;
-}
-
-function HandlerBadge({ type }: { type: string }) {
-  const variantMap: Record<string, "webhook" | "tools" | "code"> = {
-    webhook: "webhook",
-    tools: "tools",
-    code: "code",
-  };
-
-  const variant = variantMap[type] ?? "tools";
-
-  return (
-    <Badge variant={variant}>
-      {type.toUpperCase()}
-    </Badge>
-  );
-}
-
-function formatScheduleSummary(config: ScheduleConfig): string {
-  switch (config.type) {
-    case "every":
-      return `Every ${formatInterval(config.interval)}`;
-    case "daily":
-      return `Daily at ${config.times.join(", ")}`;
-    case "weekly":
-      return `${capitalizeFirst(config.days.join(", "))} at ${config.time}`;
-    case "monthly":
-      return `Monthly on ${config.day} at ${config.time}`;
-    case "once":
-      return `Once at ${new Date(config.at).toLocaleString()}`;
-    case "cron":
-      return config.expression;
-  }
-}
-
-function formatInterval(interval: string): string {
-  const match = interval.match(/^(\d+)([smhd])$/);
-  if (!match) return interval;
-  const [, num, unit] = match;
-  const units: Record<string, string> = { s: "second", m: "minute", h: "hour", d: "day" };
-  const unitName = units[unit] ?? unit;
-  return num === "1" ? unitName : `${num} ${unitName}s`;
-}
-
-function capitalizeFirst(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatTimeAgo(date: string): string {
-  const diffMs = Date.now() - new Date(date).getTime();
-  if (diffMs < 60000) return "just now";
-  if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)}m ago`;
-  if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)}h ago`;
-  return `${Math.floor(diffMs / 86400000)}d ago`;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-}
-
-function isTerminalRun(run?: RunRecord): boolean {
-  return run?.status === "success" || run?.status === "failure" || run?.status === "timeout";
-}
-
-function buildInlineResult(run: RunRecord): {
-  statusLabel: string | null;
-  durationLabel: string;
-  preview: string | null;
-} | null {
-  const durationLabel = formatDuration(run.durationMs ?? 0);
-  const statusCode = findStatusCode(run.output) ?? extractStatusCodeFromLogs(run.logs);
-  const previewSource = findPreviewSource(run.output) ?? run.errorMessage ?? run.logs;
-  const preview = previewSource ? truncate(previewSource, 200) : null;
-
-  return {
-    statusLabel: statusCode ? `${statusCode} ${statusLabelForCode(statusCode)}` : null,
-    durationLabel,
-    preview,
-  };
-}
-
-function findStatusCode(value: unknown): number | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  const direct = record.statusCode ?? record.status;
-  if (typeof direct === "number") {
-    return direct;
-  }
-
-  for (const nested of Object.values(record)) {
-    const result = findStatusCode(nested);
-    if (result !== null) {
-      return result;
-    }
-  }
-
-  return null;
-}
-
-function extractStatusCodeFromLogs(logs: string | null): number | null {
-  if (!logs) {
-    return null;
-  }
-
-  const match = logs.match(/->\s(\d{3})\b/);
-  return match ? Number(match[1]) : null;
-}
-
-function findPreviewSource(value: unknown): string | null {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  if (typeof record.body === "string") {
-    return record.body;
-  }
-
-  if (record.body && typeof record.body === "object") {
-    return JSON.stringify(record.body);
-  }
-
-  const nestedBody = Object.values(record)
-    .map((nested) => findPreviewSource(nested))
-    .find(Boolean);
-
-  if (nestedBody) {
-    return nestedBody;
-  }
-
-  return JSON.stringify(record);
-}
-
-function statusLabelForCode(statusCode: number): string {
-  if (statusCode >= 200 && statusCode < 300) return "OK";
-  if (statusCode === 301 || statusCode === 302) return "Redirect";
-  if (statusCode === 401) return "Unauthorized";
-  if (statusCode === 403) return "Forbidden";
-  if (statusCode === 404) return "Not Found";
-  if (statusCode >= 500) return "Server Error";
-  return "Response";
-}
-
-function truncate(value: string, length: number): string {
-  return value.length > length ? `${value.slice(0, length)}...` : value;
 }

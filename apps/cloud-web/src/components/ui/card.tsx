@@ -8,17 +8,17 @@ const cardVariants = cva(
   {
     variants: {
       size: {
-        default: "p-5 gap-4",
-        sm: "p-3 gap-2",
+        default: "p-4 gap-3",
+        sm: "p-2.5 gap-2",
       },
       variant: {
-        default: "rounded-2xl",
+        default: "rounded-xl",
         interactive:
-          "rounded-2xl transition-all duration-200 ease-out hover:border-primary/30 hover:-translate-y-0.5",
-        glow: "rounded-2xl shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_50px_-20px_rgba(0,0,0,0.5),0_0_80px_-40px_hsl(var(--primary)/0.2)]",
+          "rounded-xl transition-all duration-200 ease-out hover:border-primary/30 hover:-translate-y-0.5",
+        glow: "rounded-xl shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_50px_-20px_rgba(0,0,0,0.5),0_0_80px_-40px_hsl(var(--primary)/0.2)]",
         violet:
-          "rounded-2xl border-[hsl(var(--accent)/0.3)] bg-gradient-to-b from-card to-[hsl(var(--accent)/0.03)]",
-        flat: "rounded-xl border-border/30 bg-card/50",
+          "rounded-xl border-[hsl(var(--accent)/0.3)] bg-gradient-to-b from-card to-[hsl(var(--accent)/0.03)]",
+        flat: "rounded-lg border-border/30 bg-card/50",
       },
     },
     defaultVariants: {
@@ -98,7 +98,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-content"
-      className={cn("group-data-[size=sm]/card:px-4", className)}
+      className={cn("group-data-[size=sm]/card:px-3", className)}
       {...props}
     />
   )
@@ -109,7 +109,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-footer"
       className={cn(
-        "flex items-center border-t border-border/30 px-5 py-4 group-data-[size=sm]/card:px-4 group-data-[size=sm]/card:py-3",
+        "flex items-center border-t border-border/30 px-4 py-3 group-data-[size=sm]/card:px-3 group-data-[size=sm]/card:py-2.5",
         className
       )}
       {...props}

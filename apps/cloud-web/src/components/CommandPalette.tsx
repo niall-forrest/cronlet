@@ -4,9 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import {
   MagnifyingGlass,
   House,
+  Calendar,
   ListChecks,
   ClockCounterClockwise,
   Gear,
+  Pulse,
+  ArrowsClockwise,
+  Robot,
   Plus,
   ArrowRight,
 } from "@phosphor-icons/react";
@@ -55,6 +59,18 @@ export function CommandPalette() {
         },
       },
       {
+        id: "nav-upcoming",
+        type: "navigation",
+        icon: <Calendar size={16} weight="duotone" />,
+        title: "Go to Upcoming",
+        description: "Future wake-ups and scheduled work",
+        keywords: ["future", "timeline", "next", "wake-up"],
+        action: () => {
+          navigate({ to: "/upcoming" });
+          setOpen(false);
+        },
+      },
+      {
         id: "nav-tasks",
         type: "navigation",
         icon: <ListChecks size={16} weight="duotone" />,
@@ -79,6 +95,18 @@ export function CommandPalette() {
         },
       },
       {
+        id: "nav-agent-activity",
+        type: "navigation",
+        icon: <Robot size={16} weight="duotone" />,
+        title: "Go to Agent Activity",
+        description: "Schedules and failures created by agents",
+        keywords: ["agents", "activity", "autonomous"],
+        action: () => {
+          navigate({ to: "/agent-activity" });
+          setOpen(false);
+        },
+      },
+      {
         id: "nav-settings",
         type: "navigation",
         icon: <Gear size={16} weight="duotone" />,
@@ -86,7 +114,31 @@ export function CommandPalette() {
         description: "Secrets & API keys",
         keywords: ["secrets", "api", "keys", "config"],
         action: () => {
-          navigate({ to: "/settings" });
+          navigate({ to: "/security" });
+          setOpen(false);
+        },
+      },
+      {
+        id: "nav-destinations",
+        type: "navigation",
+        icon: <Pulse size={16} weight="duotone" />,
+        title: "Go to Destinations",
+        description: "Outbound endpoints and circuit state",
+        keywords: ["breakers", "destinations", "webhooks"],
+        action: () => {
+          navigate({ to: "/destinations" });
+          setOpen(false);
+        },
+      },
+      {
+        id: "nav-reconciliation",
+        type: "navigation",
+        icon: <ArrowsClockwise size={16} weight="duotone" />,
+        title: "Go to Reconciliation",
+        description: "Compare external IDs to Cronlet state",
+        keywords: ["external ids", "overdue", "duplicates"],
+        action: () => {
+          navigate({ to: "/reconciliation" });
           setOpen(false);
         },
       },
@@ -231,25 +283,25 @@ export function CommandPalette() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="p-0 gap-0 !w-[640px] !max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border/50">
+      <DialogContent className="p-0 gap-0 !w-[620px] !max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border-border/50">
         {/* Search input */}
-        <div className="flex items-center gap-4 px-5 border-b border-border/50">
-          <MagnifyingGlass size={20} className="text-muted-foreground shrink-0" />
+        <div className="flex items-center gap-3 px-4 border-b border-border/50">
+          <MagnifyingGlass size={18} className="text-muted-foreground shrink-0" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search tasks, navigate..."
-            className="flex-1 bg-transparent py-5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
+            className="flex-1 bg-transparent py-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
             autoFocus
           />
         </div>
 
         {/* Results */}
-        <div className="max-h-[400px] overflow-y-auto p-3">
+        <div className="max-h-[360px] overflow-y-auto p-2.5">
           {groupedItems.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
+            <div className="py-10 text-center text-sm text-muted-foreground">
               No results found
             </div>
           ) : (
@@ -258,8 +310,8 @@ export function CommandPalette() {
               cumulativeIndex += group.items.length;
 
               return (
-                <div key={group.label} className="mb-3 last:mb-0">
-                  <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <div key={group.label} className="mb-2.5 last:mb-0">
+                  <div className="px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground tracking-[0.04em]">
                     {group.label}
                   </div>
                   <div className="space-y-1">
@@ -273,7 +325,7 @@ export function CommandPalette() {
                           onClick={item.action}
                           onMouseEnter={() => setSelectedIndex(globalIndex)}
                           className={cn(
-                            "flex w-full items-center gap-4 rounded-xl px-4 py-3 text-left transition-colors",
+                            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors",
                             isSelected
                               ? "bg-primary/10 text-foreground"
                               : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -281,24 +333,24 @@ export function CommandPalette() {
                         >
                           <span
                             className={cn(
-                              "flex h-10 w-10 items-center justify-center rounded-xl shrink-0",
+                              "flex h-8 w-8 items-center justify-center rounded-md shrink-0",
                               isSelected ? "bg-primary/15 text-primary" : "bg-muted/50"
                             )}
                           >
                             {item.icon}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">
+                            <div className="text-sm font-medium leading-5 truncate">
                               {item.title}
                             </div>
                             {item.description && (
-                              <div className="text-xs text-muted-foreground truncate mt-0.5">
+                              <div className="mt-0.5 text-xs leading-4 text-muted-foreground truncate">
                                 {item.description}
                               </div>
                             )}
                           </div>
                           {isSelected && (
-                            <kbd className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                            <kbd className="rounded-md bg-muted/50 px-1.5 py-0.5 text-[11px] text-muted-foreground">
                               ↵
                             </kbd>
                           )}
@@ -313,20 +365,20 @@ export function CommandPalette() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-border/50 px-4 py-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border/50 px-3.5 py-1.5 text-[10px] text-muted-foreground">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-border/50 bg-muted/50 px-1">↑</kbd>
-              <kbd className="rounded border border-border/50 bg-muted/50 px-1">↓</kbd>
+              <kbd className="rounded-md border border-border/50 bg-muted/50 px-1">↑</kbd>
+              <kbd className="rounded-md border border-border/50 bg-muted/50 px-1">↓</kbd>
               navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-border/50 bg-muted/50 px-1">↵</kbd>
+              <kbd className="rounded-md border border-border/50 bg-muted/50 px-1">↵</kbd>
               select
             </span>
           </div>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border border-border/50 bg-muted/50 px-1">esc</kbd>
+            <kbd className="rounded-md border border-border/50 bg-muted/50 px-1">esc</kbd>
             close
           </span>
         </div>

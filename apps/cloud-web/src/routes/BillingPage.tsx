@@ -17,7 +17,7 @@ export function BillingPage() {
       <SignedOut>
         <Card className="border-border/70 bg-card/80">
           <CardHeader>
-            <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">Sign In Required</CardTitle>
+          <CardTitle className="text-sm font-medium tracking-[0.04em] text-muted-foreground">Sign In Required</CardTitle>
             <CardDescription>
               You must be signed in to view available subscription plans.
             </CardDescription>
@@ -42,4 +42,3 @@ export function BillingPage() {
     </div>
   );
 }
-

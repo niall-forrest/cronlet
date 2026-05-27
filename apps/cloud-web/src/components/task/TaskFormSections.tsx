@@ -346,7 +346,7 @@ function AdvancedOptionsFields({
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Execution</Label>
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">Execution</Label>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Retry Attempts</Label>
@@ -412,7 +412,7 @@ function AdvancedOptionsFields({
       </div>
 
       <div className="space-y-3 border-t border-border/40 pt-4">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Delivery</Label>
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">Delivery</Label>
         <div className="space-y-2">
           <Label className="text-xs">
             Callback URL <span className="text-muted-foreground">(optional)</span>
@@ -432,7 +432,7 @@ function AdvancedOptionsFields({
       </div>
 
       <div className="space-y-3 border-t border-border/40 pt-4">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Lifecycle Limits</Label>
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">Lifecycle limits</Label>
         <div className="space-y-3">
           <div className="rounded-xl border border-border/40 bg-card/20 p-4">
             <div className="flex items-start justify-between gap-4">
@@ -485,7 +485,7 @@ function AdvancedOptionsFields({
       </div>
 
       <div className="space-y-3 border-t border-border/40 pt-4">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Metadata</Label>
+        <Label className="text-xs tracking-[0.04em] text-muted-foreground">Metadata</Label>
         <MetadataEditor
           values={values}
           error={errors.metadata}

@@ -4,20 +4,36 @@ import type {
   ApiKeyRecord,
   ApiKeyWithToken,
   ApiResponse,
+  BulkRunReplayInput,
+  BulkRunReplayResult,
+  BulkTaskCancelInput,
+  BulkTaskCancelResult,
   CallbackSigningSecretRecord,
+  CircuitBreakerListInput,
+  CircuitBreakerRecord,
+  OpsSummaryRecord,
   OrgStatusSnapshot,
+  OutboundPolicyPatchInput,
+  OutboundPolicyRecord,
+  ReconciliationCompareInput,
+  ReconciliationCompareResult,
+  RunListInput,
   RunRecord,
-  TaskRecord,
-  SecretRecord,
-  UsageSnapshot,
-  TaskCreateInput,
-  TaskPatchInput,
+  RunReplayResult,
   SecretCreateInput,
   SecretPatchInput,
+  SecretRecord,
+  TaskCreateInput,
+  TaskListInput,
+  TaskPatchInput,
+  TaskRecord,
+  TimelineEntryRecord,
+  UsageSnapshot,
 } from "@cronlet/shared";
 
-const BASE_URL = (import.meta.env.VITE_CLOUD_API_BASE_URL as string | undefined)?.replace(/\/$/, "")
-  ?? "http://127.0.0.1:4050";
+const BASE_URL =
+  (import.meta.env.VITE_CLOUD_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
+  "http://127.0.0.1:4050";
 
 interface CloudAuthSnapshot {
   token: string | null;
@@ -47,7 +63,6 @@ async function resolveHeaders(init?: RequestInit): Promise<Headers> {
   const snapshot = await authProvider();
   const headers = new Headers();
 
-  // Only set content-type if there's a body
   if (init?.body) {
     headers.set("content-type", "application/json");
   }
@@ -92,16 +107,41 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload.data;
 }
 
-// ============================================
-// TASKS
-// ============================================
+function buildQuery(entries: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(entries)) {
+    if (value !== undefined && value !== "") {
+      params.set(key, String(value));
+    }
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
 
 export function listTasks(): Promise<TaskRecord[]> {
   return request<TaskRecord[]>("/v1/tasks");
 }
 
+export function listTasksWithFilters(input: TaskListInput = {}): Promise<TaskRecord[]> {
+  return request<TaskRecord[]>(
+    `/v1/tasks${buildQuery({
+      status: input.status,
+      scheduleType: input.scheduleType,
+      externalId: input.externalId,
+      metadata: input.metadata ? JSON.stringify(input.metadata) : undefined,
+      nextRunAfter: input.nextRunAfter,
+      nextRunBefore: input.nextRunBefore,
+      limit: input.limit,
+    })}`
+  );
+}
+
 export function getTask(taskId: string): Promise<TaskRecord> {
   return request<TaskRecord>(`/v1/tasks/${taskId}`);
+}
+
+export function getTaskTimeline(taskId: string, limit?: number): Promise<TimelineEntryRecord[]> {
+  return request<TimelineEntryRecord[]>(`/v1/tasks/${taskId}/timeline${buildQuery({ limit })}`);
 }
 
 export function createTask(input: TaskCreateInput): Promise<TaskRecord> {
@@ -124,6 +164,19 @@ export function deleteTask(taskId: string): Promise<{ deleted: boolean }> {
   });
 }
 
+export function cancelTask(taskId: string): Promise<BulkTaskCancelResult["results"][number]> {
+  return request<BulkTaskCancelResult["results"][number]>(`/v1/tasks/${taskId}/cancel`, {
+    method: "POST",
+  });
+}
+
+export function bulkCancelTasks(input: BulkTaskCancelInput): Promise<BulkTaskCancelResult> {
+  return request<BulkTaskCancelResult>("/v1/tasks/bulk-cancel", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function triggerTask(taskId: string): Promise<RunRecord> {
   return request<RunRecord>(`/v1/tasks/${taskId}/trigger`, {
     method: "POST",
@@ -138,25 +191,50 @@ export function getCallbackSigningSecret(): Promise<CallbackSigningSecretRecord>
   return request<CallbackSigningSecretRecord>("/v1/callback-signing-secret");
 }
 
-// ============================================
-// RUNS
-// ============================================
+export function rotateCallbackSigningSecret(): Promise<CallbackSigningSecretRecord> {
+  return request<CallbackSigningSecretRecord>("/v1/callback-signing-secret/rotate", {
+    method: "POST",
+  });
+}
 
 export function listRuns(taskId?: string, limit?: number): Promise<RunRecord[]> {
-  const params = new URLSearchParams();
-  if (taskId) params.set("taskId", taskId);
-  if (limit) params.set("limit", String(limit));
-  const query = params.toString() ? `?${params.toString()}` : "";
-  return request<RunRecord[]>(`/v1/runs${query}`);
+  return request<RunRecord[]>(`/v1/runs${buildQuery({ taskId, limit })}`);
+}
+
+export function listRunsWithFilters(input: RunListInput = {}): Promise<RunRecord[]> {
+  return request<RunRecord[]>(
+    `/v1/runs${buildQuery({
+      taskId: input.taskId,
+      status: input.status,
+      externalId: input.externalId,
+      metadata: input.metadata ? JSON.stringify(input.metadata) : undefined,
+      scheduledAfter: input.scheduledAfter,
+      scheduledBefore: input.scheduledBefore,
+      limit: input.limit,
+    })}`
+  );
 }
 
 export function getRun(runId: string): Promise<RunRecord> {
   return request<RunRecord>(`/v1/runs/${runId}`);
 }
 
-// ============================================
-// SECRETS
-// ============================================
+export function getRunTimeline(runId: string, limit?: number): Promise<TimelineEntryRecord[]> {
+  return request<TimelineEntryRecord[]>(`/v1/runs/${runId}/timeline${buildQuery({ limit })}`);
+}
+
+export function replayRun(runId: string): Promise<RunReplayResult> {
+  return request<RunReplayResult>(`/v1/runs/${runId}/replay`, {
+    method: "POST",
+  });
+}
+
+export function bulkReplayRuns(input: BulkRunReplayInput): Promise<BulkRunReplayResult> {
+  return request<BulkRunReplayResult>("/v1/runs/bulk-replay", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
 
 export function listSecrets(): Promise<SecretRecord[]> {
   return request<SecretRecord[]>("/v1/secrets");
@@ -182,10 +260,6 @@ export function deleteSecret(name: string): Promise<{ deleted: boolean }> {
   });
 }
 
-// ============================================
-// ALERTS
-// ============================================
-
 export function listAlerts(): Promise<AlertRecord[]> {
   return request<AlertRecord[]>("/v1/alerts");
 }
@@ -201,10 +275,6 @@ export function createAlert(input: {
     body: JSON.stringify(input),
   });
 }
-
-// ============================================
-// API KEYS
-// ============================================
 
 export function listApiKeys(): Promise<ApiKeyRecord[]> {
   return request<ApiKeyRecord[]>("/v1/api-keys");
@@ -233,17 +303,55 @@ export function revokeApiKey(apiKeyId: string): Promise<{ revoked: boolean }> {
   });
 }
 
-// ============================================
-// USAGE
-// ============================================
+export function getOutboundPolicy(): Promise<OutboundPolicyRecord> {
+  return request<OutboundPolicyRecord>("/v1/outbound-policy");
+}
+
+export function patchOutboundPolicy(input: OutboundPolicyPatchInput): Promise<OutboundPolicyRecord> {
+  return request<OutboundPolicyRecord>("/v1/outbound-policy", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listCircuitBreakers(input: CircuitBreakerListInput = {}): Promise<CircuitBreakerRecord[]> {
+  return request<CircuitBreakerRecord[]>(
+    `/v1/circuit-breakers${buildQuery({
+      state: input.state,
+      destinationKey: input.destinationKey,
+      limit: input.limit,
+    })}`
+  );
+}
+
+export function compareReconciliation(input: ReconciliationCompareInput): Promise<ReconciliationCompareResult> {
+  return request<ReconciliationCompareResult>("/v1/reconciliation/compare", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
 
 export function getUsage(): Promise<UsageSnapshot> {
   return request<UsageSnapshot>("/v1/usage");
 }
 
-// ============================================
-// AUDIT
-// ============================================
+export function getOpsSummary(): Promise<OpsSummaryRecord> {
+  return request<OpsSummaryRecord>("/v1/ops-summary");
+}
+
+export function seedDemoData(): Promise<{
+  taskCount: number;
+  runCount: number;
+  seededAt: string;
+}> {
+  return request<{
+    taskCount: number;
+    runCount: number;
+    seededAt: string;
+  }>("/v1/demo/seed", {
+    method: "POST",
+  });
+}
 
 export function listAuditEvents(input: {
   actorType?: "user" | "api_key" | "agent" | "internal" | "webhook";
@@ -252,13 +360,13 @@ export function listAuditEvents(input: {
   to?: string;
   limit?: number;
 } = {}): Promise<AuditEventRecord[]> {
-  const query = new URLSearchParams();
-  if (input.actorType) query.set("actorType", input.actorType);
-  if (input.action) query.set("action", input.action);
-  if (input.from) query.set("from", input.from);
-  if (input.to) query.set("to", input.to);
-  if (typeof input.limit === "number") query.set("limit", String(input.limit));
-
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<AuditEventRecord[]>(`/v1/audit-events${suffix}`);
+  return request<AuditEventRecord[]>(
+    `/v1/audit-events${buildQuery({
+      actorType: input.actorType,
+      action: input.action,
+      from: input.from,
+      to: input.to,
+      limit: input.limit,
+    })}`
+  );
 }

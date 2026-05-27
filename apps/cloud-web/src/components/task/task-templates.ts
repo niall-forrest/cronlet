@@ -96,6 +96,11 @@ const EVERY_FIVE_MINUTES: ScheduleConfig = {
   interval: "5m",
 };
 
+const EVERY_THIRTY_MINUTES: ScheduleConfig = {
+  type: "every",
+  interval: "30m",
+};
+
 const EVERY_SIX_HOURS: ScheduleConfig = {
   type: "every",
   interval: "6h",
@@ -118,6 +123,24 @@ const WEEKLY_MONDAY: ScheduleConfig = {
 };
 
 export const TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    id: "agent-heartbeat",
+    name: "Agent Heartbeat",
+    description: "Run a periodic check-in for an agent or assistant",
+    category: "agent-workflows",
+    handler: {
+      type: "webhook",
+      url: "https://your-app.example.com/agents/heartbeat",
+      method: "POST",
+      body: {
+        source: "cronlet",
+      },
+    },
+    schedule: EVERY_THIRTY_MINUTES,
+    retryAttempts: 1,
+    timeout: "30s",
+    requiredFields: ["webhook.url"],
+  },
   {
     id: "uptime-monitor",
     name: "Uptime Monitor",

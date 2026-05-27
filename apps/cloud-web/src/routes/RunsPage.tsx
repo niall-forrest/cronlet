@@ -1,419 +1,310 @@
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import type { RunRecord } from "@cronlet/shared";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useRouterState } from "@tanstack/react-router";
+import type { RunStatus, TaskSource } from "@cronlet/shared";
+import { Funnel, Play, WarningCircle } from "@phosphor-icons/react";
+import { bulkReplayRuns, listRunsWithFilters, listTasksWithFilters } from "@/lib/api";
 import {
-  Clock,
-  CheckCircle,
-  XCircle,
-  Timer,
-  ArrowRight,
-  Play,
-  Funnel,
-  CaretRight,
-  Spinner,
-} from "@phosphor-icons/react";
-import { Badge } from "@/components/ui/badge";
+  formatCreatedBy,
+  formatDateTime,
+  formatDuration,
+  formatRelativeTime,
+  formatTaskSource,
+  getCreatedByTypeLabel,
+  getRunDestination,
+  getRunStatusTone,
+} from "@/lib/format";
+import { CopyButton, FilterMenu, MetricTile, PageHeader, SectionCard, StatusBadge } from "@/components/operator-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Skeleton } from "@/components/Skeleton";
-import { SectionHeader } from "@/components/ui/section-header";
-import { listRuns, listTasks } from "@/lib/api";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-function StatusBadge({ status }: { status: string }) {
-  const variantMap: Record<string, "success" | "error" | "warning" | "secondary"> = {
-    success: "success",
-    failure: "error",
-    timeout: "error",
-    queued: "secondary",
-    running: "warning",
-  };
+const statuses: Array<{ label: string; value: RunStatus | "all" }> = [
+  { label: "All", value: "all" },
+  { label: "Running", value: "running" },
+  { label: "Retry wait", value: "retry_wait" },
+  { label: "Failed", value: "failure" },
+  { label: "Dead-lettered", value: "dead_lettered" },
+  { label: "Success", value: "success" },
+];
 
-  const variant = variantMap[status] ?? "secondary";
+const savedViews: Array<{ label: string; value: SavedRunView }> = [
+  { label: "All runs", value: "all" },
+  { label: "Agent-created", value: "agent-created" },
+  { label: "Human-created", value: "human-created" },
+  { label: "MCP", value: "mcp" },
+  { label: "SDK", value: "sdk" },
+];
 
-  const icons: Record<string, React.ReactNode> = {
-    success: <CheckCircle size={12} weight="fill" />,
-    failure: <XCircle size={12} weight="fill" />,
-    timeout: <Timer size={12} weight="fill" />,
-    queued: <Clock size={12} />,
-    running: <Spinner size={12} className="animate-spin" />,
-  };
+const originOptions: Array<{ label: string; value: TaskSource | "all" }> = [
+  { label: "All origins", value: "all" },
+  { label: "Dashboard", value: "dashboard" },
+  { label: "MCP", value: "mcp" },
+  { label: "SDK", value: "sdk" },
+];
 
-  return (
-    <Badge variant={variant} className="gap-1.5 capitalize">
-      {icons[status] ?? icons.queued}
-      {status}
-    </Badge>
-  );
-}
+const actorOptions: Array<{ label: string; value: ActorFilter }> = [
+  { label: "All actors", value: "all" },
+  { label: "Agents", value: "agent" },
+  { label: "Users", value: "user" },
+];
 
-function formatDuration(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined) return "—";
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.round(ms / 60000)}min`;
-}
-
-function formatTimeAgo(date: string): string {
-  const now = new Date();
-  const then = new Date(date);
-  const diffMs = now.getTime() - then.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return then.toLocaleDateString();
-}
+type SavedRunView = "all" | "agent-created" | "human-created" | "mcp" | "sdk";
+type ActorFilter = "all" | "agent" | "user";
 
 export function RunsPage() {
-  const [taskFilter, setTaskFilter] = useState<string>(() => {
-    if (typeof window === "undefined") {
-      return "all";
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    return params.get("taskId") ?? "all";
-  });
-  const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null);
+  const locationSearch = useRouterState({ select: (state) => state.location.search });
+  const searchParams = useMemo(() => new URLSearchParams(locationSearch), [locationSearch]);
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<RunStatus | "all">(
+    (searchParams.get("status") as RunStatus | "all" | null) ?? "all"
+  );
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [savedView, setSavedView] = useState<SavedRunView>("all");
+  const [sourceFilter, setSourceFilter] = useState<TaskSource | "all">(
+    (searchParams.get("origin") as TaskSource | "all" | null) ?? "all"
+  );
+  const [actorFilter, setActorFilter] = useState<ActorFilter>(
+    (searchParams.get("actor") as ActorFilter | null) ?? "all"
+  );
 
   const runsQuery = useQuery({
-    queryKey: ["runs", taskFilter],
-    queryFn: () => listRuns(taskFilter === "all" ? undefined : taskFilter, 100),
+    queryKey: ["runs", "dense", status],
+    queryFn: () => listRunsWithFilters({ status: status === "all" ? undefined : status, limit: 200 }),
     refetchInterval: 4000,
   });
-
   const tasksQuery = useQuery({
-    queryKey: ["tasks"],
-    queryFn: () => listTasks(),
+    queryKey: ["tasks", "lookup"],
+    queryFn: () => listTasksWithFilters({ limit: 200 }),
   });
 
-  const taskNames = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const task of tasksQuery.data ?? []) {
-      map.set(task.id, task.name);
+  const replayMutation = useMutation({
+    mutationFn: (runIds: string[]) => bulkReplayRuns({ runIds }),
+    onSuccess: () => {
+      setSelected({});
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
+
+  const taskMap = useMemo(
+    () => new Map((tasksQuery.data ?? []).map((task) => [task.id, task])),
+    [tasksQuery.data]
+  );
+
+  const applySavedView = (view: SavedRunView) => {
+    setSavedView(view);
+
+    switch (view) {
+      case "agent-created":
+        setActorFilter("agent");
+        setSourceFilter("all");
+        break;
+      case "human-created":
+        setActorFilter("user");
+        setSourceFilter("all");
+        break;
+      case "mcp":
+        setActorFilter("all");
+        setSourceFilter("mcp");
+        break;
+      case "sdk":
+        setActorFilter("all");
+        setSourceFilter("sdk");
+        break;
+      default:
+        setActorFilter("all");
+        setSourceFilter("all");
+        break;
     }
-    return map;
-  }, [tasksQuery.data]);
+  };
 
-  const isLoading = runsQuery.isLoading || tasksQuery.isLoading;
+  const visibleRuns = (runsQuery.data ?? []).filter((run) => {
+    const task = taskMap.get(run.taskId);
 
-  if (runsQuery.error) {
-    return <p className="text-sm text-destructive">Failed to load runs: {(runsQuery.error as Error).message}</p>;
-  }
+    if (sourceFilter !== "all" && task?.source !== sourceFilter) return false;
+    if (actorFilter !== "all" && task?.createdBy?.type !== actorFilter) return false;
 
-  const runs = runsQuery.data ?? [];
-  const tasks = tasksQuery.data ?? [];
-  const hasRuns = runs.length > 0;
-  const hasTasks = tasks.length > 0;
+    if (!query.trim()) return true;
+    const haystack = [
+      run.id,
+      task?.name ?? "",
+      task?.externalId ?? "",
+      task?.source ?? "",
+      task?.createdBy?.type ?? "",
+      task?.createdBy?.name ?? "",
+      getRunDestination(task),
+    ].join(" ").toLowerCase();
+    return haystack.includes(query.toLowerCase());
+  });
 
-  // Calculate stats
-  const successCount = runs.filter((r) => r.status === "success").length;
-  const failureCount = runs.filter((r) => r.status === "failure" || r.status === "timeout").length;
-  const runningCount = runs.filter((r) => r.status === "running" || r.status === "queued").length;
-  const successRate = runs.length > 0 ? Math.round((successCount / runs.length) * 100) : 0;
+  const selectedRunIds = Object.entries(selected)
+    .filter(([, value]) => value)
+    .map(([runId]) => runId);
+
+  const failureCount = visibleRuns.filter((run) =>
+    ["failure", "timeout", "dead_lettered", "terminal_client_error", "retry_window_expired"].includes(run.status)
+  ).length;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="display-title">Runs</h1>
-          <p className="text-muted-foreground mt-1">
-            Execution history for your scheduled tasks and on-demand dispatches
-          </p>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Runs"
+        description="Delivery history for scheduled attempts, retries, dead-lettered callbacks, and replay."
+        actions={
+          selectedRunIds.length > 0 ? (
+            <Button onClick={() => replayMutation.mutate(selectedRunIds)} disabled={replayMutation.isPending}>
+              <Play size={14} className="mr-2" />
+              {replayMutation.isPending ? "Replaying..." : `Replay ${selectedRunIds.length}`}
+            </Button>
+          ) : null
+        }
+      />
 
-        {hasTasks && (
-          <Select value={taskFilter} onValueChange={setTaskFilter}>
-            <SelectTrigger className="w-[200px]">
-              <Funnel size={14} className="mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Filter by task" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tasks</SelectItem>
-              {tasks.map((task) => (
-                <SelectItem key={task.id} value={task.id}>
-                  {task.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile label="Visible runs" value={visibleRuns.length} />
+        <MetricTile label="Failures" value={failureCount} detail="Terminal or retryable failures" />
+        <MetricTile
+          label="Running"
+          value={visibleRuns.filter((run) => ["queued", "leased", "running"].includes(run.status)).length}
+          detail="Currently in-flight"
+        />
+        <MetricTile
+          label="Agent-originated"
+          value={visibleRuns.filter((run) => taskMap.get(run.taskId)?.createdBy?.type === "agent").length}
+          detail="Runs from agent-created tasks"
+        />
       </div>
 
-      {/* Stats */}
-      <section className="space-y-4">
-        <SectionHeader label="Overview" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card variant="flat">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                  <Clock size={20} className="text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums">{runs.length}</p>
-                  <p className="meta-label">Total Runs</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card variant="flat">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-                  <CheckCircle size={20} weight="fill" className="text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums">{successCount}</p>
-                  <p className="meta-label">Successful</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card variant="flat">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
-                  <XCircle size={20} weight="fill" className="text-red-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums">{failureCount}</p>
-                  <p className="meta-label">Failed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card variant="flat">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--accent)/0.15)]">
-                  <span className="text-lg font-bold text-[hsl(var(--accent))]">{successRate}%</span>
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums">{runningCount}</p>
-                  <p className="meta-label">Running</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* Runs table */}
-      <section className="space-y-4">
-        <SectionHeader label="Run History" />
-        <Card variant="flat">
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-4 space-y-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex items-center gap-4 py-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-5 w-16 rounded-md" />
-                    <Skeleton className="h-4 w-16" />
-                    <Skeleton className="h-4 w-12" />
-                    <Skeleton className="h-4 w-16" />
-                  </div>
-                ))}
-              </div>
-            ) : hasRuns ? (
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Task</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Status</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Trigger</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Duration</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Time</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {runs.map((run) => (
-                    <TableRow
-                      key={run.id}
-                      className="cursor-pointer group"
-                      onClick={() => setSelectedRun(run)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground group-hover:text-primary transition-colors">
-                            {taskNames.get(run.taskId) ?? run.taskId.slice(0, 8)}
-                          </span>
-                          {run.attempt > 1 && (
-                            <Badge variant="outline" className="text-[10px] px-1.5">
-                              Retry {run.attempt}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={run.status} />
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground capitalize">
-                        {run.trigger}
-                      </TableCell>
-                      <TableCell className="text-sm tabular-nums text-muted-foreground">
-                        {formatDuration(run.durationMs)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        <span title={new Date(run.createdAt).toLocaleString()}>
-                          {formatTimeAgo(run.createdAt)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <CaretRight size={16} className="text-muted-foreground/50 group-hover:text-foreground transition-colors" />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16">
-                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                  <Clock size={28} weight="duotone" className="text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">No runs yet</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto text-center mb-6">
-                  {hasTasks
-                    ? "Trigger a task manually or wait for a scheduled run to appear here."
-                    : "Create a task and schedule to start seeing runs."}
-                </p>
-                {hasTasks ? (
-                  <Button asChild variant="outline">
-                    <Link to="/tasks">
-                      <Play size={14} weight="fill" className="mr-2" />
-                      View tasks
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button asChild>
-                    <Link to="/tasks/create">
-                      Create a task
-                      <ArrowRight size={14} className="ml-2" />
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Run Detail Dialog */}
-      <RunDetailDialog
-        run={selectedRun}
-        taskName={selectedRun ? taskNames.get(selectedRun.taskId) : undefined}
-        onClose={() => setSelectedRun(null)}
-      />
-    </div>
-  );
-}
-
-interface RunDetailDialogProps {
-  run: RunRecord | null;
-  taskName?: string;
-  onClose: () => void;
-}
-
-function RunDetailDialog({ run, taskName, onClose }: RunDetailDialogProps) {
-  if (!run) return null;
-
-  return (
-    <Dialog open={!!run} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent size="2xl" className="max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="flex items-center gap-3">
-            <span>{taskName ?? run.taskId}</span>
-            <StatusBadge status={run.status} />
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto space-y-5 py-2">
-          {/* Run metadata */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <span className="meta-label">Trigger</span>
-              <p className="text-sm font-medium capitalize">{run.trigger}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="meta-label">Attempt</span>
-              <p className="text-sm font-medium">{run.attempt}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="meta-label">Duration</span>
-              <p className="text-sm font-medium tabular-nums">{formatDuration(run.durationMs)}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="meta-label">Started</span>
-              <p className="text-sm font-medium">
-                {run.startedAt ? new Date(run.startedAt).toLocaleString() : "—"}
-              </p>
-            </div>
+      <SectionCard
+        title="Run history"
+        description="Searchable, filterable, and bulk-actionable delivery attempts."
+        action={
+          <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
+            <WarningCircle size={14} />
+            Bulk replay is available for selected runs
           </div>
-
-          {/* Error message */}
-          {run.errorMessage && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-2">Error</p>
-              <p className="text-sm text-destructive/90 font-mono break-words whitespace-pre-wrap">{run.errorMessage}</p>
-            </div>
-          )}
-
-          {/* Output */}
-          {run.output && (
-            <div className="space-y-2">
-              <span className="meta-label">Output</span>
-              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto max-h-48">
-                {JSON.stringify(run.output, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {/* Logs */}
-          {run.logs && (
-            <div className="space-y-2">
-              <span className="meta-label">Logs</span>
-              <pre className="rounded-xl bg-zinc-950 border border-border/50 p-4 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre-wrap max-h-64">
-                {run.logs}
-              </pre>
-            </div>
-          )}
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/40 px-4 py-3">
+          <div className="relative min-w-[280px] flex-1">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search run ID, task, actor, external ID, or destination"
+              className="h-8 bg-secondary/40 pl-9"
+            />
+            <Funnel size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <FilterMenu
+            label="View"
+            value={savedView}
+            options={savedViews}
+            onChange={applySavedView}
+            widthClassName="w-[170px]"
+          />
+          <FilterMenu
+            label="Status"
+            value={status}
+            options={statuses}
+            onChange={setStatus}
+            widthClassName="w-[165px]"
+          />
+          <FilterMenu
+            label="Origin"
+            value={sourceFilter}
+            options={originOptions}
+            onChange={(value) => {
+              setSourceFilter(value);
+              setSavedView(value === "mcp" || value === "sdk" ? value : "all");
+            }}
+            widthClassName="w-[160px]"
+          />
+          <FilterMenu
+            label="Actor"
+            value={actorFilter}
+            options={actorOptions}
+            onChange={(value) => {
+              setActorFilter(value);
+              setSavedView(value === "agent" ? "agent-created" : value === "user" ? "human-created" : "all");
+            }}
+            widthClassName="w-[160px]"
+          />
         </div>
 
-        <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-10">
+                <span className="sr-only">Select</span>
+              </TableHead>
+              <TableHead>ID</TableHead>
+              <TableHead>Task</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Origin</TableHead>
+              <TableHead>Created by</TableHead>
+              <TableHead>Attempt</TableHead>
+              <TableHead>Destination</TableHead>
+              <TableHead>Duration</TableHead>
+              <TableHead>Scheduled</TableHead>
+              <TableHead>Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visibleRuns.map((run) => {
+              const task = taskMap.get(run.taskId);
+              return (
+                <TableRow key={run.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={Boolean(selected[run.id])}
+                      onCheckedChange={(value) =>
+                        setSelected((current) => ({ ...current, [run.id]: Boolean(value) }))
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Link to="/runs/$runId" params={{ runId: run.id }} className="font-medium text-foreground hover:text-primary">
+                        {run.id}
+                      </Link>
+                      <CopyButton value={run.id} />
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-[220px]">
+                    <div className="space-y-1">
+                      <p className="truncate text-sm font-medium text-foreground">{task?.name ?? run.taskId}</p>
+                      <p className="truncate text-xs text-muted-foreground">{task?.externalId ?? "No external ID"}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge label={run.status.replaceAll("_", " ")} variant={getRunStatusTone(run.status)} />
+                  </TableCell>
+                  <TableCell>{task ? formatTaskSource(task.source) : "—"}</TableCell>
+                  <TableCell className="max-w-[180px]">
+                    <div className="space-y-0.5">
+                      <p className="truncate text-sm text-foreground">{formatCreatedBy(task?.createdBy)}</p>
+                      <p className="text-xs text-muted-foreground">{getCreatedByTypeLabel(task?.createdBy)}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>{run.attempt}</TableCell>
+                  <TableCell>{getRunDestination(task)}</TableCell>
+                  <TableCell>{formatDuration(run.durationMs)}</TableCell>
+                  <TableCell>{run.scheduledAt ? formatDateTime(run.scheduledAt) : "—"}</TableCell>
+                  <TableCell>{formatRelativeTime(run.createdAt)}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+
+        {visibleRuns.length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-muted-foreground">
+            No runs match this view.
+          </div>
+        ) : null}
+      </SectionCard>
+    </div>
   );
 }

@@ -12,16 +12,20 @@ import { ClerkAuthBridge } from "./components/ClerkAuthBridge";
 import { Layout } from "./components/Layout";
 import { OverviewPage } from "./routes/OverviewPage";
 import { TasksPage } from "./routes/TasksPage";
+import { UpcomingPage } from "./routes/UpcomingPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { TaskEditPage } from "./routes/TaskEditPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { RunsPage } from "./routes/RunsPage";
 import { RunDetailPage } from "./routes/RunDetailPage";
+import { AgentActivityPage } from "./routes/AgentActivityPage";
 import { AgentConnectPage } from "./routes/AgentConnectPage";
 import { SettingsPage } from "./routes/SettingsPage";
 import { AlertsPage } from "./routes/AlertsPage";
 import { UsagePage } from "./routes/UsagePage";
 import { BillingPage } from "./routes/BillingPage";
+import { DestinationsPage } from "./routes/DestinationsPage";
+import { ReconciliationPage } from "./routes/ReconciliationPage";
 import "./index.css";
 
 const rootRoute = createRootRoute({
@@ -40,6 +44,12 @@ const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
   component: TasksPage,
+});
+
+const upcomingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/upcoming",
+  component: UpcomingPage,
 });
 
 // Create task wizard
@@ -101,11 +111,35 @@ const agentConnectRoute = createRoute({
   component: AgentConnectPage,
 });
 
+const agentActivityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent-activity",
+  component: AgentActivityPage,
+});
+
 // Settings - secrets, API keys
+const securityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/security",
+  component: SettingsPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
   component: SettingsPage,
+});
+
+const destinationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/destinations",
+  component: DestinationsPage,
+});
+
+const reconciliationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reconciliation",
+  component: ReconciliationPage,
 });
 
 // Alerts
@@ -131,6 +165,7 @@ const billingRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   overviewRoute,
+  upcomingRoute,
   tasksRoute,
   createTaskRoute,
   createTaskTemplatesRoute,
@@ -138,7 +173,11 @@ const routeTree = rootRoute.addChildren([
   taskDetailRoute,
   runsRoute,
   runDetailRoute,
+  agentActivityRoute,
   agentConnectRoute,
+  destinationsRoute,
+  reconciliationRoute,
+  securityRoute,
   settingsRoute,
   alertsRoute,
   usageRoute,

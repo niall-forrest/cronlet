@@ -23,11 +23,11 @@ const badgeVariants = cva(
 
         // Task type badges - matching landing page
         webhook:
-          "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono uppercase tracking-wide bg-primary/10 text-primary border-0",
+          "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono tracking-wide bg-primary/10 text-primary border-0",
         tools:
-          "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono uppercase tracking-wide bg-primary/10 text-primary border-0",
-        code: "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono uppercase tracking-wide bg-[hsl(var(--accent)/0.15)] text-[hsl(var(--accent))] border-0",
-        mcp: "h-auto rounded-full px-2.5 py-1 text-[0.6875rem] font-mono uppercase tracking-wide bg-[hsl(var(--accent)/0.15)] text-[hsl(var(--accent))] border-0",
+          "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono tracking-wide bg-primary/10 text-primary border-0",
+        code: "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono tracking-wide bg-[hsl(var(--accent)/0.15)] text-[hsl(var(--accent))] border-0",
+        mcp: "h-auto rounded-md px-2.5 py-1 text-[0.6875rem] font-mono tracking-wide bg-[hsl(var(--accent)/0.15)] text-[hsl(var(--accent))] border-0",
 
         // Status badges
         success:
